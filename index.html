@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>Vinted AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap');
+
+:root{
+  --t:#e8c84a;--td:#c9a82e;--tl:rgba(232,200,74,.12);
+  --bg:#111111;--bg2:#1a1a1a;--card:#1e1e1e;--card2:#252525;
+  --tx:#ffffff;--mu:#888888;--bd:#333333;--re:#ff4444;
+  --sb:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+
+body{
+  font-family:'Rajdhani',system-ui,sans-serif;
+  background:var(--bg);
+  color:var(--tx);
+  min-height:100dvh;
+  -webkit-font-smoothing:antialiased;
+  background-image:
+    radial-gradient(ellipse at 50% 0%, rgba(232,200,74,.06) 0%, transparent 60%);
+}
+
+.shell{max-width:680px;margin:0 auto;padding:0 16px calc(88px + var(--sb)) 16px}
+
+/* header */
+.hdr{padding:44px 0 20px;display:flex;align-items:center;gap:14px;border-bottom:2px solid var(--t);margin-bottom:24px}
+
+.logo{
+  width:52px;height:52px;border-radius:10px;
+  background:var(--t);
+  display:flex;align-items:center;justify-content:center;
+  font-size:26px;flex-shrink:0;
+}
+
+.hdr h1{
+  font-family:'Orbitron',sans-serif;
+  font-size:20px;font-weight:900;line-height:1;
+  color:#ffffff;
+  letter-spacing:3px;text-transform:uppercase;
+}
+.hdr p{font-size:11px;color:var(--mu);margin-top:5px;letter-spacing:1px;text-transform:uppercase}
+
+/* card */
+.card{
+  background:var(--card);
+  border:1px solid var(--bd);
+  border-left:3px solid var(--t);
+  border-radius:12px;padding:22px;
+  margin-bottom:16px;
+}
+
+.ct{
+  font-family:'Orbitron',sans-serif;
+  font-size:13px;font-weight:700;margin-bottom:18px;
+  color:#ffffff;letter-spacing:2px;text-transform:uppercase;
+  display:flex;align-items:center;gap:10px;
+}
+.ct::before{content:'//';font-size:12px;color:var(--t)}
+
+/* nav */
+.nav{
+  position:fixed;bottom:0;left:0;right:0;
+  background:#111111;
+  border-top:2px solid var(--t);
+  display:flex;padding-bottom:var(--sb);z-index:100;
+}
+.nb{
+  flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:10px 0 11px;border:none;background:transparent;cursor:pointer;
+  color:var(--mu);font-family:'Orbitron',sans-serif;font-size:9px;font-weight:700;
+  text-transform:uppercase;letter-spacing:1px;
+  -webkit-tap-highlight-color:transparent;transition:all .2s;
+}
+.nb.on{color:var(--t)}
+.nb .ic{font-size:22px;line-height:1;transition:transform .2s}
+.nb.on .ic{transform:scale(1.15)}
+
+.tp{display:none}.tp.on{display:block}
+
+/* upload */
+.ubox{
+  display:block;
+  border:2px dashed var(--bd);border-radius:12px;
+  padding:26px 16px;text-align:center;
+  background:var(--bg2);
+  cursor:pointer;transition:all .2s;
+  -webkit-tap-highlight-color:transparent;
+}
+.ubox.has{border-color:var(--t);border-style:solid;}
+.ubox input{display:none}
+
+.ps{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.pw{position:relative;width:78px;height:78px}
+.pi{width:78px;height:78px;border-radius:8px;object-fit:cover;border:2px solid var(--t)}
+.pd{position:absolute;top:-7px;right:-7px;width:22px;height:22px;background:var(--re);color:#fff;border-radius:50%;border:none;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700}
+
+/* form */
+.fl{display:block;font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;font-family:'Orbitron',sans-serif}
+.fc{
+  width:100%;padding:12px 14px;
+  border:1px solid var(--bd);border-radius:8px;
+  font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:500;
+  color:#ffffff;background:var(--bg2);
+  -webkit-appearance:none;outline:none;
+  transition:border-color .2s;
+}
+.fc:focus{border-color:var(--t);}
+textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fg{margin-bottom:13px}
+
+/* button */
+.btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;padding:15px;border-radius:10px;border:none;cursor:pointer;
+  font-family:'Orbitron',sans-serif;font-size:12px;font-weight:700;
+  letter-spacing:2px;text-transform:uppercase;
+  background:var(--t);color:#111111;
+  -webkit-tap-highlight-color:transparent;
+  transition:all .2s;margin-top:4px;
+}
+.btn:disabled{opacity:.3;pointer-events:none}
+.btn:active{transform:scale(.97)}
+
+/* chips */
+.chip{
+  padding:7px 14px;border-radius:6px;font-size:12px;font-weight:600;
+  cursor:pointer;background:var(--bg2);
+  border:1px solid var(--bd);color:var(--mu);
+  display:inline-block;-webkit-tap-highlight-color:transparent;
+  transition:all .2s;text-transform:uppercase;letter-spacing:.5px;
+  font-family:'Rajdhani',sans-serif;
+}
+.chip.on{background:var(--tl);border-color:var(--t);color:var(--t)}
+
+/* loader */
+.loader{display:flex;align-items:center;gap:12px;color:var(--t);font-size:12px;font-weight:700;padding:18px 0;text-transform:uppercase;letter-spacing:2px;font-family:'Orbitron',sans-serif}
+.spin{width:22px;height:22px;border:3px solid var(--bd);border-top-color:var(--t);border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* result */
+.res{
+  background:var(--card);border:1px solid var(--bd);
+  border-left:3px solid var(--t);
+  border-radius:12px;padding:20px;margin-top:14px;
+  animation:fu .3s ease;
+}
+@keyframes fu{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+.rl{font-size:10px;font-weight:700;color:var(--t);letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;font-family:'Orbitron',sans-serif}
+.rt{font-size:14px;line-height:1.8;white-space:pre-wrap;color:#ffffff}
+
+.crow{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.cbtn{
+  padding:8px 14px;border-radius:8px;
+  border:1px solid var(--bd);
+  background:var(--bg2);color:#ffffff;
+  font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;
+  cursor:pointer;display:inline-flex;align-items:center;gap:6px;
+  -webkit-tap-highlight-color:transparent;
+  text-transform:uppercase;letter-spacing:.5px;
+  transition:all .2s;
+}
+.cbtn:active{border-color:var(--t);color:var(--t)}
+.cbtn.vinted{background:var(--t);color:#111;border-color:var(--t);font-family:'Orbitron',sans-serif;font-size:11px}
+
+/* error */
+.err{background:rgba(255,68,68,.1);border:1px solid var(--re);border-left:3px solid var(--re);border-radius:10px;padding:13px 16px;margin-top:12px;font-size:13px;color:#ff8888;line-height:1.5}
+
+/* price */
+.ph{display:flex;align-items:baseline;gap:10px;margin:10px 0 6px}
+.pn{font-family:'Orbitron',sans-serif;font-size:48px;font-weight:900;color:var(--t);line-height:1}
+.pr{font-size:14px;color:var(--mu)}
+.pbar{height:6px;border-radius:4px;background:var(--bd);overflow:hidden;margin-bottom:16px}
+.pf{height:100%;background:var(--t);border-radius:4px;transition:width .8s cubic-bezier(.34,1.56,.64,1)}
+.fli{display:flex;align-items:flex-start;gap:8px;font-size:14px;padding:7px 0;border-bottom:1px solid var(--bd);color:#ffffff}
+.fli:last-child{border:none}
+.fdot{width:6px;height:6px;border-radius:0;background:var(--t);margin-top:5px;flex-shrink:0;transform:rotate(45deg)}
+.tip{margin-top:14px;padding:12px 14px;background:rgba(232,200,74,.08);border-left:3px solid var(--t);border-radius:0 8px 8px 0;font-size:14px;color:#ffffff;line-height:1.5}
+
+/* toast */
+#toast{
+  position:fixed;bottom:calc(84px + var(--sb) + 12px);left:50%;
+  transform:translateX(-50%) translateY(16px);
+  background:var(--t);color:#111;
+  padding:10px 22px;border-radius:6px;
+  font-size:11px;font-weight:700;font-family:'Orbitron',sans-serif;
+  letter-spacing:1px;opacity:0;pointer-events:none;
+  transition:all .3s;white-space:nowrap;z-index:500;
+  text-transform:uppercase;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media(max-width:480px){.row{grid-template-columns:1fr}}
+
+/* storico */
+.hItem{background:var(--card);border:1px solid var(--bd);border-left:3px solid var(--t);border-radius:12px;padding:16px;margin-bottom:12px}
+.hTop{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px}
+.hName{font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.5px}
+.hSub{font-size:11px;color:var(--mu);margin-top:2px}
+.hDel{background:transparent;border:none;color:var(--re);font-size:18px;cursor:pointer;padding:0 4px;line-height:1}
+.hTitolo{font-size:14px;font-weight:600;color:#fff;margin-bottom:4px}
+.hDesc{font-size:13px;color:var(--mu);line-height:1.5;margin-bottom:6px}
+.hPrice{font-family:'Orbitron',sans-serif;font-size:18px;font-weight:900;color:var(--t)}
+.hDate{font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div style="font-family:'Bebas Neue',sans-serif;font-size:72px;font-weight:400;color:#ffffff;letter-spacing:8px;text-align:center;padding-top:32px;line-height:1;background:linear-gradient(180deg,#ffffff 0%,#e8c84a 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">DAMN</div>
+<div class="hdr">
+    <div class="logo">🛹</div>
+    <div><h1>VINTED AI</h1><p>// Street Fashion Assistant</p></div>
+  </div>
+
+  <!-- FOTO -->
+  <div id="tab-foto" class="tp on">
+    <div class="card">
+      <div class="ct">📸 Analizza la Foto</div>
+      <label class="ubox" id="ubox">
+        <input type="file" id="fileInput" accept="image/*" multiple/>
+        <div style="font-size:36px;margin-bottom:8px;filter:drop-shadow(0 0 8px #00ff88)">🖼️</div>
+        <div style="font-size:15px;font-weight:600" id="ulabel">Tocca per scegliere la foto</div>
+        <div style="font-size:12px;color:var(--mu);margin-top:3px">JPG · PNG · WEBP · max 4 immagini</div>
+      </label>
+      <div class="ps" id="ps"></div>
+      <button class="btn" id="btnA" disabled onclick="analyzePhoto()" style="margin-top:16px">🔍 Analizza con AI</button>
+    </div>
+    <div class="loader" id="lFoto" style="display:none"><div class="spin"></div>Analisi immagine…</div>
+    <div class="err" id="eFoto" style="display:none"></div>
+    <div class="res" id="rFoto" style="display:none">
+      <div class="rl">✨ Risultato Analisi</div>
+      <div class="rt" id="rFotoTxt"></div>
+      <div class="crow">
+        <button class="cbtn" onclick="cp('rFotoTxt')">📋 Copia</button>
+        <button class="cbtn" onclick="toAnnuncio()">➡️ Usa per annuncio</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ANNUNCIO -->
+  <div id="tab-annuncio" class="tp">
+    <div class="card">
+      <div class="ct">✍️ Crea Annuncio</div>
+      <div class="row">
+        <div class="fg"><label class="fl">Nome capo</label><input class="fc" id="aNome" placeholder="es: Maglione oversize"/></div>
+        <div class="fg"><label class="fl">Marca</label><input class="fc" id="aMarca" placeholder="es: Zara, Nike…"/></div>
+      </div>
+      <div class="row">
+        <div class="fg"><label class="fl">Taglia</label><input class="fc" id="aTaglia" placeholder="M, 42, L/XL…"/></div>
+        <div class="fg"><label class="fl">Condizione</label>
+          <select class="fc" id="aCond">
+            <option>Nuovo con etichetta</option><option>Nuovo senza etichetta</option>
+            <option selected>Ottimo</option><option>Buono</option><option>Soddisfacente</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="fg"><label class="fl">Colore</label><input class="fc" id="aColore" placeholder="es: Blu navy"/></div>
+        <div class="fg"><label class="fl">Materiale</label><input class="fc" id="aMat" placeholder="es: Cotone, Denim…"/></div>
+      </div>
+      <div class="fg">
+        <label class="fl">Tono</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px" id="toneChips">
+          <span class="chip on" data-t="amichevole e informale">😊 Casual</span>
+          <span class="chip" data-t="professionale ed elegante">💼 Pro</span>
+          <span class="chip" data-t="entusiasta e vivace">🔥 Vivace</span>
+          <span class="chip" data-t="conciso e diretto">⚡ Breve</span>
+        </div>
+      </div>
+      <div class="fg"><label class="fl">Dettagli aggiuntivi</label><textarea class="fc" id="aNote" placeholder="Difetti, misure, motivo della vendita…"></textarea></div>
+      <button class="btn" onclick="genAnnuncio()">✨ Genera Annuncio AI</button>
+    </div>
+    <div class="loader" id="lAnn" style="display:none"><div class="spin"></div>Scrittura annuncio…</div>
+    <div class="err" id="eAnn" style="display:none"></div>
+    <div class="res" id="rAnn" style="display:none">
+      <div class="rl">📝 Il tuo Annuncio</div>
+      <div id="rAnnTitolo" style="font-size:16px;font-weight:700;margin-bottom:6px;color:#ffffff"></div>
+      <div id="rAnnDesc" style="font-size:14px;line-height:1.8;white-space:pre-wrap;color:#ffffff;margin-bottom:8px"></div>
+      <div id="rAnnHash" style="font-size:13px;color:#009B77;line-height:1.8"></div>
+      <div class="crow" style="margin-top:14px">
+        <button class="cbtn" onclick="cpField('rAnnTitolo')">📋 Copia Titolo</button>
+        <button class="cbtn" onclick="cpField('rAnnDesc')">📋 Copia Descrizione</button>
+        <button class="cbtn" onclick="cpField('rAnnHash')">📋 Copia Hashtag</button>
+        <button class="cbtn" onclick="sh('rAnnTxt')" style="display:none" id="rAnnTxt"></button>
+        <button class="cbtn" class="cbtn vinted" onclick="openVinted()">🛍️ APRI VINTED</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PREZZO -->
+  <div id="tab-prezzo" class="tp">
+    <div class="card">
+      <div class="ct">💶 Stima il Prezzo</div>
+      <div class="row">
+        <div class="fg"><label class="fl">Nome capo</label><input class="fc" id="pNome" placeholder="es: Giubbotto pelle"/></div>
+        <div class="fg"><label class="fl">Marca</label><input class="fc" id="pMarca" placeholder="es: Levi's, Gucci…"/></div>
+      </div>
+      <div class="row">
+        <div class="fg"><label class="fl">Condizione</label>
+          <select class="fc" id="pCond">
+            <option>Nuovo con etichetta</option><option>Nuovo senza etichetta</option>
+            <option>Ottimo</option><option selected>Buono</option><option>Soddisfacente</option>
+          </select>
+        </div>
+        <div class="fg"><label class="fl">Prezzo originale €</label><input class="fc" type="number" id="pPrezzo" placeholder="es: 89"/></div>
+      </div>
+      <div class="row">
+        <div class="fg"><label class="fl">Anno acquisto</label><input class="fc" id="pAnno" placeholder="es: 2022"/></div>
+        <div class="fg"><label class="fl">Categoria</label><input class="fc" id="pCat" placeholder="Giacche, Jeans…"/></div>
+      </div>
+      <button class="btn" onclick="stimaPrezzo()">💡 Stima Prezzo AI</button>
+    </div>
+    <div class="loader" id="lPre" style="display:none"><div class="spin"></div>Analisi mercato…</div>
+    <div class="err" id="ePre" style="display:none"></div>
+    <div class="res" id="rPre" style="display:none">
+      <div class="rl">💶 Stima di Mercato Vinted</div>
+      <div class="ph"><span class="pn" id="pNum">—</span><span class="pr" id="pRng"></span></div>
+      <div class="pbar"><div class="pf" id="pBar" style="width:0%"></div></div>
+      <p id="pMot" style="font-size:14px;line-height:1.6;margin-bottom:14px;color:#ffffff"></p>
+      <div style="font-size:11px;font-weight:800;color:var(--mu);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Fattori considerati</div>
+      <ul style="list-style:none" id="pFact"></ul>
+      <div class="tip" id="pTip"></div>
+    </div>
+  </div>
+
+  <!-- STORICO -->
+  <div id="tab-storico" class="tp">
+    <div class="card">
+      <div class="ct">🗂️ Storico Annunci</div>
+      <div style="font-size:12px;color:var(--mu);margin-bottom:14px">Salvato solo su questo dispositivo — non è sincronizzato altrove.</div>
+      <button class="btn" style="background:transparent;border:1px solid var(--re);color:var(--re)" onclick="clearHistoryConfirm()">🗑️ Cancella tutto lo storico</button>
+    </div>
+    <div id="historyList"></div>
+    <div id="historyEmpty" class="card" style="display:none;text-align:center;color:var(--mu)">Ancora nessun annuncio salvato. Genera un annuncio per vederlo qui.</div>
+  </div>
+</div>
+
+<nav class="nav">
+  <button class="nb on" id="nav-foto" onclick="sw('foto')"><span class="ic">📸</span>Analizza</button>
+  <button class="nb" id="nav-annuncio" onclick="sw('annuncio')"><span class="ic">✍️</span>Annuncio</button>
+  <button class="nb" id="nav-prezzo" onclick="sw('prezzo')"><span class="ic">💶</span>Prezzo</button>
+  <button class="nb" id="nav-storico" onclick="sw('storico')"><span class="ic">🗂️</span>Storico</button>
+</nav>
+<div id="toast"></div>
+
+<script>
+let selFiles=[], selTone="amichevole e informale", lastAnalysis=null, currentItemId=null;
+
+function sw(n){
+  document.querySelectorAll('.tp').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
+  document.getElementById('tab-'+n).classList.add('on');
+  document.getElementById('nav-'+n).classList.add('on');
+  if(n==='storico') renderHistory();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+document.querySelectorAll('#toneChips .chip').forEach(c=>{
+  c.addEventListener('click',()=>{
+    document.querySelectorAll('#toneChips .chip').forEach(x=>x.classList.remove('on'));
+    c.classList.add('on'); selTone=c.dataset.t;
+  });
+});
+
+document.getElementById('fileInput').addEventListener('change',function(e){
+  selFiles=Array.from(e.target.files||[]).slice(0,4);
+  currentItemId=null; lastAnalysis=null;
+  renderPrev();
+  document.getElementById('ubox').classList.toggle('has',selFiles.length>0);
+  document.getElementById('ulabel').textContent=selFiles.length?`${selFiles.length} foto — tocca per cambiare`:'Tocca per scegliere la foto';
+  document.getElementById('btnA').disabled=selFiles.length===0;
+});
+
+function renderPrev(){
+  const s=document.getElementById('ps'); s.innerHTML='';
+  selFiles.forEach((f,i)=>{
+    const url=URL.createObjectURL(f);
+    s.innerHTML+=`<div class="pw"><img src="${url}" class="pi"/><button class="pd" onclick="delFile(${i})">×</button></div>`;
+  });
+}
+
+function delFile(i){
+  selFiles.splice(i,1); renderPrev();
+  document.getElementById('ubox').classList.toggle('has',selFiles.length>0);
+  document.getElementById('btnA').disabled=selFiles.length===0;
+}
+
+async function callAI(payload){
+  const r=await fetch('/.netlify/functions/claude',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload)
+  });
+  const d=await r.json();
+  if(d.error) throw new Error(d.error);
+  return d.text;
+}
+
+function compressImage(file, maxSize, quality){
+  maxSize = maxSize||800; quality = quality||0.75;
+  return new Promise(function(res,rej){
+    var img=new Image();
+    var url=URL.createObjectURL(file);
+    img.onload=function(){
+      var w=img.width, h=img.height;
+      if(w>maxSize||h>maxSize){
+        if(w>h){ h=Math.round(h*maxSize/w); w=maxSize; }
+        else{ w=Math.round(w*maxSize/h); h=maxSize; }
+      }
+      var canvas=document.createElement('canvas');
+      canvas.width=w; canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      var dataUrl=canvas.toDataURL('image/jpeg', quality);
+      URL.revokeObjectURL(url);
+      res(dataUrl.split(',')[1]);
+    };
+    img.onerror=function(){ rej(new Error('Caricamento immagine fallito')); };
+    img.src=url;
+  });
+}
+
+async function analyzePhoto(){
+  if(!selFiles.length) return;
+  show('lFoto'); hide('rFoto'); hide('eFoto');
+  document.getElementById('btnA').disabled=true;
+  try{
+    const file=selFiles[0];
+    const imageBase64=await compressImage(file);
+    const imageMime='image/jpeg';
+    const txt=await callAI({
+      type:'image',
+      imageBase64,
+      imageMime,
+      prompt:`Analizza questo capo di abbigliamento. Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo prima o dopo:
+{"tipo":"es: giacca in pelle","brand":"leggi l'etichetta, se non visibile scrivi Non identificato","colore":"","materiale":"es: 100% cotone, se visibile sull'etichetta","condizione":"una tra: Nuovo con etichetta, Nuovo senza etichetta, Ottimo, Buono, Soddisfacente","taglie":"taglie probabili","stagione":"","stile":"es: streetwear, casual, elegante, sportivo, vintage","fasciaPrezzo":"es: 20-50€","fasciaPrezzoMin":20,"fasciaPrezzoMax":50,"note":"difetti visibili, usura, dettagli particolari"}`
+    });
+    let obj;
+    try{
+      obj = JSON.parse(txt.replace(/```json|```/g,'').trim());
+    }catch(parseErr){
+      // fallback: mostro comunque il testo grezzo, l'utente non resta a mani vuote
+      lastAnalysis = null;
+      document.getElementById('rFotoTxt').textContent = txt;
+      show('rFoto');
+      hide('lFoto');
+      document.getElementById('btnA').disabled=false;
+      return;
+    }
+    lastAnalysis = obj;
+    document.getElementById('rFotoTxt').textContent =
+      `🏷️ TIPO DI CAPO: ${obj.tipo||''}\n👔 BRAND / MARCA: ${obj.brand||''}\n🎨 COLORE/I: ${obj.colore||''}\n🧵 MATERIALE: ${obj.materiale||''}\n⭐ CONDIZIONE STIMATA: ${obj.condizione||''}\n📐 TAGLIE PROBABILI: ${obj.taglie||''}\n🗓️ STAGIONE: ${obj.stagione||''}\n✨ STILE: ${obj.stile||''}\n💰 FASCIA DI PREZZO ORIGINALE STIMATA: ${obj.fasciaPrezzo||''}\n💡 NOTE: ${obj.note||''}`;
+    show('rFoto');
+  }catch(e){
+    document.getElementById('eFoto').textContent='⚠️ '+e.message;
+    show('eFoto');
+  }
+  hide('lFoto');
+  document.getElementById('btnA').disabled=false;
+}
+
+function toAnnuncio(){
+  if(!lastAnalysis){ toast('ANALIZZA PRIMA UN CAPO!'); return; }
+  const obj = lastAnalysis;
+  currentItemId = 'item_'+Date.now();
+
+  if(obj.tipo) document.getElementById('aNome').value = obj.tipo;
+  if(obj.brand && !obj.brand.toLowerCase().includes('non identificat')) document.getElementById('aMarca').value = obj.brand;
+  if(obj.colore) document.getElementById('aColore').value = obj.colore;
+  if(obj.materiale) document.getElementById('aMat').value = obj.materiale;
+  if(obj.condizione){
+    const condEl = document.getElementById('aCond');
+    const opts = ['Nuovo con etichetta','Nuovo senza etichetta','Ottimo','Buono','Soddisfacente'];
+    for(let i=0;i<opts.length;i++){
+      if(obj.condizione.toLowerCase().includes(opts[i].toLowerCase().split(' ')[0])){ condEl.value=opts[i]; break; }
+    }
+  }
+  document.getElementById('aNote').value = '';
+
+  // compila anche la scheda prezzo
+  if(obj.tipo) document.getElementById('pNome').value = obj.tipo;
+  if(obj.brand && !obj.brand.toLowerCase().includes('non identificat')) document.getElementById('pMarca').value = obj.brand;
+  if(obj.condizione){
+    const pCondEl = document.getElementById('pCond');
+    const pOpts = ['Nuovo con etichetta','Nuovo senza etichetta','Ottimo','Buono','Soddisfacente'];
+    for(let j=0;j<pOpts.length;j++){
+      if(obj.condizione.toLowerCase().includes(pOpts[j].toLowerCase().split(' ')[0])){ pCondEl.value=pOpts[j]; break; }
+    }
+  }
+  if(obj.tipo) document.getElementById('pCat').value = obj.tipo;
+  if(typeof obj.fasciaPrezzoMin === 'number' && typeof obj.fasciaPrezzoMax === 'number'){
+    const mid = Math.round((obj.fasciaPrezzoMin + obj.fasciaPrezzoMax)/2);
+    if(!document.getElementById('pPrezzo').value) document.getElementById('pPrezzo').value = mid;
+  }
+
+  // vai alla scheda annuncio e genera
+  sw('annuncio');
+  toast('// GENERO ANNUNCIO...');
+  setTimeout(function(){ genAnnuncio(); }, 600);
+}
+
+async function genAnnuncio(){
+  show('lAnn'); hide('rAnn'); hide('eAnn');
+  try{
+    const raw=await callAI({
+      type:'text',
+      prompt:`Crea un annuncio Vinted in italiano con tono ${selTone}:
+- Capo: ${v('aNome')||'Non specificato'}
+- Marca: ${v('aMarca')||'Non specificata'}
+- Taglia: ${v('aTaglia')||'Non specificata'}
+- Condizione: ${v('aCond')}
+- Colore: ${v('aColore')||'Non specificato'}
+- Materiale: ${v('aMat')||'Non specificato'}
+- Dettagli: ${v('aNote')||'Nessuno'}
+
+Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo prima o dopo:
+{"titolo":"max 60 caratteri","descrizione":"3-5 frasi","hashtag":"10 hashtag separati da spazio, es #tag1 #tag2"}`
+    });
+    let d;
+    try{
+      d = JSON.parse(raw.replace(/```json|```/g,'').trim());
+    }catch(parseErr){
+      // fallback: il modello non ha rispettato il formato, mostro comunque il testo grezzo
+      document.getElementById('rAnnTxt').textContent = raw;
+      document.getElementById('rAnnTitolo').textContent = '';
+      document.getElementById('rAnnDesc').textContent = raw;
+      document.getElementById('rAnnHash').textContent = '';
+      show('rAnn');
+      hide('lAnn');
+      return;
+    }
+    document.getElementById('rAnnTxt').textContent = `${d.titolo}\n\n${d.descrizione}\n\n${d.hashtag}`;
+    document.getElementById('rAnnTitolo').textContent = d.titolo || '';
+    document.getElementById('rAnnDesc').textContent = d.descrizione || '';
+    document.getElementById('rAnnHash').textContent = d.hashtag || '';
+    show('rAnn');
+
+    if(!currentItemId) currentItemId = 'item_'+Date.now();
+    upsertHistoryItem(currentItemId, {
+      nome: v('aNome'), marca: v('aMarca'), taglia: v('aTaglia'), condizione: v('aCond'),
+      titolo: d.titolo||'', descrizione: d.descrizione||'', hashtag: d.hashtag||''
+    });
+  }catch(e){
+    document.getElementById('eAnn').textContent='⚠️ '+e.message;
+    show('eAnn');
+  }
+  hide('lAnn');
+}
+
+async function stimaPrezzo(){
+  show('lPre'); hide('rPre'); hide('ePre');
+  document.getElementById('pBar').style.width='0%';
+  try{
+    const raw=await callAI({
+      type:'text',
+      prompt:`Sei un esperto di second-hand e resell sul mercato italiano, con conoscenza approfondita di Vinted Italia.
+Analizza questi dati e stima il prezzo di rivendita REALISTICO su Vinted Italia:
+
+CAPO: ${v('pNome')||'Non specificato'}
+MARCA: ${v('pMarca')||'Non specificata'}
+CONDIZIONE: ${v('pCond')}
+PREZZO ORIGINALE: ${v('pPrezzo')?v('pPrezzo')+'€':'Non noto'}
+ANNO ACQUISTO: ${v('pAnno')||'Non noto'}
+CATEGORIA: ${v('pCat')||'Abbigliamento'}
+
+Considera attentamente:
+1. POPOLARITÀ DEL BRAND su Vinted Italia (brand luxury, streetwear, fast fashion hanno valori molto diversi)
+2. DEPREZZAMENTO reale (fast fashion perde 60-80% del valore, luxury 20-40%)
+3. CONDIZIONE (nuovo con etichetta vale molto di più di "buono")
+4. STAGIONALITÀ (un cappotto in estate vale meno)
+5. DOMANDA ATTUALE su Vinted per quel tipo di capo
+6. CONCORRENZA (quanti articoli simili ci sono su Vinted)
+7. Se il brand non è noto, stima in base alla categoria e condizione
+8. Dai un prezzo COMPETITIVO che venda velocemente, non il massimo teorico
+
+Rispondi SOLO con questo JSON valido senza backtick ne markdown:
+{"prezzoSuggerito":25,"rangeMin":18,"rangeMax":35,"percentuale":60,"motivazione":"Spiegazione dettagliata del prezzo basata su dati reali Vinted","fattori":["Fattore specifico 1","Fattore specifico 2","Fattore specifico 3","Fattore specifico 4"],"consiglio":"Consiglio pratico specifico per vendere questo capo velocemente su Vinted"}`
+    });
+    let d;
+    try{
+      d = JSON.parse(raw.replace(/```json|```/g,'').trim());
+    }catch(parseErr){
+      throw new Error('Risposta AI in formato inatteso, riprova.');
+    }
+    document.getElementById('pNum').textContent=d.prezzoSuggerito+'€';
+    document.getElementById('pRng').textContent=`range: ${d.rangeMin}€ – ${d.rangeMax}€`;
+    document.getElementById('pMot').textContent=d.motivazione;
+    setTimeout(()=>document.getElementById('pBar').style.width=(d.percentuale||55)+'%',80);
+    document.getElementById('pFact').innerHTML=(d.fattori||[]).map(f=>`<li class="fli"><span class="fdot"></span>${f}</li>`).join('');
+    document.getElementById('pTip').innerHTML=`💡 <strong>Consiglio:</strong> ${d.consiglio}`;
+    show('rPre');
+
+    if(!currentItemId) currentItemId = 'item_'+Date.now();
+    upsertHistoryItem(currentItemId, {
+      nome: v('pNome'), marca: v('pMarca'), condizione: v('pCond'),
+      prezzoSuggerito: d.prezzoSuggerito, rangeMin: d.rangeMin, rangeMax: d.rangeMax, consiglio: d.consiglio||''
+    });
+  }catch(e){
+    document.getElementById('ePre').textContent='⚠️ '+e.message;
+    show('ePre');
+  }
+  hide('lPre');
+}
+
+function cpField(id){
+  const txt=document.getElementById(id)?.textContent||'';
+  if(navigator.clipboard){navigator.clipboard.writeText(txt).then(()=>toast('✅ Copiato!'))}
+  else{const ta=document.createElement('textarea');ta.value=txt;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('✅ Copiato!')}
+}
+function openVinted(){
+  // Copia automaticamente il titolo e apre Vinted
+  const titolo=document.getElementById('rAnnTitolo')?.textContent||'';
+  if(navigator.clipboard) navigator.clipboard.writeText(titolo);
+  window.open('https://www.vinted.it/items/new','_blank');
+  toast('✅ Titolo copiato — incollalo su Vinted!');
+}
+const v=id=>document.getElementById(id)?.value?.trim()||'';
+const show=id=>document.getElementById(id).style.display='';
+const hide=id=>document.getElementById(id).style.display='none';
+function toast(msg,dur=2500){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),dur);}
+function cp(id){
+  const txt=document.getElementById(id)?.textContent||'';
+  if(navigator.clipboard){navigator.clipboard.writeText(txt).then(()=>toast('✅ Copiato!'))}
+  else{const ta=document.createElement('textarea');ta.value=txt;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('✅ Copiato!')}
+}
+function sh(id){
+  const txt=document.getElementById(id)?.textContent||'';
+  if(navigator.share) navigator.share({title:'Annuncio Vinted',text:txt});
+  else cp(id);
+}
+
+/* ===== STORICO (localStorage, solo su questo device) ===== */
+const HISTORY_KEY = 'vintedAiHistory';
+
+function loadHistory(){
+  try{
+    const raw = localStorage.getItem(HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  }catch(e){
+    return []; // dati corrotti: non blocco l'app, riparto da storico vuoto
+  }
+}
+
+function saveHistoryArr(arr){
+  try{
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(arr));
+  }catch(e){
+    toast('⚠️ Storico non salvato (spazio esaurito?)');
+  }
+}
+
+function upsertHistoryItem(id, patch){
+  const arr = loadHistory();
+  const idx = arr.findIndex(x=>x.id===id);
+  if(idx>=0){
+    arr[idx] = Object.assign({}, arr[idx], patch, {id, updatedAt: Date.now()});
+  }else{
+    arr.unshift(Object.assign({id, createdAt: Date.now(), updatedAt: Date.now()}, patch));
+  }
+  saveHistoryArr(arr);
+}
+
+function deleteHistoryItem(id){
+  const arr = loadHistory().filter(x=>x.id!==id);
+  saveHistoryArr(arr);
+  renderHistory();
+  toast('🗑️ Eliminato');
+}
+
+function clearHistoryConfirm(){
+  if(!loadHistory().length){ toast('Storico già vuoto'); return; }
+  if(confirm('Cancellare tutto lo storico salvato su questo dispositivo? L\'azione non è reversibile.')){
+    saveHistoryArr([]);
+    renderHistory();
+    toast('🗑️ Storico cancellato');
+  }
+}
+
+function fmtDate(ts){
+  const d = new Date(ts);
+  return d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'}) + ' ' +
+         d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+}
+
+function esc(s){
+  return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderHistory(){
+  const arr = loadHistory().sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+  const list = document.getElementById('historyList');
+  document.getElementById('historyEmpty').style.display = arr.length ? 'none' : '';
+  list.innerHTML = arr.map(item => `
+    <div class="hItem">
+      <div class="hTop">
+        <div>
+          <div class="hName">${esc(item.nome)||'Capo senza nome'}${item.marca?' · '+esc(item.marca):''}</div>
+          <div class="hSub">${esc(item.condizione)||''}${item.taglia?' · Taglia '+esc(item.taglia):''}</div>
+        </div>
+        <button class="hDel" onclick="deleteHistoryItem('${item.id}')" title="Elimina">×</button>
+      </div>
+      ${item.titolo ? `<div class="hTitolo">${esc(item.titolo)}</div>` : ''}
+      ${item.descrizione ? `<div class="hDesc">${esc(item.descrizione)}</div>` : ''}
+      ${item.hashtag ? `<div class="hDesc" style="color:var(--t)">${esc(item.hashtag)}</div>` : ''}
+      ${typeof item.prezzoSuggerito==='number' ? `<div class="hPrice">${item.prezzoSuggerito}€ <span style="font-size:12px;color:var(--mu);font-family:'Rajdhani',sans-serif">(range ${item.rangeMin}€–${item.rangeMax}€)</span></div>` : ''}
+      ${item.consiglio ? `<div class="hSub" style="margin-top:6px">💡 ${esc(item.consiglio)}</div>` : ''}
+      <div class="hDate">${fmtDate(item.updatedAt||item.createdAt)}</div>
+    </div>
+  `).join('');
+}
+
+</script>
+</body>
+</html>
