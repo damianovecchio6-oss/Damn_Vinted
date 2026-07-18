@@ -433,7 +433,7 @@ async function analyzePhoto(){
   document.getElementById('btnA').disabled=true;
   try{
     const file=selFiles[0];
-    const imageBase64=await compressImage(file);
+    const imageBase64=await compressImage(file, 1280, 0.85);
     const imageMime='image/jpeg';
     const txt=await callAI({
       type:'image',
@@ -448,7 +448,6 @@ Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo 
     try{
       obj = JSON.parse(txt.replace(/```json|```/g,'').trim());
     }catch(parseErr){
-      // fallback: mostro comunque il testo grezzo, l'utente non resta a mani vuote
       lastAnalysis = null;
       document.getElementById('rFotoTxt').textContent = txt;
       show('rFoto');
@@ -490,7 +489,6 @@ function toAnnuncio(){
   }
   document.getElementById('aNote').value = '';
 
-  // compila anche la scheda prezzo
   if(obj.tipo) document.getElementById('pNome').value = obj.tipo;
   if(obj.brand && !obj.brand.toLowerCase().includes('non identificat')) document.getElementById('pMarca').value = obj.brand;
   if(obj.condizione){
@@ -506,7 +504,6 @@ function toAnnuncio(){
     if(!document.getElementById('pPrezzo').value) document.getElementById('pPrezzo').value = mid;
   }
 
-  // vai alla scheda annuncio e genera
   sw('annuncio');
   toast('// GENERO ANNUNCIO...');
   setTimeout(function(){ genAnnuncio(); }, 600);
@@ -515,9 +512,6 @@ function toAnnuncio(){
 async function genAnnuncio(){
   show('lAnn'); hide('rAnn'); hide('eAnn');
   try{
-    // Se abbiamo appena analizzato una foto e il modello ha rilevato indizi vintage
-    // con confidenza almeno media, lo segnaliamo al prompt — altrimenti non lo nominiamo,
-    // per non inventare un'informazione che non è abbastanza solida.
     let vintageHint = '';
     if(lastAnalysis && lastAnalysis.vintageStima && !lastAnalysis.vintageStima.toLowerCase().includes('non vintage')){
       const conf = (lastAnalysis.vintageConfidenza||'').toLowerCase();
@@ -550,7 +544,6 @@ Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo 
     try{
       d = JSON.parse(raw.replace(/```json|```/g,'').trim());
     }catch(parseErr){
-      // fallback: il modello non ha rispettato il formato, mostro comunque il testo grezzo
       document.getElementById('rAnnTxt').textContent = raw;
       document.getElementById('rAnnTitolo').textContent = '';
       document.getElementById('rAnnDesc').textContent = raw;
@@ -693,7 +686,7 @@ function deleteHistoryItem(id){
   const arr = loadHistory().filter(x=>x.id!==id);
   saveHistoryArr(arr);
   renderHistory();
-  toast('🗑 Eliminato');
+  toast('🗑️ Eliminato');
 }
 
 function clearHistoryConfirm(){
