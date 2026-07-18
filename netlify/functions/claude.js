@@ -77,7 +77,7 @@ exports.handler = async (event) => {
       messages = [{ role: 'user', content: prompt }];
     }
 
-    const model = type === 'image' ? 'meta-llama/llama-4-scout-17b-16e-instruct' : 'llama-3.3-70b-versatile';
+    const model = type === 'image' ? 'qwen/qwen3.6-27b' : 'openai/gpt-oss-120b';
 
     const payload = JSON.stringify({
       model,
