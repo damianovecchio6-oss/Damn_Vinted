@@ -34,7 +34,6 @@ async function callGroqWithRetry(payload, maxRetries) {
     if (!retriable || attempt === maxRetries) return result;
 
     lastErr = result;
-    // backoff esponenziale: 500ms, 1000ms, 2000ms...
     await sleep(500 * Math.pow(2, attempt));
   }
   return lastErr;
@@ -64,7 +63,6 @@ exports.handler = async (event) => {
 
     let messages;
     if (type === 'image') {
-      // Groq vuole sempre image/jpeg o image/png
       const mime = (imageMime === 'image/png') ? 'image/png' : 'image/jpeg';
       messages = [{
         role: 'user',
@@ -82,7 +80,8 @@ exports.handler = async (event) => {
     const payload = JSON.stringify({
       model,
       messages,
-      max_tokens: 1024
+      max_tokens: 1024,
+      reasoning_effort: 'none'
     });
 
     const result = await callGroqWithRetry(payload, 2);
@@ -97,8 +96,12 @@ exports.handler = async (event) => {
     const data = JSON.parse(result.body);
     if (data.error) throw new Error(data.error.message);
 
-    const text = data.choices?.[0]?.message?.content;
+    let text = data.choices?.[0]?.message?.content;
     if (!text) throw new Error('Risposta vuota: ' + JSON.stringify(data));
+
+    // Alcuni modelli (es. modelli "reasoning") includono un blocco di pensiero
+    // prima della risposta vera: lo rimuoviamo per non rompere il parsing JSON lato client.
+    text = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
 
     return {
       statusCode: 200,
