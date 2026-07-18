@@ -34,6 +34,7 @@ async function callGroqWithRetry(payload, maxRetries) {
     if (!retriable || attempt === maxRetries) return result;
 
     lastErr = result;
+    // backoff esponenziale: 500ms, 1000ms, 2000ms...
     await sleep(500 * Math.pow(2, attempt));
   }
   return lastErr;
@@ -63,6 +64,7 @@ exports.handler = async (event) => {
 
     let messages;
     if (type === 'image') {
+      // Groq vuole sempre image/jpeg o image/png
       const mime = (imageMime === 'image/png') ? 'image/png' : 'image/jpeg';
       messages = [{
         role: 'user',
@@ -76,12 +78,13 @@ exports.handler = async (event) => {
     }
 
     const model = type === 'image' ? 'qwen/qwen3.6-27b' : 'openai/gpt-oss-120b';
+    const reasoningEffort = type === 'image' ? 'none' : 'low';
 
     const payload = JSON.stringify({
       model,
       messages,
       max_tokens: 1024,
-      reasoning_effort: 'none'
+      reasoning_effort: reasoningEffort
     });
 
     const result = await callGroqWithRetry(payload, 2);
