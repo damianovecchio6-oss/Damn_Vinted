@@ -439,8 +439,10 @@ async function analyzePhoto(){
       type:'image',
       imageBase64,
       imageMime,
-      prompt:`Analizza questo capo di abbigliamento. Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo prima o dopo:
-{"tipo":"es: giacca in pelle","brand":"leggi l'etichetta, se non visibile scrivi Non identificato","colore":"","materiale":"es: 100% cotone, se visibile sull'etichetta","condizione":"una tra: Nuovo con etichetta, Nuovo senza etichetta, Ottimo, Buono, Soddisfacente","taglie":"taglie probabili","stagione":"","stile":"es: streetwear, casual, elegante, sportivo, vintage","fasciaPrezzo":"es: 20-50€","fasciaPrezzoMin":20,"fasciaPrezzoMax":50,"note":"difetti visibili, usura, dettagli particolari"}`
+      prompt:`Analizza questo capo di abbigliamento con l'occhio di un esperto di seconda mano e vintage. Guarda con attenzione l'etichetta (se visibile): il tipo di font del logo, il formato dell'etichetta di lavaggio/composizione, lo stile di cucitura, il tipo di tessuto, eventuali codici o scritte — questi sono indizi per capire se il capo è vintage e di che epoca.
+
+Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo prima o dopo:
+{"tipo":"es: giacca in pelle","brand":"leggi l'etichetta, se non visibile scrivi Non identificato","colore":"","materiale":"es: 100% cotone, se visibile sull'etichetta","condizione":"una tra: Nuovo con etichetta, Nuovo senza etichetta, Ottimo, Buono, Soddisfacente","taglie":"taglie probabili","stagione":"","stile":"es: streetwear, casual, elegante, sportivo, vintage","fasciaPrezzo":"es: 20-50€","fasciaPrezzoMin":20,"fasciaPrezzoMax":50,"note":"difetti visibili, usura, dettagli particolari","vintageStima":"es: Anni 90, Y2K, Anni 80, oppure Non vintage se non ci sono indizi","vintageIndizi":"elenco breve degli indizi visivi concreti che ti fanno pensare sia vintage (o assenza di indizi), es: etichetta con font squadrato tipico anni 90, cucitura a doppio filo, tessuto pesante non più in uso","vintageConfidenza":"una tra: bassa, media, alta - quanto sei sicuro della stima vintage"}`
     });
     let obj;
     try{
@@ -455,8 +457,12 @@ async function analyzePhoto(){
       return;
     }
     lastAnalysis = obj;
+    const isVintage = obj.vintageStima && !obj.vintageStima.toLowerCase().includes('non vintage');
+    const vintageLine = isVintage
+      ? `\n🕰️ POSSIBILE VINTAGE: ${obj.vintageStima} (confidenza: ${obj.vintageConfidenza||'non specificata'})\n🔍 INDIZI: ${obj.vintageIndizi||''}`
+      : '';
     document.getElementById('rFotoTxt').textContent =
-      `🏷️ TIPO DI CAPO: ${obj.tipo||''}\n👔 BRAND / MARCA: ${obj.brand||''}\n🎨 COLORE/I: ${obj.colore||''}\n🧵 MATERIALE: ${obj.materiale||''}\n⭐ CONDIZIONE STIMATA: ${obj.condizione||''}\n📐 TAGLIE PROBABILI: ${obj.taglie||''}\n🗓️ STAGIONE: ${obj.stagione||''}\n✨ STILE: ${obj.stile||''}\n💰 FASCIA DI PREZZO ORIGINALE STIMATA: ${obj.fasciaPrezzo||''}\n💡 NOTE: ${obj.note||''}`;
+      `🏷️ TIPO DI CAPO: ${obj.tipo||''}\n👔 BRAND / MARCA: ${obj.brand||''}\n🎨 COLORE/I: ${obj.colore||''}\n🧵 MATERIALE: ${obj.materiale||''}\n⭐ CONDIZIONE STIMATA: ${obj.condizione||''}\n📐 TAGLIE PROBABILI: ${obj.taglie||''}\n🗓️ STAGIONE: ${obj.stagione||''}\n✨ STILE: ${obj.stile||''}\n💰 FASCIA DI PREZZO ORIGINALE STIMATA: ${obj.fasciaPrezzo||''}\n💡 NOTE: ${obj.note||''}${vintageLine}`;
     show('rFoto');
   }catch(e){
     document.getElementById('eFoto').textContent='⚠️ '+e.message;
@@ -509,19 +515,36 @@ function toAnnuncio(){
 async function genAnnuncio(){
   show('lAnn'); hide('rAnn'); hide('eAnn');
   try{
+    // Se abbiamo appena analizzato una foto e il modello ha rilevato indizi vintage
+    // con confidenza almeno media, lo segnaliamo al prompt — altrimenti non lo nominiamo,
+    // per non inventare un'informazione che non è abbastanza solida.
+    let vintageHint = '';
+    if(lastAnalysis && lastAnalysis.vintageStima && !lastAnalysis.vintageStima.toLowerCase().includes('non vintage')){
+      const conf = (lastAnalysis.vintageConfidenza||'').toLowerCase();
+      if(conf === 'media' || conf === 'alta'){
+        vintageHint = `\n- Possibile epoca vintage: ${lastAnalysis.vintageStima} (indizi: ${lastAnalysis.vintageIndizi||'non specificati'}) — menzionalo con cautela, es. "in stile anni 90" o "con dettagli che richiamano gli anni 90", MAI come certificazione assoluta`;
+      }
+    }
     const raw=await callAI({
       type:'text',
-      prompt:`Crea un annuncio Vinted in italiano con tono ${selTone}:
+      prompt:`Scrivi un annuncio Vinted in italiano, tono ${selTone}, per questo capo:
 - Capo: ${v('aNome')||'Non specificato'}
 - Marca: ${v('aMarca')||'Non specificata'}
 - Taglia: ${v('aTaglia')||'Non specificata'}
 - Condizione: ${v('aCond')}
 - Colore: ${v('aColore')||'Non specificato'}
 - Materiale: ${v('aMat')||'Non specificato'}
-- Dettagli: ${v('aNote')||'Nessuno'}
+- Dettagli: ${v('aNote')||'Nessuno'}${vintageHint}
+
+REGOLE IMPORTANTI per non suonare generico o da pubblicità:
+- Vietate frasi fatte tipo "capo must-have", "perfetto per ogni occasione", "pezzo unico nel suo genere", "dona un tocco di classe", "ideale per ogni stagione", o qualunque frase che potrebbe andare bene per QUALSIASI capo
+- Ogni frase deve contenere almeno un dettaglio CONCRETO preso dai dati sopra (il colore esatto, il materiale, un dettaglio delle note, l'occasione d'uso specifica per quel tipo di capo)
+- Scrivi come lo scriverebbe una persona reale che vende un proprio vestito, non un copywriter pubblicitario
+- Massimo 1 emoji in tutta la descrizione, zero se il tono è "professionale ed elegante"
+- Se non hai abbastanza dettagli specifici, sii onesto e breve piuttosto che riempire con frasi vuote
 
 Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo prima o dopo:
-{"titolo":"max 60 caratteri","descrizione":"3-5 frasi","hashtag":"10 hashtag separati da spazio, es #tag1 #tag2"}`
+{"titolo":"max 60 caratteri, specifico non generico","descrizione":"3-5 frasi concrete","hashtag":"10 hashtag separati da spazio, es #tag1 #tag2"}`
     });
     let d;
     try{
@@ -615,7 +638,6 @@ function cpField(id){
   else{const ta=document.createElement('textarea');ta.value=txt;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('✅ Copiato!')}
 }
 function openVinted(){
-  // Copia automaticamente il titolo e apre Vinted
   const titolo=document.getElementById('rAnnTitolo')?.textContent||'';
   if(navigator.clipboard) navigator.clipboard.writeText(titolo);
   window.open('https://www.vinted.it/items/new','_blank');
@@ -644,7 +666,7 @@ function loadHistory(){
     const raw = localStorage.getItem(HISTORY_KEY);
     return raw ? JSON.parse(raw) : [];
   }catch(e){
-    return []; // dati corrotti: non blocco l'app, riparto da storico vuoto
+    return [];
   }
 }
 
@@ -671,7 +693,7 @@ function deleteHistoryItem(id){
   const arr = loadHistory().filter(x=>x.id!==id);
   saveHistoryArr(arr);
   renderHistory();
-  toast('🗑️ Eliminato');
+  toast('🗑 Eliminato');
 }
 
 function clearHistoryConfirm(){
