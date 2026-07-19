@@ -59,7 +59,7 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { type, prompt, imageBase64, imageMime } = JSON.parse(event.body);
+    const { type, prompt, imageBase64, imageMime, creative } = JSON.parse(event.body);
 
     let messages;
     if (type === 'image') {
@@ -76,16 +76,15 @@ exports.handler = async (event) => {
     }
 
     const model = type === 'image' ? 'qwen/qwen3.6-27b' : 'openai/gpt-oss-120b';
-    // 'none' sulle foto: 'default' fa partire un ragionamento lungo che spesso
-    // consuma tutto il budget di token prima di arrivare al JSON vero e proprio.
     const reasoningEffort = type === 'image' ? 'none' : 'low';
+    const temperature = creative ? 0.9 : 0.2;
 
     const payload = JSON.stringify({
       model,
       messages,
       max_tokens: 1536,
       reasoning_effort: reasoningEffort,
-      temperature: 0.2
+      temperature
     });
 
     const result = await callGroqWithRetry(payload, 2);
@@ -103,11 +102,7 @@ exports.handler = async (event) => {
     let text = data.choices?.[0]?.message?.content;
     if (!text) throw new Error('Risposta vuota: ' + JSON.stringify(data));
 
-    // Rimuove blocchi di pensiero chiusi normalmente...
     text = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-    // ...e gestisce anche il caso di un tag <think> rimasto aperto (risposta troncata
-    // prima della chiusura): tutto ciò che segue non è più affidabile, quindi tronchiamo
-    // lì e segnaliamo un errore chiaro invece di mostrare pensieri grezzi del modello.
     if (text.includes('<think>')) {
       text = text.split('<think>')[0].trim();
     }
