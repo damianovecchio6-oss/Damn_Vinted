@@ -423,4 +423,335 @@ function compressImage(file, maxSize, quality){
       URL.revokeObjectURL(url);
       res(dataUrl.split(',')[1]);
     };
-    img.onerror=function(){
+    img.onerror=function(){ rej(new Error('Caricamento immagine fallito')); };
+    img.src=url;
+  });
+}
+
+async function analyzePhoto(){
+  if(!selFiles.length) return;
+  show('lFoto'); hide('rFoto'); hide('eFoto');
+  document.getElementById('btnA').disabled=true;
+  try{
+    const file=selFiles[0];
+    const imageBase64=await compressImage(file, 1280, 0.85);
+    const imageMime='image/jpeg';
+    try{
+      lastThumbnail = 'data:image/jpeg;base64,' + await compressImage(file, 160, 0.5);
+    }catch(thumbErr){
+      lastThumbnail = null;
+    }
+    const txt=await callAI({
+      type:'image',
+      imageBase64,
+      imageMime,
+      prompt:`Analizza questo capo di abbigliamento con l'occhio di un esperto di seconda mano e vintage. Guarda con attenzione l'etichetta (se visibile): il tipo di font del logo, il formato dell'etichetta di lavaggio/composizione, lo stile di cucitura, il tipo di tessuto, eventuali codici o scritte — questi sono indizi per capire se il capo è vintage e di che epoca.
+
+Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo prima o dopo:
+{"tipo":"es: giacca in pelle","brand":"leggi l'etichetta, se non visibile scrivi Non identificato","colore":"","materiale":"es: 100% cotone, se visibile sull'etichetta","condizione":"una tra: Nuovo con etichetta, Nuovo senza etichetta, Ottimo, Buono, Soddisfacente","taglie":"taglie probabili","stagione":"","stile":"es: streetwear, casual, elegante, sportivo, vintage","fasciaPrezzo":"es: 20-50€","fasciaPrezzoMin":20,"fasciaPrezzoMax":50,"note":"difetti visibili, usura, dettagli particolari","vintageStima":"es: Anni 90, Y2K, Anni 80, oppure Non vintage se non ci sono indizi","vintageIndizi":"elenco breve degli indizi visivi concreti che ti fanno pensare sia vintage (o assenza di indizi), es: etichetta con font squadrato tipico anni 90, cucitura a doppio filo, tessuto pesante non più in uso","vintageConfidenza":"una tra: bassa, media, alta - quanto sei sicuro della stima vintage"}`
+    });
+    let obj;
+    try{
+      obj = JSON.parse(txt.replace(/```json|```/g,'').trim());
+    }catch(parseErr){
+      lastAnalysis = null;
+      document.getElementById('rFotoTxt').textContent = txt;
+      show('rFoto');
+      hide('lFoto');
+      document.getElementById('btnA').disabled=false;
+      return;
+    }
+    lastAnalysis = obj;
+    const isVintage = obj.vintageStima && !obj.vintageStima.toLowerCase().includes('non vintage');
+    const vintageLine = isVintage
+      ? `\n🕰️ POSSIBILE VINTAGE: ${obj.vintageStima} (confidenza: ${obj.vintageConfidenza||'non specificata'})\n🔍 INDIZI: ${obj.vintageIndizi||''}`
+      : '';
+    document.getElementById('rFotoTxt').textContent =
+      `🏷️ TIPO DI CAPO: ${obj.tipo||''}\n👔 BRAND / MARCA: ${obj.brand||''}\n🎨 COLORE/I: ${obj.colore||''}\n🧵 MATERIALE: ${obj.materiale||''}\n⭐ CONDIZIONE STIMATA: ${obj.condizione||''}\n📐 TAGLIE PROBABILI: ${obj.taglie||''}\n🗓️ STAGIONE: ${obj.stagione||''}\n✨ STILE: ${obj.stile||''}\n💰 FASCIA DI PREZZO ORIGINALE STIMATA: ${obj.fasciaPrezzo||''}\n💡 NOTE: ${obj.note||''}${vintageLine}`;
+    show('rFoto');
+  }catch(e){
+    document.getElementById('eFoto').textContent='⚠️ '+e.message;
+    show('eFoto');
+  }
+  hide('lFoto');
+  document.getElementById('btnA').disabled=false;
+}
+
+function toAnnuncio(){
+  if(!lastAnalysis){ toast('ANALIZZA PRIMA UN CAPO!'); return; }
+  const obj = lastAnalysis;
+  currentItemId = 'item_'+Date.now();
+
+  if(obj.tipo) document.getElementById('aNome').value = obj.tipo;
+  if(obj.brand && !obj.brand.toLowerCase().includes('non identificat')) document.getElementById('aMarca').value = obj.brand;
+  if(obj.colore) document.getElementById('aColore').value = obj.colore;
+  if(obj.materiale) document.getElementById('aMat').value = obj.materiale;
+  if(obj.condizione){
+    const condEl = document.getElementById('aCond');
+    const opts = ['Nuovo con etichetta','Nuovo senza etichetta','Ottimo','Buono','Soddisfacente'];
+    for(let i=0;i<opts.length;i++){
+      if(obj.condizione.toLowerCase().includes(opts[i].toLowerCase().split(' ')[0])){ condEl.value=opts[i]; break; }
+    }
+  }
+  document.getElementById('aNote').value = '';
+
+  if(obj.tipo) document.getElementById('pNome').value = obj.tipo;
+  if(obj.brand && !obj.brand.toLowerCase().includes('non identificat')) document.getElementById('pMarca').value = obj.brand;
+  if(obj.condizione){
+    const pCondEl = document.getElementById('pCond');
+    const pOpts = ['Nuovo con etichetta','Nuovo senza etichetta','Ottimo','Buono','Soddisfacente'];
+    for(let j=0;j<pOpts.length;j++){
+      if(obj.condizione.toLowerCase().includes(pOpts[j].toLowerCase().split(' ')[0])){ pCondEl.value=pOpts[j]; break; }
+    }
+  }
+  if(obj.tipo) document.getElementById('pCat').value = obj.tipo;
+  if(typeof obj.fasciaPrezzoMin === 'number' && typeof obj.fasciaPrezzoMax === 'number'){
+    const mid = Math.round((obj.fasciaPrezzoMin + obj.fasciaPrezzoMax)/2);
+    if(!document.getElementById('pPrezzo').value) document.getElementById('pPrezzo').value = mid;
+  }
+
+  sw('annuncio');
+  toast('// GENERO ANNUNCIO...');
+  setTimeout(function(){ genAnnuncio(); }, 600);
+}
+
+async function genAnnuncio(){
+  show('lAnn'); hide('rAnn'); hide('eAnn');
+  try{
+    let vintageHint = '';
+    if(lastAnalysis && lastAnalysis.vintageStima && !lastAnalysis.vintageStima.toLowerCase().includes('non vintage')){
+      const conf = (lastAnalysis.vintageConfidenza||'').toLowerCase();
+      if(conf === 'media' || conf === 'alta'){
+        vintageHint = `\n- Possibile epoca vintage: ${lastAnalysis.vintageStima} (indizi: ${lastAnalysis.vintageIndizi||'non specificati'}) — menzionalo con cautela, es. "in stile anni 90" o "con dettagli che richiamano gli anni 90", MAI come certificazione assoluta`;
+      }
+    }
+    const angoli = [
+      'parti descrivendo subito il colore o il materiale',
+      'parti dall\'occasione in cui useresti questo capo',
+      'parti da un dettaglio delle note o della condizione',
+      'parti in modo diretto, dicendo cosa vendi e perché è comodo/bello da indossare',
+      'parti da come sta o da un abbinamento pratico'
+    ];
+    const angoloScelto = angoli[Math.floor(Math.random()*angoli.length)];
+
+    const raw=await callAI({
+      type:'text',
+      creative:true,
+      prompt:`Scrivi un annuncio Vinted in italiano, tono ${selTone}, per questo capo:
+- Capo: ${v('aNome')||'Non specificato'}
+- Marca: ${v('aMarca')||'Non specificata'}
+- Taglia: ${v('aTaglia')||'Non specificata'}
+- Condizione: ${v('aCond')}
+- Colore: ${v('aColore')||'Non specificato'}
+- Materiale: ${v('aMat')||'Non specificato'}
+- Dettagli: ${v('aNote')||'Nessuno'}${vintageHint}
+
+Per la descrizione, ${angoloScelto} — non iniziare sempre allo stesso modo.
+
+REGOLE IMPORTANTI per non suonare generico o da pubblicità:
+- Vietate frasi fatte tipo "capo must-have", "perfetto per ogni occasione", "pezzo unico nel suo genere", "dona un tocco di classe", "ideale per ogni stagione", o qualunque frase che potrebbe andare bene per QUALSIASI capo
+- Ogni frase deve contenere almeno un dettaglio CONCRETO preso dai dati sopra (il colore esatto, il materiale, un dettaglio delle note, l'occasione d'uso specifica per quel tipo di capo)
+- Scrivi come lo scriverebbe una persona reale che vende un proprio vestito, non un copywriter pubblicitario
+- Massimo 1 emoji in tutta la descrizione, zero se il tono è "professionale ed elegante"
+- Se non hai abbastanza dettagli specifici, sii onesto e breve piuttosto che riempire con frasi vuote
+
+Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo prima o dopo:
+{"titolo":"max 60 caratteri, specifico non generico","descrizione":"3-5 frasi concrete","hashtag":"10 hashtag separati da spazio, es #tag1 #tag2"}`
+    });
+    let d;
+    try{
+      d = JSON.parse(raw.replace(/```json|```/g,'').trim());
+    }catch(parseErr){
+      document.getElementById('rAnnTxt').textContent = raw;
+      document.getElementById('rAnnTitolo').textContent = '';
+      document.getElementById('rAnnDesc').textContent = raw;
+      document.getElementById('rAnnHash').textContent = '';
+      show('rAnn');
+      hide('lAnn');
+      return;
+    }
+    document.getElementById('rAnnTxt').textContent = `${d.titolo}\n\n${d.descrizione}\n\n${d.hashtag}`;
+    document.getElementById('rAnnTitolo').textContent = d.titolo || '';
+    document.getElementById('rAnnDesc').textContent = d.descrizione || '';
+    document.getElementById('rAnnHash').textContent = d.hashtag || '';
+    show('rAnn');
+
+    if(!currentItemId) currentItemId = 'item_'+Date.now();
+    upsertHistoryItem(currentItemId, {
+      nome: v('aNome'), marca: v('aMarca'), taglia: v('aTaglia'), condizione: v('aCond'),
+      titolo: d.titolo||'', descrizione: d.descrizione||'', hashtag: d.hashtag||'',
+      foto: lastThumbnail || undefined
+    });
+  }catch(e){
+    document.getElementById('eAnn').textContent='⚠️ '+e.message;
+    show('eAnn');
+  }
+  hide('lAnn');
+}
+
+async function stimaPrezzo(){
+  show('lPre'); hide('rPre'); hide('ePre');
+  document.getElementById('pBar').style.width='0%';
+  try{
+    const raw=await callAI({
+      type:'text',
+      prompt:`Sei un esperto di second-hand e resell sul mercato italiano, con conoscenza approfondita di Vinted Italia.
+Analizza questi dati e stima il prezzo di rivendita REALISTICO su Vinted Italia:
+
+CAPO: ${v('pNome')||'Non specificato'}
+MARCA: ${v('pMarca')||'Non specificata'}
+CONDIZIONE: ${v('pCond')}
+PREZZO ORIGINALE: ${v('pPrezzo')?v('pPrezzo')+'€':'Non noto'}
+ANNO ACQUISTO: ${v('pAnno')||'Non noto'}
+CATEGORIA: ${v('pCat')||'Abbigliamento'}
+
+Considera attentamente:
+1. POPOLARITÀ DEL BRAND su Vinted Italia (brand luxury, streetwear, fast fashion hanno valori molto diversi)
+2. DEPREZZAMENTO reale (fast fashion perde 60-80% del valore, luxury 20-40%)
+3. CONDIZIONE (nuovo con etichetta vale molto di più di "buono")
+4. STAGIONALITÀ (un cappotto in estate vale meno)
+5. DOMANDA ATTUALE su Vinted per quel tipo di capo
+6. CONCORRENZA (quanti articoli simili ci sono su Vinted)
+7. Se il brand non è noto, stima in base alla categoria e condizione
+8. Dai un prezzo COMPETITIVO che venda velocemente, non il massimo teorico
+
+Rispondi SOLO con questo JSON valido senza backtick ne markdown:
+{"prezzoSuggerito":25,"rangeMin":18,"rangeMax":35,"percentuale":60,"motivazione":"Spiegazione dettagliata del prezzo basata su dati reali Vinted","fattori":["Fattore specifico 1","Fattore specifico 2","Fattore specifico 3","Fattore specifico 4"],"consiglio":"Consiglio pratico specifico per vendere questo capo velocemente su Vinted"}`
+    });
+    let d;
+    try{
+      d = JSON.parse(raw.replace(/```json|```/g,'').trim());
+    }catch(parseErr){
+      throw new Error('Risposta AI in formato inatteso, riprova.');
+    }
+    document.getElementById('pNum').textContent=d.prezzoSuggerito+'€';
+    document.getElementById('pRng').textContent=`range: ${d.rangeMin}€ – ${d.rangeMax}€`;
+    document.getElementById('pMot').textContent=d.motivazione;
+    setTimeout(()=>document.getElementById('pBar').style.width=(d.percentuale||55)+'%',80);
+    document.getElementById('pFact').innerHTML=(d.fattori||[]).map(f=>`<li class="fli"><span class="fdot"></span>${f}</li>`).join('');
+    document.getElementById('pTip').innerHTML=`💡 <strong>Consiglio:</strong> ${d.consiglio}`;
+    show('rPre');
+
+    if(!currentItemId) currentItemId = 'item_'+Date.now();
+    upsertHistoryItem(currentItemId, {
+      nome: v('pNome'), marca: v('pMarca'), condizione: v('pCond'),
+      prezzoSuggerito: d.prezzoSuggerito, rangeMin: d.rangeMin, rangeMax: d.rangeMax, consiglio: d.consiglio||'',
+      foto: lastThumbnail || undefined
+    });
+  }catch(e){
+    document.getElementById('ePre').textContent='⚠️ '+e.message;
+    show('ePre');
+  }
+  hide('lPre');
+}
+
+function cpField(id){
+  const txt=document.getElementById(id)?.textContent||'';
+  if(navigator.clipboard){navigator.clipboard.writeText(txt).then(()=>toast('✅ Copiato!'))}
+  else{const ta=document.createElement('textarea');ta.value=txt;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('✅ Copiato!')}
+}
+function openVinted(){
+  const titolo=document.getElementById('rAnnTitolo')?.textContent||'';
+  if(navigator.clipboard) navigator.clipboard.writeText(titolo);
+  window.open('https://www.vinted.it/items/new','_blank');
+  toast('✅ Titolo copiato — incollalo su Vinted!');
+}
+const v=id=>document.getElementById(id)?.value?.trim()||'';
+const show=id=>document.getElementById(id).style.display='';
+const hide=id=>document.getElementById(id).style.display='none';
+function toast(msg,dur=2500){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),dur);}
+function cp(id){
+  const txt=document.getElementById(id)?.textContent||'';
+  if(navigator.clipboard){navigator.clipboard.writeText(txt).then(()=>toast('✅ Copiato!'))}
+  else{const ta=document.createElement('textarea');ta.value=txt;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('✅ Copiato!')}
+}
+function sh(id){
+  const txt=document.getElementById(id)?.textContent||'';
+  if(navigator.share) navigator.share({title:'Annuncio Vinted',text:txt});
+  else cp(id);
+}
+
+/* ===== STORICO (localStorage, solo su questo device) ===== */
+const HISTORY_KEY = 'vintedAiHistory';
+
+function loadHistory(){
+  try{
+    const raw = localStorage.getItem(HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  }catch(e){
+    return [];
+  }
+}
+
+function saveHistoryArr(arr){
+  try{
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(arr));
+  }catch(e){
+    toast('⚠️ Storico non salvato (spazio esaurito?)');
+  }
+}
+
+function upsertHistoryItem(id, patch){
+  const arr = loadHistory();
+  const idx = arr.findIndex(x=>x.id===id);
+  if(idx>=0){
+    arr[idx] = Object.assign({}, arr[idx], patch, {id, updatedAt: Date.now()});
+  }else{
+    arr.unshift(Object.assign({id, createdAt: Date.now(), updatedAt: Date.now()}, patch));
+  }
+  saveHistoryArr(arr);
+}
+
+function deleteHistoryItem(id){
+  const arr = loadHistory().filter(x=>x.id!==id);
+  saveHistoryArr(arr);
+  renderHistory();
+  toast('🗑️ Eliminato');
+}
+
+function clearHistoryConfirm(){
+  if(!loadHistory().length){ toast('Storico già vuoto'); return; }
+  if(confirm('Cancellare tutto lo storico salvato su questo dispositivo? L\'azione non è reversibile.')){
+    saveHistoryArr([]);
+    renderHistory();
+    toast('🗑️ Storico cancellato');
+  }
+}
+
+function fmtDate(ts){
+  const d = new Date(ts);
+  return d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'}) + ' ' +
+         d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+}
+
+function esc(s){
+  return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderHistory(){
+  const arr = loadHistory().sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+  const list = document.getElementById('historyList');
+  document.getElementById('historyEmpty').style.display = arr.length ? 'none' : '';
+  list.innerHTML = arr.map(item => `
+    <div class="hItem">
+      <div class="hTop">
+        ${item.foto ? `<img src="${item.foto}" style="width:52px;height:52px;border-radius:8px;object-fit:cover;border:1px solid var(--bd);flex-shrink:0"/>` : ''}
+        <div style="flex:1">
+          <div class="hName">${esc(item.nome)||'Capo senza nome'}${item.marca?' · '+esc(item.marca):''}</div>
+          <div class="hSub">${esc(item.condizione)||''}${item.taglia?' · Taglia '+esc(item.taglia):''}</div>
+        </div>
+        <button class="hDel" onclick="deleteHistoryItem('${item.id}')" title="Elimina">×</button>
+      </div>
+      ${item.titolo ? `<div class="hTitolo">${esc(item.titolo)}</div>` : ''}
+      ${item.descrizione ? `<div class="hDesc">${esc(item.descrizione)}</div>` : ''}
+      ${item.hashtag ? `<div class="hDesc" style="color:var(--t)">${esc(item.hashtag)}</div>` : ''}
+      ${typeof item.prezzoSuggerito==='number' ? `<div class="hPrice">${item.prezzoSuggerito}€ <span style="font-size:12px;color:var(--mu);font-family:'Rajdhani',sans-serif">(range ${item.rangeMin}€–${item.rangeMax}€)</span></div>` : ''}
+      ${item.consiglio ? `<div class="hSub" style="margin-top:6px">💡 ${esc(item.consiglio)}</div>` : ''}
+      <div class="hDate">${fmtDate(item.updatedAt||item.createdAt)}</div>
+    </div>
+  `).join('');
+}
+
+</script>
+</body>
+</html>
