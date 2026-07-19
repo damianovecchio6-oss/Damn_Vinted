@@ -76,14 +76,14 @@ exports.handler = async (event) => {
     }
 
     const model = type === 'image' ? 'qwen/qwen3.6-27b' : 'openai/gpt-oss-120b';
-    // qwen3 accetta solo 'none' o 'default' per reasoning_effort;
-    // gpt-oss accetta invece 'low'/'medium'/'high'. Vocabolari diversi per modello.
-    const reasoningEffort = type === 'image' ? 'default' : 'low';
+    // 'none' sulle foto: 'default' fa partire un ragionamento lungo che spesso
+    // consuma tutto il budget di token prima di arrivare al JSON vero e proprio.
+    const reasoningEffort = type === 'image' ? 'none' : 'low';
 
     const payload = JSON.stringify({
       model,
       messages,
-      max_tokens: 1024,
+      max_tokens: 1536,
       reasoning_effort: reasoningEffort,
       temperature: 0.2
     });
@@ -103,9 +103,15 @@ exports.handler = async (event) => {
     let text = data.choices?.[0]?.message?.content;
     if (!text) throw new Error('Risposta vuota: ' + JSON.stringify(data));
 
-    // Alcuni modelli (es. modelli "reasoning") includono un blocco di pensiero
-    // prima della risposta vera: lo rimuoviamo per non rompere il parsing JSON lato client.
+    // Rimuove blocchi di pensiero chiusi normalmente...
     text = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+    // ...e gestisce anche il caso di un tag <think> rimasto aperto (risposta troncata
+    // prima della chiusura): tutto ciò che segue non è più affidabile, quindi tronchiamo
+    // lì e segnaliamo un errore chiaro invece di mostrare pensieri grezzi del modello.
+    if (text.includes('<think>')) {
+      text = text.split('<think>')[0].trim();
+    }
+    if (!text) throw new Error('Il modello non ha completato la risposta in tempo, riprova.');
 
     return {
       statusCode: 200,
@@ -119,5 +125,3 @@ exports.handler = async (event) => {
       headers: { ...cors, 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: e.message })
     };
-  }
-};
