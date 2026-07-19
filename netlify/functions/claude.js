@@ -76,16 +76,15 @@ exports.handler = async (event) => {
     }
 
     const model = type === 'image' ? 'qwen/qwen3.6-27b' : 'openai/gpt-oss-120b';
-    // 'low' invece di 'none' sulle foto: dà al modello un attimo in più per leggere
-    // bene etichette piccole/sfocate prima di rispondere, a scapito di qualche secondo.
-    const reasoningEffort = type === 'image' ? 'low' : 'low';
+    // qwen3 accetta solo 'none' o 'default' per reasoning_effort;
+    // gpt-oss accetta invece 'low'/'medium'/'high'. Vocabolari diversi per modello.
+    const reasoningEffort = type === 'image' ? 'default' : 'low';
 
     const payload = JSON.stringify({
       model,
       messages,
       max_tokens: 1024,
       reasoning_effort: reasoningEffort,
-      // temperature bassa: stesso capo, stessa foto → risposta più stabile tra un tentativo e l'altro
       temperature: 0.2
     });
 
