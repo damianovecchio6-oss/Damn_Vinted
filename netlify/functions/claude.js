@@ -125,3 +125,5 @@ exports.handler = async (event) => {
       headers: { ...cors, 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: e.message })
     };
+  }
+};
