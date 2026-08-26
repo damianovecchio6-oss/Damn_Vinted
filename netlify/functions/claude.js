@@ -1,124 +1,154 @@
 const https = require('https');
 
-const GROQ_KEY = process.env.GROQ_KEY;
+// La chiave NON sta piu' nel codice.
+// Su Netlify: Site settings > Environment variables > GROQ_API_KEY
+const GROQ_KEY = process.env.GROQ_API_KEY;
 
-function sleep(ms) { return new Promise(res => setTimeout(res, ms)); }
+// Metti qui il dominio del tuo sito per impedire che altri usino la tua chiave.
+// Esempio: ['https://vinted-damn.netlify.app', 'http://localhost:8888']
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
+  .split(',').map(s => s.trim()).filter(Boolean);
 
-// Chiama Groq con retry su errori transitori (429 rate limit, 5xx server error)
-async function callGroqWithRetry(payload, maxRetries) {
-  maxRetries = maxRetries || 2;
-  let lastErr;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const result = await new Promise((resolve, reject) => {
-      const options = {
-        hostname: 'api.groq.com',
-        path: '/openai/v1/chat/completions',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${GROQ_KEY}`,
-          'Content-Length': Buffer.byteLength(payload)
-        }
-      };
-      const req = https.request(options, (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => resolve({ status: res.statusCode, body: data }));
-      });
-      req.on('error', reject);
-      req.write(payload);
-      req.end();
-    });
+const MAX_BODY = 6 * 1024 * 1024; // 6MB, limite Netlify
+const TIMEOUT_MS = 25000;
 
-    const retriable = result.status === 429 || result.status >= 500;
-    if (!retriable || attempt === maxRetries) return result;
-
-    lastErr = result;
-    await sleep(500 * Math.pow(2, attempt));
-  }
-  return lastErr;
+function corsFor(origin) {
+  let allow = 'null';
+  if (ALLOWED_ORIGINS.length === 0) allow = origin || '*';       // dev: nessuna lista = passa tutto
+  else if (origin && ALLOWED_ORIGINS.includes(origin)) allow = origin;
+  return {
+    'Access-Control-Allow-Origin': allow,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Vary': 'Origin'
+  };
 }
 
 exports.handler = async (event) => {
-  const cors = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type'
-  };
+  const origin = event.headers.origin || event.headers.Origin || '';
+  const cors = corsFor(origin);
 
   if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers: cors, body: '' };
+    return { statusCode: 204, headers: cors, body: '' };
   }
-
+  if (event.httpMethod !== 'POST') {
+    return json(405, cors, { error: 'Metodo non consentito' });
+  }
+  if (ALLOWED_ORIGINS.length > 0 && cors['Access-Control-Allow-Origin'] === 'null') {
+    return json(403, cors, { error: 'Origine non autorizzata' });
+  }
   if (!GROQ_KEY) {
-    return {
-      statusCode: 500,
-      headers: { ...cors, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'GROQ_KEY non configurata su Netlify (Site settings > Environment variables)' })
-    };
+    return json(500, cors, { error: 'GROQ_API_KEY non configurata sul server' });
+  }
+  if (event.body && event.body.length > MAX_BODY) {
+    return json(413, cors, { error: 'Immagine troppo pesante' });
   }
 
   try {
-    const { type, prompt, imageBase64, imageMime, creative } = JSON.parse(event.body);
+    const body = JSON.parse(event.body || '{}');
+    const { type, prompt } = body;
+
+    if (typeof prompt !== 'string' || !prompt.trim()) {
+      return json(400, cors, { error: 'Prompt mancante' });
+    }
+
+    // Accetta sia il formato nuovo (images: [...]) sia quello vecchio (imageBase64)
+    let images = Array.isArray(body.images) ? body.images : [];
+    if (!images.length && body.imageBase64) {
+      images = [{ base64: body.imageBase64, mime: body.imageMime }];
+    }
+    images = images.slice(0, 4);
 
     let messages;
     if (type === 'image') {
-      const mime = (imageMime === 'image/png') ? 'image/png' : 'image/jpeg';
-      messages = [{
-        role: 'user',
-        content: [
-          { type: 'text', text: prompt },
-          { type: 'image_url', image_url: { url: `data:${mime};base64,${imageBase64}` } }
-        ]
-      }];
+      if (!images.length) return json(400, cors, { error: 'Nessuna immagine ricevuta' });
+      const content = [{ type: 'text', text: prompt }];
+      for (const img of images) {
+        if (!img || typeof img.base64 !== 'string' || !img.base64) continue;
+        const mime = img.mime === 'image/png' ? 'image/png' : 'image/jpeg';
+        content.push({
+          type: 'image_url',
+          image_url: { url: `data:${mime};base64,${img.base64}` }
+        });
+      }
+      if (content.length < 2) return json(400, cors, { error: 'Immagini non valide' });
+      messages = [{ role: 'user', content }];
     } else {
       messages = [{ role: 'user', content: prompt }];
     }
 
-    const model = type === 'image' ? 'qwen/qwen3.6-27b' : 'openai/gpt-oss-120b';
-    const reasoningEffort = type === 'image' ? 'none' : 'low';
-    const temperature = creative ? 0.9 : 0.2;
-
     const payload = JSON.stringify({
-      model,
+      model: type === 'image'
+        ? 'meta-llama/llama-4-scout-17b-16e-instruct'
+        : 'llama-3.3-70b-versatile',
       messages,
-      max_tokens: 1536,
-      reasoning_effort: reasoningEffort,
-      temperature
+      temperature: type === 'image' ? 0.2 : 0.6,
+      max_tokens: 1024
     });
 
-    const result = await callGroqWithRetry(payload, 2);
+    const result = await request(payload);
 
-    if (result.status === 429) {
-      throw new Error('Troppe richieste in questo momento, riprova tra qualche secondo.');
+    let data;
+    try {
+      data = JSON.parse(result.body);
+    } catch {
+      return json(502, cors, { error: `Risposta non valida dal modello (HTTP ${result.status})` });
     }
-    if (result.status >= 500) {
-      throw new Error('Il servizio AI non risponde al momento, riprova tra poco.');
+
+    if (result.status >= 400 || data.error) {
+      const msg = typeof data.error === 'string'
+        ? data.error
+        : (data.error && data.error.message) || `Errore API (HTTP ${result.status})`;
+      // 429 = quota/rate limit, messaggio piu' chiaro per l'utente
+      const friendly = result.status === 429
+        ? 'Troppe richieste, riprova tra qualche secondo.'
+        : msg;
+      return json(result.status >= 400 ? result.status : 502, cors, { error: friendly });
     }
 
-    const data = JSON.parse(result.body);
-    if (data.error) throw new Error(data.error.message);
+    const text = data.choices && data.choices[0] && data.choices[0].message
+      ? data.choices[0].message.content
+      : null;
+    if (!text) return json(502, cors, { error: 'Il modello ha restituito una risposta vuota' });
 
-    let text = data.choices?.[0]?.message?.content;
-    if (!text) throw new Error('Risposta vuota: ' + JSON.stringify(data));
-
-    text = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-    if (text.includes('<think>')) {
-      text = text.split('<think>')[0].trim();
-    }
-    if (!text) throw new Error('Il modello non ha completato la risposta in tempo, riprova.');
-
-    return {
-      statusCode: 200,
-      headers: { ...cors, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
-    };
+    return json(200, cors, { text });
 
   } catch (e) {
-    return {
-      statusCode: 500,
-      headers: { ...cors, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: e.message })
-    };
+    console.error('claude fn error:', e);
+    // Non rimandiamo mai stack o dettagli interni al client
+    return json(500, cors, { error: 'Errore interno del server' });
   }
 };
+
+function json(statusCode, cors, obj) {
+  return {
+    statusCode,
+    headers: { ...cors, 'Content-Type': 'application/json' },
+    body: JSON.stringify(obj)
+  };
+}
+
+function request(payload) {
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'api.groq.com',
+      path: '/openai/v1/chat/completions',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${GROQ_KEY}`,
+        'Content-Length': Buffer.byteLength(payload)
+      },
+      timeout: TIMEOUT_MS
+    }, (res) => {
+      let data = '';
+      res.setEncoding('utf8');
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => resolve({ status: res.statusCode, body: data }));
+    });
+    req.on('timeout', () => { req.destroy(new Error('Timeout richiesta AI')); });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
