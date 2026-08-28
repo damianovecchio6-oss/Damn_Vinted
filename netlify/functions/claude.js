@@ -1,31 +1,103 @@
 const https = require('https');
 
-// La chiave NON sta piu' nel codice.
+// La chiave NON sta nel codice.
 // Su Netlify: Site settings > Environment variables > GROQ_API_KEY
 const GROQ_KEY = process.env.GROQ_API_KEY;
 
-// Metti qui il dominio del tuo sito per impedire che altri usino la tua chiave.
-// Esempio: ['https://vinted-damn.netlify.app', 'http://localhost:8888']
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
-  .split(',').map(s => s.trim()).filter(Boolean);
+// Allowlist delle origini. Di default CHIUSA: se non c'e' nessuna origine valida
+// la function rifiuta tutto, invece di diventare un proxy aperto sulla chiave.
+// Oltre a ALLOWED_ORIGINS (lista separata da virgole) accetta in automatico gli
+// URL che Netlify inietta da sola nel build, cosi' il sito funziona senza config.
+const ALLOWED_ORIGINS = buildAllowlist();
 
-const MAX_BODY = 6 * 1024 * 1024; // 6MB, limite Netlify
-const TIMEOUT_MS = 25000;
+// Rate limit best-effort per IP. Le function sono stateless tra istanze diverse,
+// quindi non e' una protezione forte: serve a tagliare gli abusi banali.
+const RATE_LIMIT_PER_MIN = Number(process.env.RATE_LIMIT_PER_MIN || 20);
+const RATE_WINDOW_MS = 60 * 1000;
+const hits = new Map();
+
+const MAX_BODY = 6 * 1024 * 1024;   // 6MB, limite Netlify
+const MAX_PROMPT = 8000;            // caratteri
+const MAX_IMAGES = 4;
+
+// Netlify chiude le function sincrone a 10s (default account).
+// Teniamoci sotto, cosi' restituiamo un errore JSON pulito invece della
+// pagina di timeout di Netlify. Alzabile se l'account ha il limite esteso.
+const TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || 9000);
+
+const MODEL_TEXT = process.env.GROQ_MODEL_TEXT || 'llama-3.3-70b-versatile';
+const MODEL_VISION = process.env.GROQ_MODEL_VISION || 'meta-llama/llama-4-scout-17b-16e-instruct';
+
+function buildAllowlist() {
+  const list = (process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map(s => normalizeOrigin(s))
+    .filter(Boolean);
+
+  // Netlify popola queste da sola: URL = sito di produzione,
+  // DEPLOY_PRIME_URL / DEPLOY_URL = deploy preview e branch deploy.
+  for (const key of ['URL', 'DEPLOY_PRIME_URL', 'DEPLOY_URL']) {
+    const val = normalizeOrigin(process.env[key]);
+    if (val) list.push(val);
+  }
+
+  if (process.env.NETLIFY_DEV) {
+    list.push('http://localhost:8888', 'http://127.0.0.1:8888');
+  }
+
+  return Array.from(new Set(list));
+}
+
+function normalizeOrigin(value) {
+  const raw = (value || '').trim();
+  if (!raw) return '';
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return raw.replace(/\/+$/, '');
+  }
+}
+
+function isAllowed(origin) {
+  return !!origin && ALLOWED_ORIGINS.includes(origin);
+}
 
 function corsFor(origin) {
-  let allow = 'null';
-  if (ALLOWED_ORIGINS.length === 0) allow = origin || '*';       // dev: nessuna lista = passa tutto
-  else if (origin && ALLOWED_ORIGINS.includes(origin)) allow = origin;
-  return {
-    'Access-Control-Allow-Origin': allow,
+  const headers = {
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Vary': 'Origin'
   };
+  if (isAllowed(origin)) headers['Access-Control-Allow-Origin'] = origin;
+  return headers;
+}
+
+function clientIp(headers) {
+  return headers['x-nf-client-connection-ip']
+    || (headers['x-forwarded-for'] || '').split(',')[0].trim()
+    || 'unknown';
+}
+
+function rateLimited(ip) {
+  if (!RATE_LIMIT_PER_MIN) return false;
+  const now = Date.now();
+  const recent = (hits.get(ip) || []).filter(t => now - t < RATE_WINDOW_MS);
+  recent.push(now);
+  hits.set(ip, recent);
+
+  if (hits.size > 500) {
+    for (const [key, times] of hits) {
+      if (!times.length || now - times[times.length - 1] > RATE_WINDOW_MS) hits.delete(key);
+    }
+  }
+  return recent.length > RATE_LIMIT_PER_MIN;
 }
 
 exports.handler = async (event) => {
-  const origin = event.headers.origin || event.headers.Origin || '';
+  const headers = lowerKeys(event.headers || {});
+  // Su una POST il browser manda sempre Origin, anche same-origin.
+  // Il Referer e' solo una rete di sicurezza per i webview che lo omettono.
+  const origin = normalizeOrigin(headers.origin) || normalizeOrigin(headers.referer);
   const cors = corsFor(origin);
 
   if (event.httpMethod === 'OPTIONS') {
@@ -34,22 +106,42 @@ exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return json(405, cors, { error: 'Metodo non consentito' });
   }
-  if (ALLOWED_ORIGINS.length > 0 && cors['Access-Control-Allow-Origin'] === 'null') {
+  if (!ALLOWED_ORIGINS.length) {
+    console.error('Nessuna origine autorizzata: imposta ALLOWED_ORIGINS nelle env var del sito.');
+    return json(500, cors, { error: 'Server non configurato: manca ALLOWED_ORIGINS' });
+  }
+  if (!isAllowed(origin)) {
     return json(403, cors, { error: 'Origine non autorizzata' });
   }
   if (!GROQ_KEY) {
     return json(500, cors, { error: 'GROQ_API_KEY non configurata sul server' });
   }
-  if (event.body && event.body.length > MAX_BODY) {
-    return json(413, cors, { error: 'Immagine troppo pesante' });
+  if (rateLimited(clientIp(headers))) {
+    return json(429, cors, { error: 'Troppe richieste, aspetta un minuto.' });
+  }
+
+  const rawBody = event.isBase64Encoded
+    ? Buffer.from(event.body || '', 'base64').toString('utf8')
+    : (event.body || '');
+  if (Buffer.byteLength(rawBody) > MAX_BODY) {
+    return json(413, cors, { error: 'Immagini troppo pesanti' });
   }
 
   try {
-    const body = JSON.parse(event.body || '{}');
+    let body;
+    try {
+      body = JSON.parse(rawBody || '{}');
+    } catch {
+      return json(400, cors, { error: 'Richiesta non valida' });
+    }
+
     const { type, prompt } = body;
 
     if (typeof prompt !== 'string' || !prompt.trim()) {
       return json(400, cors, { error: 'Prompt mancante' });
+    }
+    if (prompt.length > MAX_PROMPT) {
+      return json(400, cors, { error: 'Prompt troppo lungo' });
     }
 
     // Accetta sia il formato nuovo (images: [...]) sia quello vecchio (imageBase64)
@@ -57,7 +149,7 @@ exports.handler = async (event) => {
     if (!images.length && body.imageBase64) {
       images = [{ base64: body.imageBase64, mime: body.imageMime }];
     }
-    images = images.slice(0, 4);
+    images = images.slice(0, MAX_IMAGES);
 
     let messages;
     if (type === 'image') {
@@ -77,16 +169,25 @@ exports.handler = async (event) => {
       messages = [{ role: 'user', content: prompt }];
     }
 
-    const payload = JSON.stringify({
-      model: type === 'image'
-        ? 'meta-llama/llama-4-scout-17b-16e-instruct'
-        : 'llama-3.3-70b-versatile',
+    const request = {
+      model: type === 'image' ? MODEL_VISION : MODEL_TEXT,
       messages,
-      temperature: type === 'image' ? 0.2 : 0.6,
+      temperature: type === 'image' ? 0.2 : (body.creative ? 0.85 : 0.6),
       max_tokens: 1024
-    });
+    };
 
-    const result = await request(payload);
+    // JSON mode: solo per il testo. Sul multimodale non e' garantito,
+    // li' ci affidiamo al parsing tollerante lato client.
+    const wantsJson = body.json === true && type !== 'image';
+    if (wantsJson) request.response_format = { type: 'json_object' };
+
+    let result = await callGroq(request);
+
+    // Se il modello non digerisce response_format, riprova una volta senza.
+    if (wantsJson && result.status >= 400 && /response_format|json/i.test(result.body || '')) {
+      delete request.response_format;
+      result = await callGroq(request);
+    }
 
     let data;
     try {
@@ -99,7 +200,6 @@ exports.handler = async (event) => {
       const msg = typeof data.error === 'string'
         ? data.error
         : (data.error && data.error.message) || `Errore API (HTTP ${result.status})`;
-      // 429 = quota/rate limit, messaggio piu' chiaro per l'utente
       const friendly = result.status === 429
         ? 'Troppe richieste, riprova tra qualche secondo.'
         : msg;
@@ -115,10 +215,19 @@ exports.handler = async (event) => {
 
   } catch (e) {
     console.error('claude fn error:', e);
+    if (e && e.code === 'AI_TIMEOUT') {
+      return json(504, cors, { error: 'L\'AI ci ha messo troppo. Riprova.' });
+    }
     // Non rimandiamo mai stack o dettagli interni al client
     return json(500, cors, { error: 'Errore interno del server' });
   }
 };
+
+function lowerKeys(obj) {
+  const out = {};
+  for (const key of Object.keys(obj)) out[key.toLowerCase()] = obj[key];
+  return out;
+}
 
 function json(statusCode, cors, obj) {
   return {
@@ -128,7 +237,8 @@ function json(statusCode, cors, obj) {
   };
 }
 
-function request(payload) {
+function callGroq(requestBody) {
+  const payload = JSON.stringify(requestBody);
   return new Promise((resolve, reject) => {
     const req = https.request({
       hostname: 'api.groq.com',
@@ -146,7 +256,11 @@ function request(payload) {
       res.on('data', chunk => { data += chunk; });
       res.on('end', () => resolve({ status: res.statusCode, body: data }));
     });
-    req.on('timeout', () => { req.destroy(new Error('Timeout richiesta AI')); });
+    req.on('timeout', () => {
+      const err = new Error('Timeout richiesta AI');
+      err.code = 'AI_TIMEOUT';
+      req.destroy(err);
+    });
     req.on('error', reject);
     req.write(payload);
     req.end();
