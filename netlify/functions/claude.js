@@ -2,7 +2,9 @@ const https = require('https');
 
 // La chiave NON sta nel codice.
 // Su Netlify: Site settings > Environment variables > GROQ_API_KEY
-const GROQ_KEY = process.env.GROQ_API_KEY;
+// Accettiamo anche GROQ_KEY: e' il nome usato storicamente su questo sito,
+// e la rinomina del codice a GROQ_API_KEY aveva lasciato la function senza chiave.
+const GROQ_KEY = process.env.GROQ_API_KEY || process.env.GROQ_KEY;
 
 // Allowlist delle origini. Di default CHIUSA: se non c'e' nessuna origine valida
 // la function rifiuta tutto, invece di diventare un proxy aperto sulla chiave.
@@ -114,7 +116,7 @@ exports.handler = async (event) => {
     return json(403, cors, { error: 'Origine non autorizzata' });
   }
   if (!GROQ_KEY) {
-    return json(500, cors, { error: 'GROQ_API_KEY non configurata sul server' });
+    return json(500, cors, { error: 'Chiave AI non configurata sul server (GROQ_API_KEY o GROQ_KEY)' });
   }
   if (rateLimited(clientIp(headers))) {
     return json(429, cors, { error: 'Troppe richieste, aspetta un minuto.' });
