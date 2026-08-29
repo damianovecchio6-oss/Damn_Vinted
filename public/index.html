@@ -141,10 +141,12 @@ body{
   transform:translate(-50%,-50%) scale(1);
   transition:transform .52s cubic-bezier(.5,-0.3,.66,.42);
 }
-/* Parcheggiato: il centro del sole finisce sul bordo di sotto, quindi se ne
-   vede la meta' - il resto sta fuori dallo schermo, come nel disegno. */
+/* Parcheggiato: il sole si appoggia sul bordo di sotto invece di affondarci.
+   Col centro esattamente sul bordo se ne vedeva troppo poco per capire che e'
+   ancora li' e che si puo' toccare: alzato di 34px si vede il disco intero e i
+   raggi di sopra, e resta comunque mezzo fuori come nel disegno. */
 #soleApp.parcheggiato{
-  transform:translate(-50%, calc(-50% + 50vh - 4px)) scale(.42);
+  transform:translate(-50%, calc(-50% + 50vh - 34px)) scale(.46);
 }
 .soleWrap{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center}
 .soleNav{width:100%;overflow:visible;color:var(--t);pointer-events:auto}

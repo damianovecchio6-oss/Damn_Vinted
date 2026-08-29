@@ -114,7 +114,11 @@ async function apri(browser, opzioni) {
   check('e il sole passa in stato parcheggiato', await page.evaluate(() => document.getElementById('soleApp').classList.contains('parcheggiato')));
   await page.waitForTimeout(700);
   const parcheggiato = await doveSta();
-  check('finisce a meta sul bordo di sotto', Math.abs(parcheggiato.centro - parcheggiato.fondo) < 25, parcheggiato);
+  check('si appoggia sul bordo di sotto, mezzo dentro e mezzo fuori',
+    parcheggiato.centro > parcheggiato.fondo - 80 && parcheggiato.centro < parcheggiato.fondo + 10, parcheggiato);
+  check('e se ne vede abbastanza da capire che si puo toccare',
+    parcheggiato.fondo - (parcheggiato.centro - parcheggiato.largo / 2) > 50,
+    { visibile: Math.round(parcheggiato.fondo - (parcheggiato.centro - parcheggiato.largo / 2)) });
   check('rimpicciolito, ma ancora visibile', parcheggiato.largo > 40 && parcheggiato.largo < aCasa.largo * 0.6, { parcheggiato: parcheggiato.largo, casa: aCasa.largo });
   check('le scritte dei raggi spariscono: a quella scala sarebbero macchie', await page.evaluate(() => getComputedStyle(document.querySelector('.rEti')).opacity) === '0');
   check('e i raggi non si toccano piu uno per uno', await page.evaluate(() => getComputedStyle(document.querySelector('.raggio')).pointerEvents) === 'none');
