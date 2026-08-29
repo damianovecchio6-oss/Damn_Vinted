@@ -6,10 +6,10 @@ const https = require('https');
 // e la rinomina del codice a GROQ_API_KEY aveva lasciato la function senza chiave.
 const GROQ_KEY = process.env.GROQ_API_KEY || process.env.GROQ_KEY;
 
-// Allowlist delle origini. Di default CHIUSA: se non c'e' nessuna origine valida
-// la function rifiuta tutto, invece di diventare un proxy aperto sulla chiave.
-// Oltre a ALLOWED_ORIGINS (lista separata da virgole) accetta in automatico gli
-// URL che Netlify inietta da sola nel build, cosi' il sito funziona senza config.
+// Allowlist per le chiamate CROSS-ORIGIN, cioe' da un dominio diverso da quello
+// che serve la function. Le chiamate della nostra pagina passano gia' dal
+// controllo same-site (vedi isSameSite) e non hanno bisogno di stare qui.
+// Restano fuori tutti gli altri siti: la chiave non e' un proxy aperto.
 const ALLOWED_ORIGINS = buildAllowlist();
 
 // Rate limit best-effort per IP. Le function sono stateless tra istanze diverse,
@@ -60,18 +60,35 @@ function normalizeOrigin(value) {
   }
 }
 
-function isAllowed(origin) {
-  return !!origin && ALLOWED_ORIGINS.includes(origin);
+// La pagina che chiama la function e' servita dallo stesso host della function:
+// se Origin e Host coincidono la richiesta arriva dal nostro sito, qualunque
+// esso sia. Cosi' funzionano produzione, deploy preview, branch deploy e domini
+// custom senza doverli elencare da nessuna parte, mentre un altro sito resta
+// fuori perche' il suo Origin non corrispondera' mai al nostro Host.
+function isSameSite(origin, headers) {
+  if (!origin) return false;
+  const host = (headers['x-forwarded-host'] || headers.host || '').trim().toLowerCase();
+  if (!host) return false;
+  try {
+    return new URL(origin).host.toLowerCase() === host;
+  } catch {
+    return false;
+  }
 }
 
-function corsFor(origin) {
-  const headers = {
+function isAllowed(origin, headers) {
+  if (!origin) return false;
+  return isSameSite(origin, headers) || ALLOWED_ORIGINS.includes(origin);
+}
+
+function corsFor(origin, headers) {
+  const out = {
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Vary': 'Origin'
   };
-  if (isAllowed(origin)) headers['Access-Control-Allow-Origin'] = origin;
-  return headers;
+  if (isAllowed(origin, headers)) out['Access-Control-Allow-Origin'] = origin;
+  return out;
 }
 
 function clientIp(headers) {
@@ -100,7 +117,7 @@ exports.handler = async (event) => {
   // Su una POST il browser manda sempre Origin, anche same-origin.
   // Il Referer e' solo una rete di sicurezza per i webview che lo omettono.
   const origin = normalizeOrigin(headers.origin) || normalizeOrigin(headers.referer);
-  const cors = corsFor(origin);
+  const cors = corsFor(origin, headers);
 
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 204, headers: cors, body: '' };
@@ -108,11 +125,7 @@ exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return json(405, cors, { error: 'Metodo non consentito' });
   }
-  if (!ALLOWED_ORIGINS.length) {
-    console.error('Nessuna origine autorizzata: imposta ALLOWED_ORIGINS nelle env var del sito.');
-    return json(500, cors, { error: 'Server non configurato: manca ALLOWED_ORIGINS' });
-  }
-  if (!isAllowed(origin)) {
+  if (!isAllowed(origin, headers)) {
     return json(403, cors, { error: 'Origine non autorizzata' });
   }
   if (!GROQ_KEY) {
