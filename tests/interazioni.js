@@ -41,21 +41,35 @@ async function apri(browser, opzioni) {
   check('sono bottoni veri, non disegni', raggi.every(r => r.ruolo === 'button' && r.tab === '0' && r.nome && r.nome.length > 5), raggi);
   check('e dicono a voce cosa fanno', raggi.map(r => r.etichetta).join(',') === 'ANALIZZA,ANNUNCIO,PREZZO,RICERCA,STORICO', raggi.map(r => r.etichetta));
 
+  // Il sole si cala come un burattino, e la funzione entra quando e' sparito.
   await page.click('.raggio[data-scheda="ricerca"] .presa');
-  await page.waitForTimeout(320);
+  const calato = await page.evaluate(() => {
+    const sole = document.querySelector('.soleWrap');
+    return { classe: sole.classList.contains('giu'), animazione: getComputedStyle(sole).animationName };
+  });
+  check('il sole si cala giu quando scegli', calato.classe && calato.animazione === 'soleGiu', calato);
+  check('e la funzione non e ancora entrata', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-sole');
+  await page.waitForFunction(() => document.querySelector('.tp.on').id === 'tab-ricerca', null, { timeout: 5000 });
   check('toccare un raggio apre la sua funzione', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-ricerca');
+  check('e il sole resta pronto per la prossima volta', await page.evaluate(() => !document.querySelector('.soleWrap').classList.contains('giu')));
   check('e la barra in basso torna', await page.evaluate(() => getComputedStyle(document.querySelector('.nav')).display) !== 'none');
   check('col raggio giusto acceso in basso', await page.evaluate(() => document.querySelector('.nb.on').id) === 'nav-ricerca');
 
   await page.click('.logo');
   await page.waitForTimeout(120);
   check('il logo riporta al sole', await page.evaluate(() => document.body.classList.contains('home')));
+  check('e il sole risale da sotto', await page.evaluate(() => getComputedStyle(document.querySelector('.soleWrap')).animationName) === 'soleSu');
+  await page.waitForFunction(() => !document.querySelector('.soleWrap').classList.contains('su'), null, { timeout: 5000 });
+  check('finita la risalita non resta appeso a niente', await page.evaluate(() => document.querySelector('.soleWrap').className.trim()) === 'soleWrap');
   check('e la riga della barra si ritira invece di restare accesa', await page.evaluate(() => document.querySelector('.nav').style.getPropertyValue('--nbw')) === '0px');
 
   await page.evaluate(() => document.querySelector('.raggio[data-scheda="prezzo"]').focus());
   await page.keyboard.press('Enter');
-  await page.waitForTimeout(320);
-  check('i raggi si aprono anche da tastiera', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-prezzo');
+  // Anche da tastiera si aspetta che il sole finisca di calarsi.
+  await page.waitForFunction(() => document.querySelector('.tp.on').id === 'tab-prezzo', null, { timeout: 5000 })
+    .catch(() => {});
+  check('i raggi si aprono anche da tastiera', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-prezzo',
+    await page.evaluate(() => document.querySelector('.tp.on').id));
 
   // Da qui in poi si prova la navigazione dentro le funzioni: si resta fuori
   // dalla home, dove la barra in basso non c'e'.
@@ -162,6 +176,12 @@ async function apri(browser, opzioni) {
     s.remove();
     return d === '0.9s' && i === 'infinite';
   }));
+  await fermo.click('.raggio[data-scheda="prezzo"] .presa');
+  check('il raggio apre subito, senza far cadere niente', await fermo.evaluate(() => document.querySelector('.tp.on').id) === 'tab-prezzo',
+    await fermo.evaluate(() => document.querySelector('.tp.on').id));
+  await fermo.click('.logo');
+  check('e rientrando il sole non risale, e gia li', await fermo.evaluate(() => !document.querySelector('.soleWrap').classList.contains('su')));
+
   check('e non vibra niente', await fermo.evaluate(() => {
     let vibrato = false;
     navigator.vibrate = () => { vibrato = true; return true; };
