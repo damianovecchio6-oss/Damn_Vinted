@@ -27,7 +27,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-336 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+347 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -108,6 +108,12 @@ I raggi non sono un'illustrazione con sopra dei bottoni: sono bottoni veri, con
 la forma del raggio come area sensibile piu' una presa tonda intorno all'icona,
 perche' un triangolo sottile col pollice non si prende. Funzionano con Tab e
 Invio come con il dito.
+
+E si girano come la ghiera dell'iPod classic: il dito ruota intorno al sole e la
+selezione salta di raggio in raggio, uno scatto ogni 45 gradi, con la vibrazione
+corta a fare da "click". Il disco al centro fa da schermo - dice cosa stai per
+aprire - e da tasto: si preme li' per entrare. Anche la rotella del mouse e le
+frecce della tastiera fanno scattare la ghiera, e Invio preme al centro.
 
 Scelto un raggio il sole non sparisce: **si rimpicciolisce e va a parcheggiarsi
 a meta' sul bordo di sotto**, e li' resta mentre usi la funzione. Toccarlo lo fa

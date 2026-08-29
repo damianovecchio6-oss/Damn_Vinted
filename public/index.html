@@ -166,6 +166,20 @@ body{
 .raggio:focus-visible .presa{fill:var(--tl);stroke:var(--t);stroke-width:2}
 .raggio.scelto .lama{opacity:1;transform:scale(1.14)}
 .raggio.scelto .rEti{fill:var(--t)}
+/* Il raggio su cui e' ferma la ghiera: acceso come se ci fosse sopra il dito,
+   perche' e' esattamente quello che succede. */
+.raggio.selezionato .lama{opacity:1}
+.raggio.selezionato .rEti{fill:var(--t)}
+.raggio.selezionato .rIco{font-size:30px}
+/* A casa la ghiera e' tutta l'area del sole, non solo le forme disegnate:
+   dentro un <svg> il vuoto lascia passare il dito, e un giro che parte da uno
+   spazio vuoto non partirebbe. Parcheggiato si torna a rispondere solo dove
+   c'e' il disegno, cosi' il sole non ruba tocchi al contenuto sotto. */
+body.home #soleApp{pointer-events:auto;touch-action:none}
+/* Girando, il dito non deve selezionare testo ne' trascinare il disegno. */
+#soleApp{user-select:none;-webkit-user-select:none}
+#soleApp svg,#soleApp text{-webkit-user-drag:none}
+.disco{cursor:pointer}
 /* Fuori dal flusso: se contasse nell'altezza, il centro del riquadro non
    sarebbe piu' il centro del sole e il parcheggio finirebbe storto. */
 .soleAiuto{position:absolute;left:0;right:0;bottom:-4px;text-align:center;font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--mu);transition:opacity .2s ease}
@@ -404,10 +418,10 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
       <text class="rEti" x="57.3" y="183.6">STORICO</text>
     </g>
     <circle class="disco" cx="200" cy="200" r="72"/>
-    <text class="dTitolo" x="200" y="192">DAMN</text>
-    <text class="dSotto" x="200" y="216">VINTED AI</text>
+    <text class="dTitolo" x="200" y="190">DAMN</text>
+    <text class="dSotto" id="dScelta" x="200" y="215">ANALIZZA</text>
     </svg>
-    <p class="soleAiuto">Tocca un raggio</p>
+    <p class="soleAiuto" id="soleAiuto">Gira intorno · premi al centro</p>
   </div>
 </div>
 
@@ -645,47 +659,167 @@ function tocco(ms){
   try{ if(navigator.vibrate && !menoMovimento()) navigator.vibrate(ms||12); }catch(e){}
 }
 
-/* ===== I RAGGI DEL SOLE =====
-   Ogni raggio e' un bottone vero: si prende col dito, con Tab e con Invio. Il
-   lampeggio prima del cambio scheda non e' vezzo: e' la risposta al tocco, che
-   altrimenti arriverebbe solo quando la pagina e' gia' cambiata. */
-document.querySelectorAll('.raggio').forEach(raggio=>{
-  const vai=()=>{
-    const scheda=raggio.dataset.scheda;
-    if(!scheda) return;
-    // Il lampeggio dura quanto la discesa: il raggio scelto resta acceso
-    // mentre il sole si cala, cosi' si vede quale hai preso.
-    raggio.classList.add('scelto');
-    tocco(8);
-    setTimeout(()=>raggio.classList.remove('scelto'), 520);
-    sw(scheda);
-  };
-  raggio.addEventListener('click', vai);
+/* ===== LA GHIERA =====
+   Il principio dell'iPod classic: la ruota sta ferma, il dito ci gira intorno
+   e la selezione salta di voce in voce con uno scatto per volta. Qui le voci
+   sono i cinque raggi, il disco al centro fa da schermo (dice cosa stai per
+   aprire) e da tasto: si preme li' per entrare.
+
+   Restano tutte le strade di prima: il tocco secco su un raggio lo apre, Tab e
+   Invio pure. La ghiera si aggiunge, non sostituisce. */
+const RAGGI = Array.from(document.querySelectorAll('.raggio'));
+// Quanti gradi di dito valgono uno scatto. Con cinque voci un quinto di giro
+// (72°) sarebbe il rapporto "vero", ma il pollice su uno schermo piccolo fa
+// giri corti: 45° e' la distanza a cui gli scatti si sentono senza doversi
+// sbracciare.
+const GRADI_PER_SCATTO = 45;
+let selezione = 0;
+// Vero se il giro appena finito ha fatto scattare la ghiera. Il rilascio del
+// dito genera comunque un click, e se il dito era fermo su un raggio quel
+// click lo aprirebbe: qui si distingue "ho girato" da "ho toccato". A tempo
+// (un quarto di secondo) mangiava anche i tocchi veri subito dopo un giro.
+let giroConScatti = false;
+
+function nomeDi(raggio){
+  const eti = raggio.querySelector('.rEti');
+  return eti ? eti.textContent : '';
+}
+
+function mostraSelezione(){
+  RAGGI.forEach((r,i)=>r.classList.toggle('selezionato', i===selezione));
+  const display = document.getElementById('dScelta');
+  if(display) display.textContent = nomeDi(RAGGI[selezione]);
+  const disco = document.querySelector('.disco');
+  if(disco) disco.setAttribute('aria-label', 'Apri '+nomeDi(RAGGI[selezione]));
+}
+
+// Uno scatto per volta, e a ogni scatto la vibrazione corta: e' il "click"
+// della ghiera, l'unica cosa che rende il giro una cosa che si sente e non
+// solo si guarda.
+function scatta(verso){
+  selezione = (selezione + verso + RAGGI.length) % RAGGI.length;
+  mostraSelezione();
+  tocco(6);
+}
+
+function apriRaggio(raggio){
+  const scheda = raggio.dataset.scheda;
+  if(!scheda) return;
+  selezione = RAGGI.indexOf(raggio);
+  mostraSelezione();
+  raggio.classList.add('scelto');
+  tocco(10);
+  setTimeout(()=>raggio.classList.remove('scelto'), 520);
+  sw(scheda);
+}
+
+RAGGI.forEach(raggio=>{
+  raggio.addEventListener('click', ()=>{
+    if(giroConScatti) return;   // era la fine di un giro, non un tocco
+    apriRaggio(raggio);
+  });
   raggio.addEventListener('keydown', e=>{
-    if(e.key==='Enter'||e.key===' '){ e.preventDefault(); vai(); }
+    if(e.key==='Enter'||e.key===' '){ e.preventDefault(); apriRaggio(raggio); }
   });
 });
 
-// Parcheggiato, il sole intero e' il bottone per tornare a scegliere.
-// Il tocco su un raggio pero' risale fin qui, e a quel punto il sole si e'
-// gia' parcheggiato: senza questo controllo lo stesso click apriva la funzione
-// e tornava subito indietro.
-const soleApp=document.getElementById('soleApp');
+const soleApp = document.getElementById('soleApp');
 if(soleApp){
-  const disegno=soleApp.querySelector('.soleNav');
-  const daRaggio=e=>!!(e.target && e.target.closest && e.target.closest('.raggio'));
-  disegno.addEventListener('click', e=>{
-    if(daRaggio(e)) return;
-    if(soleApp.classList.contains('parcheggiato')){ tocco(8); sw('sole'); }
+  const disegno = soleApp.querySelector('.soleNav');
+  const parcheggiato = ()=>soleApp.classList.contains('parcheggiato');
+  const daRaggio = e => !!(e.target && e.target.closest && e.target.closest('.raggio'));
+
+  /* --- il giro del dito --- */
+  let giro = null;
+
+  const angolo = (e, centro)=>Math.atan2(e.clientY - centro.y, e.clientX - centro.x) * 180 / Math.PI;
+
+  soleApp.addEventListener('pointerdown', e=>{
+    // Ogni tocco nuovo riparte pulito: se il ripristino stesse dopo i
+    // controlli qui sotto, un tocco al centro (che li salta) resterebbe
+    // marchiato come "fine di un giro" e non aprirebbe niente.
+    giroConScatti = false;
+    if(parcheggiato()) return;
+    const r = disegno.getBoundingClientRect();
+    const centro = { x:r.x + r.width/2, y:r.y + r.height/2 };
+    // Il dito deve partire sulla corona, non sul disco: al centro c'e' il tasto.
+    const distanza = Math.hypot(e.clientX - centro.x, e.clientY - centro.y);
+    if(distanza < r.width * 0.17) return;
+    // Senza questo il browser avvia il trascinamento nativo del disegno al
+    // primo movimento: da li' in poi non arrivano piu' ne' i movimenti ne' il
+    // rilascio, e la ghiera si blocca dopo il primo giro.
+    e.preventDefault();
+    giro = { centro, ultimo:angolo(e, centro), residuo:0 };
+    // I movimenti si ascoltano sulla finestra, non sul sole: girando, il dito
+    // esce e rientra dal disegno in continuazione, e dentro un <svg> il vuoto
+    // non riceve eventi. (setPointerCapture sembrava la strada giusta, ma
+    // reggeva un giro solo: dal secondo in poi i movimenti non arrivavano
+    // piu' e la ghiera restava ferma.)
+    window.addEventListener('pointermove', muoviGhiera);
+    window.addEventListener('pointerup', finisciGiro);
+    window.addEventListener('pointercancel', finisciGiro);
   });
+
+  function muoviGhiera(e){
+    if(!giro) return;
+    const ora = angolo(e, giro.centro);
+    // Il salto fra +180 e -180 non e' mezzo giro del dito: va riportato dentro.
+    let delta = ora - giro.ultimo;
+    if(delta > 180) delta -= 360;
+    if(delta < -180) delta += 360;
+    giro.ultimo = ora;
+    giro.residuo += delta;
+
+    while(Math.abs(giro.residuo) >= GRADI_PER_SCATTO){
+      const verso = giro.residuo > 0 ? 1 : -1;
+      giro.residuo -= verso * GRADI_PER_SCATTO;
+      scatta(verso);
+      giroConScatti = true;
+    }
+  }
+
+  function finisciGiro(){
+    giro = null;
+    window.removeEventListener('pointermove', muoviGhiera);
+    window.removeEventListener('pointerup', finisciGiro);
+    window.removeEventListener('pointercancel', finisciGiro);
+  }
+
+  /* --- la rotella del mouse fa lo stesso lavoro del dito --- */
+  soleApp.addEventListener('wheel', e=>{
+    if(parcheggiato()) return;
+    e.preventDefault();
+    scatta(e.deltaY > 0 || e.deltaX > 0 ? 1 : -1);
+  }, { passive:false });
+
+  /* --- il tasto centrale, e il ritorno quando il sole e' parcheggiato --- */
+  soleApp.addEventListener('click', e=>{
+    if(daRaggio(e)) return;      // il raggio si apre da solo
+    if(giroConScatti) return;    // era la fine di un giro, non un tocco
+    if(parcheggiato()){ tocco(8); sw('sole'); return; }
+    // A casa, un tocco che non e' su un raggio preme il tasto centrale: apre
+    // quello che il disco sta mostrando.
+    apriRaggio(RAGGI[selezione]);
+  });
+
   disegno.setAttribute('tabindex','0');
+  disegno.setAttribute('role','application');
+  disegno.setAttribute('aria-label','Ghiera: frecce per scorrere le funzioni, Invio per aprire');
   disegno.addEventListener('keydown', e=>{
     if(daRaggio(e)) return;
-    if((e.key==='Enter'||e.key===' ') && soleApp.classList.contains('parcheggiato')){
-      e.preventDefault(); tocco(8); sw('sole');
+    if(parcheggiato()){
+      if(e.key==='Enter'||e.key===' '){ e.preventDefault(); tocco(8); sw('sole'); }
+      return;
     }
+    // Le frecce girano la ghiera, Invio preme al centro: la stessa cosa del
+    // dito, per chi non ce l'ha sullo schermo.
+    if(e.key==='ArrowRight'||e.key==='ArrowDown'){ e.preventDefault(); scatta(1); }
+    else if(e.key==='ArrowLeft'||e.key==='ArrowUp'){ e.preventDefault(); scatta(-1); }
+    else if(e.key==='Enter'||e.key===' '){ e.preventDefault(); apriRaggio(RAGGI[selezione]); }
   });
 }
+
+mostraSelezione();
 
 document.querySelectorAll('#toneChips .chip').forEach(c=>{
   const pick=()=>{

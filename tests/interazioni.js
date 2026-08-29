@@ -47,7 +47,68 @@ async function apri(browser, opzioni) {
   const aCasa = await doveSta();
   check('a casa il sole sta in mezzo allo schermo', Math.abs(aCasa.centro - aCasa.fondo / 2) < 40, aCasa);
 
+  console.log('\n-- la ghiera: si gira intorno come sull\'iPod --');
+  await page.evaluate(() => sw('sole'));
+  const centro = await page.evaluate(() => {
+    const r = document.getElementById('soleApp').getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2, raggio: r.width * 0.36 };
+  });
+  const gira = async (daGradi, aGradi, passo) => {
+    const punto = g => [centro.x + centro.raggio * Math.cos(g * Math.PI / 180),
+                        centro.y + centro.raggio * Math.sin(g * Math.PI / 180)];
+    await page.mouse.move(...punto(daGradi));
+    await page.mouse.down();
+    for (let g = daGradi + passo; passo > 0 ? g <= aGradi : g >= aGradi; g += passo) await page.mouse.move(...punto(g));
+    await page.mouse.up();
+  };
+  const scelta = () => page.evaluate(() => document.getElementById('dScelta').textContent);
+  const accesi = () => page.evaluate(() => Array.from(document.querySelectorAll('.raggio.selezionato')).map(r => r.dataset.scheda));
+
+  check('si parte dalla prima funzione', await scelta() === 'ANALIZZA', await scelta());
+  await gira(0, 90, 10);
+  check('mezzo quarto di giro = due scatti', await scelta() === 'PREZZO', await scelta());
+  check('e il raggio corrispondente si accende', (await accesi()).join() === 'prezzo', await accesi());
+  check('uno solo per volta', (await accesi()).length === 1);
+
+  // Il giro nativo del disegno rubava i movimenti dal secondo giro in poi:
+  // questo controllo c'e' perche' e' successo davvero.
+  await page.waitForTimeout(300);
+  await gira(0, -90, -10);
+  check('il secondo giro funziona come il primo', await scelta() === 'ANALIZZA', await scelta());
+  await page.waitForTimeout(300);
+  await gira(180, 270, 10);
+  check('e si puo partire da qualunque punto della corona', await scelta() === 'PREZZO', await scelta());
+
+  await page.waitForTimeout(300);
+  await page.evaluate(() => { document.getElementById('soleApp').dispatchEvent(new WheelEvent('wheel', { deltaY: 120, bubbles: true, cancelable: true })); });
+  check('anche la rotella del mouse scatta', await scelta() === 'RICERCA', await scelta());
+
+  await page.evaluate(() => document.querySelector('#soleApp .soleNav').focus());
+  await page.keyboard.press('ArrowLeft');
+  check('le frecce girano la ghiera', await scelta() === 'PREZZO', await scelta());
+  await page.keyboard.press('Enter');
+  check('Invio preme al centro e apre quello scelto', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-prezzo', await page.evaluate(() => document.querySelector('.tp.on').id));
+
+  await page.click('#soleApp .dTitolo');
+  await page.waitForTimeout(700);
+  await gira(0, 90, 10);
+  // Subito, senza aspettare: dopo un giro il tasto centrale deve rispondere
+  // al primo tocco, non dopo un tempo di grazia.
+  await page.click('#soleApp .dTitolo');
+  check('il tasto centrale apre quello che il disco mostra', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-storico', await page.evaluate(() => document.querySelector('.tp.on').id));
+  await page.click('#soleApp .dTitolo');
+  await page.waitForTimeout(700);
+
+  // Un giro finisce con il dito su un raggio: quel rilascio non deve aprirlo.
+  await page.evaluate(() => sw('sole'));
+  await page.waitForTimeout(700);
+  const primaDelGiro = await page.evaluate(() => document.querySelector('.tp.on').id);
+  await gira(-90, 20, 10);
+  check('finire il giro su un raggio non lo apre', await page.evaluate(() => document.querySelector('.tp.on').id) === primaDelGiro);
+
   console.log('\n-- scegliendo, il sole va a parcheggiarsi sul bordo --');
+  await page.evaluate(() => sw('sole'));
+  await page.waitForTimeout(700);
   await page.click('.raggio[data-scheda="ricerca"] .presa');
   check('la funzione si apre', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-ricerca');
   check('e il sole passa in stato parcheggiato', await page.evaluate(() => document.getElementById('soleApp').classList.contains('parcheggiato')));
