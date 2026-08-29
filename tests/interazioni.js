@@ -31,8 +31,7 @@ async function apri(browser, opzioni) {
 
   console.log('\n-- il sole e la home: i raggi sono le funzioni --');
   check('la pagina si apre sul sole', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-sole', await page.evaluate(() => document.querySelector('.tp.on').id));
-  check('e la barra in basso si toglie di mezzo', await page.evaluate(() => getComputedStyle(document.querySelector('.nav')).display) === 'none');
-  check('nessuna voce in basso risulta accesa', await page.evaluate(() => document.querySelectorAll('.nb.on').length) === 0);
+  check('il sole vive fuori dalle schede, non dentro la home', await page.evaluate(() => !document.getElementById('tab-sole').querySelector('.soleWrap') && !!document.querySelector('#soleApp .soleWrap')));
   check('cinque raggi, una funzione ciascuno', await page.evaluate(() => document.querySelectorAll('.raggio').length) === 5);
   const raggi = await page.evaluate(() => Array.from(document.querySelectorAll('.raggio')).map(r => ({
     scheda: r.dataset.scheda, ruolo: r.getAttribute('role'), nome: r.getAttribute('aria-label'),
@@ -41,64 +40,114 @@ async function apri(browser, opzioni) {
   check('sono bottoni veri, non disegni', raggi.every(r => r.ruolo === 'button' && r.tab === '0' && r.nome && r.nome.length > 5), raggi);
   check('e dicono a voce cosa fanno', raggi.map(r => r.etichetta).join(',') === 'ANALIZZA,ANNUNCIO,PREZZO,RICERCA,STORICO', raggi.map(r => r.etichetta));
 
-  // Il sole si cala come un burattino, e la funzione entra quando e' sparito.
-  await page.click('.raggio[data-scheda="ricerca"] .presa');
-  const calato = await page.evaluate(() => {
-    const sole = document.querySelector('.soleWrap');
-    return { classe: sole.classList.contains('giu'), animazione: getComputedStyle(sole).animationName };
+  const doveSta = () => page.evaluate(() => {
+    const d = document.querySelector('#soleApp .disco').getBoundingClientRect();
+    return { centro: Math.round(d.y + d.height / 2), largo: Math.round(d.width), fondo: window.innerHeight };
   });
-  check('il sole si cala giu quando scegli', calato.classe && calato.animazione === 'soleGiu', calato);
-  check('e la funzione non e ancora entrata', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-sole');
-  await page.waitForFunction(() => document.querySelector('.tp.on').id === 'tab-ricerca', null, { timeout: 5000 });
-  check('toccare un raggio apre la sua funzione', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-ricerca');
-  check('e il sole resta pronto per la prossima volta', await page.evaluate(() => !document.querySelector('.soleWrap').classList.contains('giu')));
-  check('e la barra in basso torna', await page.evaluate(() => getComputedStyle(document.querySelector('.nav')).display) !== 'none');
-  check('col raggio giusto acceso in basso', await page.evaluate(() => document.querySelector('.nb.on').id) === 'nav-ricerca');
+  const aCasa = await doveSta();
+  check('a casa il sole sta in mezzo allo schermo', Math.abs(aCasa.centro - aCasa.fondo / 2) < 40, aCasa);
 
-  await page.click('.logo');
-  await page.waitForTimeout(120);
-  check('il logo riporta al sole', await page.evaluate(() => document.body.classList.contains('home')));
-  check('e il sole risale da sotto', await page.evaluate(() => getComputedStyle(document.querySelector('.soleWrap')).animationName) === 'soleSu');
-  await page.waitForFunction(() => !document.querySelector('.soleWrap').classList.contains('su'), null, { timeout: 5000 });
-  check('finita la risalita non resta appeso a niente', await page.evaluate(() => document.querySelector('.soleWrap').className.trim()) === 'soleWrap');
-  check('e la riga della barra si ritira invece di restare accesa', await page.evaluate(() => document.querySelector('.nav').style.getPropertyValue('--nbw')) === '0px');
+  console.log('\n-- la ghiera: si gira intorno come sull\'iPod --');
+  await page.evaluate(() => sw('sole'));
+  const centro = await page.evaluate(() => {
+    const r = document.getElementById('soleApp').getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2, raggio: r.width * 0.36 };
+  });
+  const gira = async (daGradi, aGradi, passo) => {
+    const punto = g => [centro.x + centro.raggio * Math.cos(g * Math.PI / 180),
+                        centro.y + centro.raggio * Math.sin(g * Math.PI / 180)];
+    await page.mouse.move(...punto(daGradi));
+    await page.mouse.down();
+    for (let g = daGradi + passo; passo > 0 ? g <= aGradi : g >= aGradi; g += passo) await page.mouse.move(...punto(g));
+    await page.mouse.up();
+  };
+  const scelta = () => page.evaluate(() => document.getElementById('dScelta').textContent);
+  const accesi = () => page.evaluate(() => Array.from(document.querySelectorAll('.raggio.selezionato')).map(r => r.dataset.scheda));
 
+  check('si parte dalla prima funzione', await scelta() === 'ANALIZZA', await scelta());
+  await gira(0, 90, 10);
+  check('mezzo quarto di giro = due scatti', await scelta() === 'PREZZO', await scelta());
+  check('e il raggio corrispondente si accende', (await accesi()).join() === 'prezzo', await accesi());
+  check('uno solo per volta', (await accesi()).length === 1);
+
+  // Il giro nativo del disegno rubava i movimenti dal secondo giro in poi:
+  // questo controllo c'e' perche' e' successo davvero.
+  await page.waitForTimeout(300);
+  await gira(0, -90, -10);
+  check('il secondo giro funziona come il primo', await scelta() === 'ANALIZZA', await scelta());
+  await page.waitForTimeout(300);
+  await gira(180, 270, 10);
+  check('e si puo partire da qualunque punto della corona', await scelta() === 'PREZZO', await scelta());
+
+  await page.waitForTimeout(300);
+  await page.evaluate(() => { document.getElementById('soleApp').dispatchEvent(new WheelEvent('wheel', { deltaY: 120, bubbles: true, cancelable: true })); });
+  check('anche la rotella del mouse scatta', await scelta() === 'RICERCA', await scelta());
+
+  await page.evaluate(() => document.querySelector('#soleApp .soleNav').focus());
+  await page.keyboard.press('ArrowLeft');
+  check('le frecce girano la ghiera', await scelta() === 'PREZZO', await scelta());
+  await page.keyboard.press('Enter');
+  check('Invio preme al centro e apre quello scelto', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-prezzo', await page.evaluate(() => document.querySelector('.tp.on').id));
+
+  await page.click('#soleApp .dTitolo');
+  await page.waitForTimeout(700);
+  await gira(0, 90, 10);
+  // Subito, senza aspettare: dopo un giro il tasto centrale deve rispondere
+  // al primo tocco, non dopo un tempo di grazia.
+  await page.click('#soleApp .dTitolo');
+  check('il tasto centrale apre quello che il disco mostra', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-storico', await page.evaluate(() => document.querySelector('.tp.on').id));
+  await page.click('#soleApp .dTitolo');
+  await page.waitForTimeout(700);
+
+  // Un giro finisce con il dito su un raggio: quel rilascio non deve aprirlo.
+  await page.evaluate(() => sw('sole'));
+  await page.waitForTimeout(700);
+  const primaDelGiro = await page.evaluate(() => document.querySelector('.tp.on').id);
+  await gira(-90, 20, 10);
+  check('finire il giro su un raggio non lo apre', await page.evaluate(() => document.querySelector('.tp.on').id) === primaDelGiro);
+
+  console.log('\n-- scegliendo, il sole va a parcheggiarsi sul bordo --');
+  await page.evaluate(() => sw('sole'));
+  await page.waitForTimeout(700);
+  await page.click('.raggio[data-scheda="ricerca"] .presa');
+  check('la funzione si apre', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-ricerca');
+  check('e il sole passa in stato parcheggiato', await page.evaluate(() => document.getElementById('soleApp').classList.contains('parcheggiato')));
+  await page.waitForTimeout(700);
+  const parcheggiato = await doveSta();
+  check('si appoggia sul bordo di sotto, mezzo dentro e mezzo fuori',
+    parcheggiato.centro > parcheggiato.fondo - 80 && parcheggiato.centro < parcheggiato.fondo + 10, parcheggiato);
+  check('e se ne vede abbastanza da capire che si puo toccare',
+    parcheggiato.fondo - (parcheggiato.centro - parcheggiato.largo / 2) > 50,
+    { visibile: Math.round(parcheggiato.fondo - (parcheggiato.centro - parcheggiato.largo / 2)) });
+  check('rimpicciolito, ma ancora visibile', parcheggiato.largo > 40 && parcheggiato.largo < aCasa.largo * 0.6, { parcheggiato: parcheggiato.largo, casa: aCasa.largo });
+  check('le scritte dei raggi spariscono: a quella scala sarebbero macchie', await page.evaluate(() => getComputedStyle(document.querySelector('.rEti')).opacity) === '0');
+  check('e i raggi non si toccano piu uno per uno', await page.evaluate(() => getComputedStyle(document.querySelector('.raggio')).pointerEvents) === 'none');
+  check('il contenuto lascia spazio al sole parcheggiato', await page.evaluate(() => parseInt(getComputedStyle(document.querySelector('.shell')).paddingBottom, 10)) > 90);
+
+  await page.click('#soleApp .dTitolo');
+  check('toccando il sole si torna a scegliere', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-sole');
+  check('e il sole risale', await page.evaluate(() => !document.getElementById('soleApp').classList.contains('parcheggiato')));
+
+  // Il tocco su un raggio risale fino al sole, che nel frattempo si e'
+  // parcheggiato: senza il controllo apriva la funzione e tornava subito indietro.
+  await page.click('.raggio[data-scheda="prezzo"] .presa');
+  await page.waitForTimeout(700);
+  check('un tocco su un raggio non rimbalza a casa', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-prezzo', await page.evaluate(() => document.querySelector('.tp.on').id));
+
+  await page.click('#soleApp .dTitolo');
   await page.evaluate(() => document.querySelector('.raggio[data-scheda="prezzo"]').focus());
   await page.keyboard.press('Enter');
-  // Anche da tastiera si aspetta che il sole finisca di calarsi.
-  await page.waitForFunction(() => document.querySelector('.tp.on').id === 'tab-prezzo', null, { timeout: 5000 })
-    .catch(() => {});
-  check('i raggi si aprono anche da tastiera', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-prezzo',
-    await page.evaluate(() => document.querySelector('.tp.on').id));
-
-  // Da qui in poi si prova la navigazione dentro le funzioni: si resta fuori
-  // dalla home, dove la barra in basso non c'e'.
-  console.log('\n-- la riga della nav segue la scheda --');
-  const barra = () => page.evaluate(() => {
-    const nav = document.querySelector('.nav');
-    return { x: nav.style.getPropertyValue('--nbx'), w: nav.style.getPropertyValue('--nbw') };
-  });
-  await page.click('#nav-prezzo');
-  const suPrezzo = await barra();
-  check('la riga si posiziona sulla scheda scelta', suPrezzo.x !== '' && suPrezzo.w !== '', suPrezzo);
-  const bottone = await page.evaluate(() => {
-    const b = document.getElementById('nav-prezzo');
-    return { left: b.offsetLeft, width: b.offsetWidth };
-  });
-  check('e la misura sul bottone vero', suPrezzo.x === bottone.left + 'px' && suPrezzo.w === bottone.width + 'px', { suPrezzo, bottone });
-  await page.click('#nav-storico');
-  const suStorico = await barra();
-  check('si sposta cambiando scheda', suStorico.x !== suPrezzo.x, { suPrezzo, suStorico });
+  check('i raggi si aprono anche da tastiera', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-prezzo');
 
   console.log('\n-- la scheda entra dal lato da cui l\'hai chiamata --');
-  await page.click('#nav-foto');
+  await page.evaluate(() => sw('foto'));
   check('andando indietro entra da sinistra', await page.evaluate(() => !document.getElementById('tab-foto').classList.contains('daDestra')));
-  await page.click('#nav-ricerca');
+  await page.evaluate(() => sw('ricerca'));
   check('andando avanti entra da destra', await page.evaluate(() => document.getElementById('tab-ricerca').classList.contains('daDestra')));
   check('una sola scheda per volta resta accesa', await page.evaluate(() => document.querySelectorAll('.tp.on').length) === 1);
 
   console.log('\n-- il bottone dice che sta lavorando --');
-  await page.click('#nav-prezzo');
+  await page.evaluate(() => sw('prezzo'));
   await page.fill('#pNome', 'Giacca');
   await page.click('#btnP');
   await page.waitForSelector('#btnP .bspin', { timeout: 5000 });
@@ -123,7 +172,7 @@ async function apri(browser, opzioni) {
     // conta qui e' il ritorno della promessa, non il contenuto degli appunti.
     navigator.clipboard.writeText = () => Promise.resolve();
   });
-  await page.click('#nav-annuncio');
+  await page.evaluate(() => sw('annuncio'));
   await page.evaluate(() => { document.getElementById('rAnnTitolo').textContent = 'Un titolo'; show('rAnn'); });
   const copia = await page.$('#tab-annuncio .cbtn:nth-child(2)');
   await copia.click();
@@ -133,7 +182,7 @@ async function apri(browser, opzioni) {
   check('e torna com\'era da solo', (await copia.textContent()).includes('Copia Titolo'), await copia.textContent());
 
   console.log('\n-- il focus da tastiera si vede --');
-  await page.click('#nav-prezzo');
+  await page.evaluate(() => sw('prezzo'));
   await page.evaluate(() => document.getElementById('pNome').focus());
   await page.keyboard.press('Tab');
   const focoVisibile = await page.evaluate(() => {
@@ -149,7 +198,7 @@ async function apri(browser, opzioni) {
 
   console.log('\n-- la vibrazione: solo sui momenti che contano --');
   await page.evaluate(() => { window.__vibrazioni = []; navigator.vibrate = ms => { window.__vibrazioni.push(ms); return true; }; });
-  await page.click('#nav-foto'); await page.click('#nav-prezzo');
+  await page.evaluate(() => sw('foto')); await page.evaluate(() => sw('prezzo'));
   check('cambiare scheda non vibra', await page.evaluate(() => window.__vibrazioni.length) === 0);
   await page.click('#btnP');
   await page.waitForSelector('#rPre:not([style*="display: none"])', { timeout: 15000 });
@@ -177,10 +226,13 @@ async function apri(browser, opzioni) {
     return d === '0.9s' && i === 'infinite';
   }));
   await fermo.click('.raggio[data-scheda="prezzo"] .presa');
-  check('il raggio apre subito, senza far cadere niente', await fermo.evaluate(() => document.querySelector('.tp.on').id) === 'tab-prezzo',
+  check('il raggio apre subito', await fermo.evaluate(() => document.querySelector('.tp.on').id) === 'tab-prezzo',
     await fermo.evaluate(() => document.querySelector('.tp.on').id));
-  await fermo.click('.logo');
-  check('e rientrando il sole non risale, e gia li', await fermo.evaluate(() => !document.querySelector('.soleWrap').classList.contains('su')));
+  const scivolata = await fermo.evaluate(() => {
+    const s = document.getElementById('soleApp');
+    return { parcheggiato: s.classList.contains('parcheggiato'), durata: getComputedStyle(s).transitionDuration };
+  });
+  check('e il sole si parcheggia senza scivolare', scivolata.parcheggiato && parseFloat(scivolata.durata) < 0.001, scivolata);
 
   check('e non vibra niente', await fermo.evaluate(() => {
     let vibrato = false;
@@ -203,7 +255,7 @@ async function apri(browser, opzioni) {
     await page.evaluate(() => document.querySelectorAll('.res .alba').length));
   check('ma resta dietro: non si puo cliccare', await page.evaluate(() => getComputedStyle(document.querySelector('.alba')).pointerEvents) === 'none');
   check('e non lo legge chi usa uno screen reader', await page.evaluate(() => Array.from(document.querySelectorAll('.alba,.soleSpin,.soleLogo')).every(e => e.getAttribute('aria-hidden') === 'true')));
-  await page.click('#nav-storico');
+  await page.evaluate(() => sw('storico'));
   check('la versione sole+luna sta dove non c\'e ancora niente', await page.evaluate(() => {
     const vuoto = document.getElementById('historyEmpty');
     return vuoto.style.display !== 'none' ? !!vuoto.querySelector('use[href="#ico-sole-luna"]') : true;

@@ -68,7 +68,7 @@ const RISULTATO = (titolo, prezzo, fonte) => ({
   const attendiFine = () => page.waitForFunction(() => !document.getElementById('btnS').disabled, null, { timeout: 30000 });
 
   console.log('\n-- la scheda esiste ed e\' raggiungibile --');
-  await page.click('#nav-ricerca');
+  await page.evaluate(() => sw('ricerca'));
   check('la scheda si apre dalla barra in basso', await page.evaluate(() => document.getElementById('tab-ricerca').classList.contains('on')));
   check('parte senza rapporto e senza passi', await page.evaluate(() => document.getElementById('rRic').style.display === 'none' && document.getElementById('agSteps').style.display === 'none'));
   await page.click('#btnS');
@@ -177,7 +177,7 @@ const RISULTATO = (titolo, prezzo, fonte) => ({
   risultatiPer = (b) => /shopping|prezzo/.test(b.query)
     ? [RISULTATO('Con prezzo A', 40), RISULTATO('Con prezzo B', 55), RISULTATO('Con prezzo C', 62)]
     : [RISULTATO('Senza prezzo A', null), RISULTATO('Senza prezzo B', null)];
-  await page.click('#nav-ricerca');
+  await page.evaluate(() => sw('ricerca'));
   await page.click('#btnS');
   await page.waitForSelector('#rRic:not([style*="display: none"])', { timeout: 30000 });
   const elenco = (aiPost.find(b => /RISULTATI TROVATI ONLINE ADESSO/.test(b.prompt)).prompt.match(/^\d+\. .+$/gm) || []);
@@ -193,7 +193,7 @@ const RISULTATO = (titolo, prezzo, fonte) => ({
 
   console.log('\n-- i dati di un capo non finiscono nella stima di un altro --');
   reset();
-  await page.click('#nav-prezzo');
+  await page.evaluate(() => sw('prezzo'));
   await page.fill('#pNome', 'Scarpe running'); await page.fill('#pMarca', 'Asics');
   await page.click('#btnP');
   await page.waitForSelector('#rPre:not([style*="display: none"])', { timeout: 30000 });
@@ -205,7 +205,7 @@ const RISULTATO = (titolo, prezzo, fonte) => ({
   check('stesso capo: la ricerca rientra da sola', /RICERCA ONLINE/.test(aiPost[aiPost.length - 1].prompt));
 
   console.log('\n-- la ricerca finisce nello storico --');
-  await page.click('#nav-storico');
+  await page.evaluate(() => sw('storico'));
   const storico = await page.textContent('#historyList');
   check('la voce c\'e\', col nome del capo', /Felpa hoodie/.test(storico), storico.slice(0, 200));
   check('col prezzo che ha concluso l\'agente', /42€/.test(storico), storico.slice(0, 300));
@@ -216,7 +216,7 @@ const RISULTATO = (titolo, prezzo, fonte) => ({
   // un rapporto che il prezzo non ce l'ha: la voce di storico deve tenersi
   // quello della stima invece di restare senza.
   await page.evaluate(() => { try{ localStorage.removeItem('vintedAiHistory'); }catch(e){} });
-  await page.click('#nav-prezzo');
+  await page.evaluate(() => sw('prezzo'));
   await page.fill('#pNome', 'Giacca jeans'); await page.fill('#pMarca', 'Levis');
   await page.click('#btnP');
   await page.waitForSelector('#rPre:not([style*="display: none"])', { timeout: 30000 });
@@ -227,14 +227,14 @@ const RISULTATO = (titolo, prezzo, fonte) => ({
   });
   const rapportoPieno = rapporto;
   rapporto = rapportoSenzaPrezzo;
-  await page.click('#nav-ricerca');
+  await page.evaluate(() => sw('ricerca'));
   await page.evaluate(() => { ['sNome','sMarca','sTaglia','sNote'].forEach(id => { document.getElementById(id).value=''; }); });
   await compila('Giacca jeans', 'Levis');
   await page.click('#btnS');
   await page.waitForSelector('#rRic:not([style*="display: none"])', { timeout: 30000 });
   rapporto = rapportoPieno;
 
-  await page.click('#nav-storico');
+  await page.evaluate(() => sw('storico'));
   const voci = await page.evaluate(() => Array.from(document.querySelectorAll('.hItem')).map(h => h.textContent.replace(/\s+/g, ' ')));
   const voce = voci.find(t => /Giacca jeans/.test(t)) || '';
   check('la ricerca non crea una voce doppia', voci.filter(t => /Giacca jeans/.test(t)).length === 1, voci.length);
@@ -251,7 +251,7 @@ const RISULTATO = (titolo, prezzo, fonte) => ({
     ricPost.push(b);
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ query: b.query, risultati: risultatiPer(b), correlate: [], prezzi: null }) });
   });
-  await page.click('#nav-ricerca');
+  await page.evaluate(() => sw('ricerca'));
   await page.click('#btnS');
   // La ricerca e' ferma sulla promessa: il diario deve gia' mostrare il passo
   // "Cerco:" in corso, con la pianificazione chiusa sopra.
@@ -281,25 +281,25 @@ const RISULTATO = (titolo, prezzo, fonte) => ({
     const x = c.getContext('2d'); x.fillStyle = '#888'; x.fillRect(0, 0, 400, 400);
     return c.toDataURL('image/jpeg', 0.8);
   });
-  await page.click('#nav-foto');
+  await page.evaluate(() => sw('foto'));
   await page.setInputFiles('#fileInput', [{ name: 'capo.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(jpeg.split(',')[1], 'base64') }]);
-  await page.click('#nav-ricerca');
+  await page.evaluate(() => sw('ricerca'));
   check('i campi della ricerca vecchia sono stati svuotati', await page.inputValue('#sMarca') === '', await page.inputValue('#sMarca'));
   check('il rapporto vecchio sparisce dalla pagina', await page.evaluate(() => document.getElementById('rRic').style.display === 'none'));
   check('e anche il diario vecchio', await page.evaluate(() => document.getElementById('agList').children.length === 0));
   reset();
-  await page.click('#nav-prezzo');
+  await page.evaluate(() => sw('prezzo'));
   await page.fill('#pNome', 'Felpa hoodie'); await page.fill('#pMarca', 'Carhartt');
   await page.click('#btnP');
   await page.waitForSelector('#rPre:not([style*="display: none"])', { timeout: 30000 });
   check('la ricerca del capo di prima non alimenta piu\' la stima', !/RICERCA ONLINE/.test(aiPost[aiPost.length - 1].prompt));
-  await page.click('#nav-ricerca');
+  await page.evaluate(() => sw('ricerca'));
   await compila('Felpa hoodie', 'Carhartt');
 
   console.log('\n-- ricerca non configurata sul server --');
   reset();
   ricercaStatus = 501; ricercaErrore = 'Ricerca online non configurata sul server (SERPAPI_KEY)';
-  await page.click('#nav-ricerca');
+  await page.evaluate(() => sw('ricerca'));
   await page.click('#btnS');
   await attendiFine();
   check('lo dice invece di ripetere un errore qualsiasi', /SERPAPI_KEY/.test(await page.textContent('#eRic')), await page.textContent('#eRic'));
@@ -322,12 +322,12 @@ const RISULTATO = (titolo, prezzo, fonte) => ({
     lastAnalysis = { tipo: 'Giacca di jeans', brand: 'Levi\'s', taglie: 'L', colore: 'blu', materiale: 'denim', condizione: 'Ottimo' };
     sw('foto');
   });
-  await page.click('#nav-ricerca');
+  await page.evaluate(() => sw('ricerca'));
   check('nome e marca arrivano dall\'analisi', await page.inputValue('#sNome') === 'Giacca di jeans' && await page.inputValue('#sMarca') === 'Levi\'s');
   check('taglia e dettagli arrivano dall\'analisi', await page.inputValue('#sTaglia') === 'L' && await page.inputValue('#sNote') === 'blu denim');
   check('la condizione finisce nella tendina', await page.inputValue('#sCond') === 'Ottimo');
   await page.fill('#sNome', 'scritto a mano');
-  await page.click('#nav-foto'); await page.click('#nav-ricerca');
+  await page.evaluate(() => sw('foto')); await page.evaluate(() => sw('ricerca'));
   check('quello che l\'utente ha scritto non viene sovrascritto', await page.inputValue('#sNome') === 'scritto a mano');
 
   console.log('\n-- errori JS accumulati --');

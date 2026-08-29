@@ -67,32 +67,6 @@ body{
 }
 .ct::before{content:'//';font-size:12px;color:var(--t)}
 
-/* nav */
-.nav{
-  position:fixed;bottom:0;left:0;right:0;
-  background:#111111;
-  border-top:2px solid var(--bd);
-  display:flex;padding-bottom:var(--sb);z-index:100;
-}
-/* La riga d'oro non attraversa piu' tutta la barra: sta sotto la scheda in cui
-   sei, e ci scorre quando cambi. La posizione la misura sw() sul bottone vero,
-   cosi' regge qualunque numero di schede e qualunque larghezza. */
-.nav::before{
-  content:'';position:absolute;top:-2px;left:0;height:2px;
-  width:var(--nbw,20%);transform:translateX(var(--nbx,0));
-  background:var(--t);
-  transition:transform .28s cubic-bezier(.4,0,.2,1),width .28s cubic-bezier(.4,0,.2,1);
-}
-.nb{
-  flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
-  padding:10px 0 11px;border:none;background:transparent;cursor:pointer;
-  color:var(--mu);font-family:'Orbitron',sans-serif;font-size:9px;font-weight:700;
-  text-transform:uppercase;letter-spacing:1px;
-  -webkit-tap-highlight-color:transparent;transition:all .2s;
-}
-.nb.on{color:var(--t)}
-.nb .ic{font-size:22px;line-height:1;transition:transform .2s}
-.nb.on .ic{transform:scale(1.15)}
 
 .tp{display:none}
 .tp.on{display:block;animation:tabIn .22s ease-out}
@@ -148,12 +122,34 @@ body{
 .agvn{font-family:'Orbitron',sans-serif;font-size:19px;font-weight:900;color:var(--t);line-height:1.1}
 .agvl{font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:1px;margin-top:3px}
 
-/* ===== IL SOLE: e' la home, e i suoi raggi sono le funzioni =====
-   Non e' un'illustrazione con sopra dei bottoni: i raggi SONO i bottoni, con
-   la loro forma come area sensibile piu' una presa tonda intorno all'icona,
-   perche' un triangolo sottile col pollice non si prende. */
-.soleWrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:calc(100dvh - 60px);padding:8px 0}
-.soleNav{width:100%;max-width:440px;overflow:visible;color:var(--t)}
+/* ===== IL SOLE =====
+   E' un elemento fisso della pagina, non il contenuto di una scheda: quando
+   scegli un raggio non sparisce, si rimpicciolisce e va a parcheggiarsi a
+   meta' sul bordo di sotto, e li' resta mentre usi la funzione. Toccarlo lo
+   fa risalire.
+
+   Il movimento e' una transizione sola sul transform, con una curva che parte
+   all'indietro: il valore negativo nella cubic-bezier e' lo strappo verso
+   l'alto prima di calarsi, e funziona identico anche al contrario quando
+   risale. */
+#soleApp{
+  position:fixed;left:50%;top:50%;z-index:60;
+  /* Quadrato come il suo viewBox: cosi' il centro del riquadro e' il centro
+     del sole, e le due posizioni si calcolano senza sorprese. */
+  width:min(94vw,420px);aspect-ratio:1;
+  pointer-events:none;
+  transform:translate(-50%,-50%) scale(1);
+  transition:transform .52s cubic-bezier(.5,-0.3,.66,.42);
+}
+/* Parcheggiato: il sole si appoggia sul bordo di sotto invece di affondarci.
+   Col centro esattamente sul bordo se ne vedeva troppo poco per capire che e'
+   ancora li' e che si puo' toccare: alzato di 34px si vede il disco intero e i
+   raggi di sopra, e resta comunque mezzo fuori come nel disegno. */
+#soleApp.parcheggiato{
+  transform:translate(-50%, calc(-50% + 50vh - 34px)) scale(.46);
+}
+.soleWrap{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+.soleNav{width:100%;overflow:visible;color:var(--t);pointer-events:auto}
 .soleNav .decoro{fill:var(--t);opacity:.28;transform-origin:200px 200px;animation:giroLento 90s linear infinite}
 @keyframes giroLento{to{transform:rotate(360deg)}}
 
@@ -170,37 +166,44 @@ body{
 .raggio:hover .rEti,.raggio:focus-visible .rEti{fill:var(--t)}
 .raggio:focus{outline:none}
 .raggio:focus-visible .presa{fill:var(--tl);stroke:var(--t);stroke-width:2}
-/* Il raggio scelto lampeggia mentre la scheda entra: il tocco ha una risposta
-   prima che cambi la pagina. */
 .raggio.scelto .lama{opacity:1;transform:scale(1.14)}
 .raggio.scelto .rEti{fill:var(--t)}
-.soleAiuto{font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--mu);margin-top:6px}
+/* Il raggio su cui e' ferma la ghiera: acceso come se ci fosse sopra il dito,
+   perche' e' esattamente quello che succede. */
+.raggio.selezionato .lama{opacity:1}
+.raggio.selezionato .rEti{fill:var(--t)}
+.raggio.selezionato .rIco{font-size:30px}
+/* A casa la ghiera e' tutta l'area del sole, non solo le forme disegnate:
+   dentro un <svg> il vuoto lascia passare il dito, e un giro che parte da uno
+   spazio vuoto non partirebbe. Parcheggiato si torna a rispondere solo dove
+   c'e' il disegno, cosi' il sole non ruba tocchi al contenuto sotto. */
+body.home #soleApp{pointer-events:auto;touch-action:none}
+/* Girando, il dito non deve selezionare testo ne' trascinare il disegno. */
+#soleApp{user-select:none;-webkit-user-select:none}
+#soleApp svg,#soleApp text{-webkit-user-drag:none}
+.disco{cursor:pointer}
+/* Fuori dal flusso: se contasse nell'altezza, il centro del riquadro non
+   sarebbe piu' il centro del sole e il parcheggio finirebbe storto. */
+.soleAiuto{position:absolute;left:0;right:0;bottom:-4px;text-align:center;font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--mu);transition:opacity .2s ease}
 
-/* Scelto il raggio, il sole si cala come un burattino: prima un piccolo
-   strappo verso l'alto - il filo che si tende - poi giu', rimpicciolendo e
-   ruotando appena, come un pupazzo tirato sotto il palco. La funzione entra
-   quando il sole e' sparito, non prima: cosi' e' un movimento solo. */
-@keyframes soleGiu{
-  0%{transform:none;opacity:1}
-  22%{transform:translateY(-14px) scale(1.04) rotate(-3deg)}
-  100%{transform:translateY(62vh) scale(.24) rotate(9deg);opacity:0}
-}
-@keyframes soleSu{
-  0%{transform:translateY(62vh) scale(.24) rotate(9deg);opacity:0}
-  70%{opacity:1}
-  100%{transform:none;opacity:1}
-}
-.soleWrap.giu{animation:soleGiu .42s cubic-bezier(.5,.03,.72,.35) forwards}
-.soleWrap.su{animation:soleSu .5s cubic-bezier(.22,.92,.3,1.04) both}
+/* Parcheggiato: le scritte e le icone dei raggi a quella scala sarebbero
+   macchie, e il sole intero diventa un bottone solo - quello per tornare. */
+#soleApp.parcheggiato .rEti,
+#soleApp.parcheggiato .rIco,
+#soleApp.parcheggiato .soleAiuto{opacity:0}
+#soleApp.parcheggiato .raggio{pointer-events:none}
+#soleApp.parcheggiato .soleNav{cursor:pointer}
+#soleApp.parcheggiato .decoro{opacity:.5}
 
 /* Sulla home il sole si prende la pagina: intestazione e titolone spariscono,
    il nome sta gia' dentro al disco. */
 body.home .hdr,body.home .damn{display:none}
-/* Sulla home la navigazione e' il sole: la barra in basso sarebbe la stessa
-   cosa detta due volte. Torna appena entri in una funzione, e dal logo si
-   rientra nel sole. */
-body.home .nav{display:none}
-body.home .shell{padding-bottom:28px}
+/* Dentro una funzione il contenuto lascia spazio al sole parcheggiato. */
+body:not(.home) .shell{padding-bottom:calc(104px + var(--sb))}
+
+@media(prefers-reduced-motion:reduce){
+  #soleApp{transition:none}
+}
 
 /* form */
 .fl{display:block;font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;font-family:'Orbitron',sans-serif}
@@ -215,7 +218,7 @@ body.home .shell{padding-bottom:28px}
 .fc:focus{border-color:var(--t);box-shadow:0 0 0 3px var(--tl)}
 /* Il focus da tastiera deve vedersi: outline:none sui campi lo aveva tolto
    senza rimettere niente al suo posto, e col mouse non se ne accorge nessuno. */
-.fc:focus-visible,.btn:focus-visible,.cbtn:focus-visible,.nb:focus-visible,
+.fc:focus-visible,.btn:focus-visible,.cbtn:focus-visible,.soleNav:focus-visible,
 .chip:focus-visible,.pd:focus-visible,.pt:focus-visible,.hDel:focus-visible,
 .ubox:focus-within{outline:2px solid var(--t);outline-offset:2px}
 /* L'etichetta si accende col suo campo: dice dove sei senza aggiungere niente. */
@@ -321,7 +324,7 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
 
 /* toast */
 #toast{
-  position:fixed;bottom:calc(84px + var(--sb) + 12px);left:50%;
+  position:fixed;bottom:calc(108px + var(--sb));left:50%;
   transform:translateX(-50%) translateY(16px);
   background:var(--t);color:#111;
   padding:10px 22px;border-radius:6px;
@@ -375,6 +378,55 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
   </symbol>
 </svg>
 
+<div id="soleApp">
+  <div class="soleWrap">
+    <svg class="soleNav" viewBox="0 0 400 400" role="group" aria-label="Scegli cosa fare">
+    <g class="decoro">
+      <path d="M233.6 134.1 L258.8 119.1 L252.3 147.7 Z"/>
+      <path d="M272.9 212.8 L289.4 229.0 L266.5 232.4 Z"/>
+      <path d="M212.8 272.9 L200.0 302.0 L187.2 272.9 Z"/>
+      <path d="M134.1 233.6 L108.7 229.7 L126.9 211.6 Z"/>
+      <path d="M146.8 148.6 L141.8 119.9 L167.6 133.5 Z"/>
+      <path d="M148.6 146.8 L145.3 124.8 L165.3 134.7 Z"/>
+    </g>
+    <g class="raggio" data-scheda="foto" tabindex="0" role="button" aria-label="Analizza le foto del capo">
+      <path class="lama" d="M183.4 127.9 L200.0 70.0 L216.6 127.9 Z"/>
+      <circle class="presa" cx="200.0" cy="50.0" r="36"/>
+      <text class="rIco" x="200.0" y="54.0">📸</text>
+      <text class="rEti" x="200.0" y="80.0">ANALIZZA</text>
+    </g>
+    <g class="raggio" data-scheda="annuncio" tabindex="0" role="button" aria-label="Scrivi l'annuncio">
+      <path class="lama" d="M263.4 161.9 L323.6 159.8 L273.7 193.6 Z"/>
+      <circle class="presa" cx="342.7" cy="153.6" r="36"/>
+      <text class="rIco" x="342.7" y="157.6">✍️</text>
+      <text class="rEti" x="342.7" y="183.6">ANNUNCIO</text>
+    </g>
+    <g class="raggio" data-scheda="prezzo" tabindex="0" role="button" aria-label="Stima il prezzo">
+      <path class="lama" d="M255.8 248.5 L276.4 305.2 L228.9 268.1 Z"/>
+      <circle class="presa" cx="288.2" cy="321.4" r="36"/>
+      <text class="rIco" x="288.2" y="325.4">💶</text>
+      <text class="rEti" x="288.2" y="351.4">PREZZO</text>
+    </g>
+    <g class="raggio" data-scheda="ricerca" tabindex="0" role="button" aria-label="L'agente cerca online quanto vale il capo">
+      <path class="lama" d="M171.1 268.1 L123.6 305.2 L144.2 248.5 Z"/>
+      <circle class="presa" cx="111.8" cy="321.4" r="36"/>
+      <text class="rIco" x="111.8" y="325.4">🤖</text>
+      <text class="rEti" x="111.8" y="351.4">RICERCA</text>
+    </g>
+    <g class="raggio" data-scheda="storico" tabindex="0" role="button" aria-label="Rivedi quello che hai salvato">
+      <path class="lama" d="M126.3 193.6 L76.4 159.8 L136.6 161.9 Z"/>
+      <circle class="presa" cx="57.3" cy="153.6" r="36"/>
+      <text class="rIco" x="57.3" y="157.6">🗂️</text>
+      <text class="rEti" x="57.3" y="183.6">STORICO</text>
+    </g>
+    <circle class="disco" cx="200" cy="200" r="72"/>
+    <text class="dTitolo" x="200" y="190">DAMN</text>
+    <text class="dSotto" id="dScelta" x="200" y="215">ANALIZZA</text>
+    </svg>
+    <p class="soleAiuto" id="soleAiuto">Gira intorno · premi al centro</p>
+  </div>
+</div>
+
 <div class="shell">
   <div class="damn" style="font-family:'Bebas Neue',sans-serif;font-size:72px;font-weight:400;color:#ffffff;letter-spacing:8px;text-align:center;padding-top:32px;line-height:1;background:linear-gradient(180deg,#ffffff 0%,#e8c84a 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">DAMN</div>
 <div class="hdr">
@@ -383,54 +435,9 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
   </div>
 
   <!-- IL SOLE: la home. I raggi sono le funzioni. -->
-  <div id="tab-sole" class="tp on">
-    <div class="soleWrap">
-      <svg class="soleNav" viewBox="0 0 400 400" role="group" aria-label="Scegli cosa fare">
-      <g class="decoro">
-        <path d="M233.6 134.1 L258.8 119.1 L252.3 147.7 Z"/>
-        <path d="M272.9 212.8 L289.4 229.0 L266.5 232.4 Z"/>
-        <path d="M212.8 272.9 L200.0 302.0 L187.2 272.9 Z"/>
-        <path d="M134.1 233.6 L108.7 229.7 L126.9 211.6 Z"/>
-        <path d="M146.8 148.6 L141.8 119.9 L167.6 133.5 Z"/>
-        <path d="M148.6 146.8 L145.3 124.8 L165.3 134.7 Z"/>
-      </g>
-      <g class="raggio" data-scheda="foto" tabindex="0" role="button" aria-label="Analizza le foto del capo">
-        <path class="lama" d="M183.4 127.9 L200.0 70.0 L216.6 127.9 Z"/>
-        <circle class="presa" cx="200.0" cy="50.0" r="36"/>
-        <text class="rIco" x="200.0" y="54.0">📸</text>
-        <text class="rEti" x="200.0" y="80.0">ANALIZZA</text>
-      </g>
-      <g class="raggio" data-scheda="annuncio" tabindex="0" role="button" aria-label="Scrivi l'annuncio">
-        <path class="lama" d="M263.4 161.9 L323.6 159.8 L273.7 193.6 Z"/>
-        <circle class="presa" cx="342.7" cy="153.6" r="36"/>
-        <text class="rIco" x="342.7" y="157.6">✍️</text>
-        <text class="rEti" x="342.7" y="183.6">ANNUNCIO</text>
-      </g>
-      <g class="raggio" data-scheda="prezzo" tabindex="0" role="button" aria-label="Stima il prezzo">
-        <path class="lama" d="M255.8 248.5 L276.4 305.2 L228.9 268.1 Z"/>
-        <circle class="presa" cx="288.2" cy="321.4" r="36"/>
-        <text class="rIco" x="288.2" y="325.4">💶</text>
-        <text class="rEti" x="288.2" y="351.4">PREZZO</text>
-      </g>
-      <g class="raggio" data-scheda="ricerca" tabindex="0" role="button" aria-label="L'agente cerca online quanto vale il capo">
-        <path class="lama" d="M171.1 268.1 L123.6 305.2 L144.2 248.5 Z"/>
-        <circle class="presa" cx="111.8" cy="321.4" r="36"/>
-        <text class="rIco" x="111.8" y="325.4">🤖</text>
-        <text class="rEti" x="111.8" y="351.4">RICERCA</text>
-      </g>
-      <g class="raggio" data-scheda="storico" tabindex="0" role="button" aria-label="Rivedi quello che hai salvato">
-        <path class="lama" d="M126.3 193.6 L76.4 159.8 L136.6 161.9 Z"/>
-        <circle class="presa" cx="57.3" cy="153.6" r="36"/>
-        <text class="rIco" x="57.3" y="157.6">🗂️</text>
-        <text class="rEti" x="57.3" y="183.6">STORICO</text>
-      </g>
-      <circle class="disco" cx="200" cy="200" r="72"/>
-      <text class="dTitolo" x="200" y="192">DAMN</text>
-      <text class="dSotto" x="200" y="216">VINTED AI</text>
-      </svg>
-      <p class="soleAiuto">Tocca un raggio</p>
-    </div>
-  </div>
+  <!-- La home non ha contenuto suo: il sole vive fuori dalle schede, perche'
+       resta in pagina anche mentre usi una funzione. -->
+  <div id="tab-sole" class="tp on"></div>
 
   <!-- FOTO -->
   <div id="tab-foto" class="tp">
@@ -610,13 +617,6 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
   </div>
 </div>
 
-<nav class="nav">
-  <button class="nb" id="nav-foto" onclick="sw('foto')"><span class="ic">📸</span>Analizza</button>
-  <button class="nb" id="nav-annuncio" onclick="sw('annuncio')"><span class="ic">✍️</span>Annuncio</button>
-  <button class="nb" id="nav-prezzo" onclick="sw('prezzo')"><span class="ic">💶</span>Prezzo</button>
-  <button class="nb" id="nav-ricerca" onclick="sw('ricerca')"><span class="ic">🤖</span>Ricerca</button>
-  <button class="nb" id="nav-storico" onclick="sw('storico')"><span class="ic">🗂️</span>Storico</button>
-</nav>
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -641,45 +641,19 @@ function sw(n){
   schedaCorrente=n;
 
   document.querySelectorAll('.tp').forEach(p=>p.classList.remove('on','daDestra'));
-  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
   pannello.classList.add('on');
   pannello.classList.toggle('daDestra', daDestra);
-  // Il sole non ha una voce nella barra in basso: ci si torna dal logo.
-  const voce=document.getElementById('nav-'+n);
-  if(voce) voce.classList.add('on');
   document.body.classList.toggle('home', n==='sole');
-  if(n==='sole') risaliSole();
-  muoviIndicatore(n);
+  // Il sole non sparisce mai: o e' al centro, o e' parcheggiato sul bordo.
+  const sole=document.getElementById('soleApp');
+  if(sole) sole.classList.toggle('parcheggiato', n!=='sole');
 
   if(n==='storico') renderHistory();
   if(n==='ricerca') prefillRicerca();
   window.scrollTo({top:0,behavior:menoMovimento()?'auto':'smooth'});
 }
 
-// Rientrando, il sole risale da sotto: e' lo stesso movimento al contrario.
-function risaliSole(){
-  const sole=document.querySelector('.soleWrap');
-  if(!sole || menoMovimento()) return;
-  sole.classList.remove('giu','su');
-  // Senza questo il browser riusa l'animazione appena tolta e non la rigioca.
-  void sole.offsetWidth;
-  sole.classList.add('su');
-  sole.addEventListener('animationend', ()=>sole.classList.remove('su'), { once:true });
-}
 
-// L'indicatore lo misuriamo sul bottone vero invece di dividere per il numero
-// di schede: cosi' non va rifatto ogni volta che se ne aggiunge una.
-function muoviIndicatore(n){
-  const nav=document.querySelector('.nav'), b=document.getElementById('nav-'+n);
-  if(!nav) return;
-  // Sulla home non c'e' niente da indicare: la riga si ritira invece di
-  // restare accesa su una scheda in cui non sei.
-  if(!b){ nav.style.setProperty('--nbw','0px'); return; }
-  nav.style.setProperty('--nbx', b.offsetLeft+'px');
-  nav.style.setProperty('--nbw', b.offsetWidth+'px');
-}
-window.addEventListener('resize', ()=>muoviIndicatore(schedaCorrente));
-window.addEventListener('load', ()=>muoviIndicatore(schedaCorrente));
 
 // Una vibrazione corta sui momenti che valgono l'attesa: analisi finita,
 // rapporto pronto, prezzo stimato. Non a ogni tocco, o diventa rumore.
@@ -687,46 +661,167 @@ function tocco(ms){
   try{ if(navigator.vibrate && !menoMovimento()) navigator.vibrate(ms||12); }catch(e){}
 }
 
-/* ===== I RAGGI DEL SOLE =====
-   Ogni raggio e' un bottone vero: si prende col dito, con Tab e con Invio. Il
-   lampeggio prima del cambio scheda non e' vezzo: e' la risposta al tocco, che
-   altrimenti arriverebbe solo quando la pagina e' gia' cambiata. */
-document.querySelectorAll('.raggio').forEach(raggio=>{
-  const vai=()=>{
-    const scheda=raggio.dataset.scheda;
-    if(!scheda || raggio.classList.contains('scelto')) return;
-    raggio.classList.add('scelto');
-    tocco(8);
+/* ===== LA GHIERA =====
+   Il principio dell'iPod classic: la ruota sta ferma, il dito ci gira intorno
+   e la selezione salta di voce in voce con uno scatto per volta. Qui le voci
+   sono i cinque raggi, il disco al centro fa da schermo (dice cosa stai per
+   aprire) e da tasto: si preme li' per entrare.
 
-    const sole=document.querySelector('.soleWrap');
-    // Chi ha chiesto meno movimento non aspetta nessuna animazione.
-    if(!sole || menoMovimento()){
-      raggio.classList.remove('scelto');
-      sw(scheda);
-      return;
-    }
+   Restano tutte le strade di prima: il tocco secco su un raggio lo apre, Tab e
+   Invio pure. La ghiera si aggiunge, non sostituisce. */
+const RAGGI = Array.from(document.querySelectorAll('.raggio'));
+// Quanti gradi di dito valgono uno scatto. Con cinque voci un quinto di giro
+// (72°) sarebbe il rapporto "vero", ma il pollice su uno schermo piccolo fa
+// giri corti: 45° e' la distanza a cui gli scatti si sentono senza doversi
+// sbracciare.
+const GRADI_PER_SCATTO = 45;
+let selezione = 0;
+// Vero se il giro appena finito ha fatto scattare la ghiera. Il rilascio del
+// dito genera comunque un click, e se il dito era fermo su un raggio quel
+// click lo aprirebbe: qui si distingue "ho girato" da "ho toccato". A tempo
+// (un quarto di secondo) mangiava anche i tocchi veri subito dopo un giro.
+let giroConScatti = false;
 
-    let fatto=false;
-    const entra=()=>{
-      if(fatto) return;
-      fatto=true;
-      sole.classList.remove('giu');
-      raggio.classList.remove('scelto');
-      sw(scheda);
-    };
-    sole.classList.remove('su');
-    sole.classList.add('giu');
-    sole.addEventListener('animationend', entra, { once:true });
-    // Paracadute: se l'animazione non parte o l'evento non arriva (scheda in
-    // secondo piano, animazioni disattivate dal browser) la funzione si apre
-    // lo stesso.
-    setTimeout(entra, 700);
-  };
-  raggio.addEventListener('click', vai);
+function nomeDi(raggio){
+  const eti = raggio.querySelector('.rEti');
+  return eti ? eti.textContent : '';
+}
+
+function mostraSelezione(){
+  RAGGI.forEach((r,i)=>r.classList.toggle('selezionato', i===selezione));
+  const display = document.getElementById('dScelta');
+  if(display) display.textContent = nomeDi(RAGGI[selezione]);
+  const disco = document.querySelector('.disco');
+  if(disco) disco.setAttribute('aria-label', 'Apri '+nomeDi(RAGGI[selezione]));
+}
+
+// Uno scatto per volta, e a ogni scatto la vibrazione corta: e' il "click"
+// della ghiera, l'unica cosa che rende il giro una cosa che si sente e non
+// solo si guarda.
+function scatta(verso){
+  selezione = (selezione + verso + RAGGI.length) % RAGGI.length;
+  mostraSelezione();
+  tocco(6);
+}
+
+function apriRaggio(raggio){
+  const scheda = raggio.dataset.scheda;
+  if(!scheda) return;
+  selezione = RAGGI.indexOf(raggio);
+  mostraSelezione();
+  raggio.classList.add('scelto');
+  tocco(10);
+  setTimeout(()=>raggio.classList.remove('scelto'), 520);
+  sw(scheda);
+}
+
+RAGGI.forEach(raggio=>{
+  raggio.addEventListener('click', ()=>{
+    if(giroConScatti) return;   // era la fine di un giro, non un tocco
+    apriRaggio(raggio);
+  });
   raggio.addEventListener('keydown', e=>{
-    if(e.key==='Enter'||e.key===' '){ e.preventDefault(); vai(); }
+    if(e.key==='Enter'||e.key===' '){ e.preventDefault(); apriRaggio(raggio); }
   });
 });
+
+const soleApp = document.getElementById('soleApp');
+if(soleApp){
+  const disegno = soleApp.querySelector('.soleNav');
+  const parcheggiato = ()=>soleApp.classList.contains('parcheggiato');
+  const daRaggio = e => !!(e.target && e.target.closest && e.target.closest('.raggio'));
+
+  /* --- il giro del dito --- */
+  let giro = null;
+
+  const angolo = (e, centro)=>Math.atan2(e.clientY - centro.y, e.clientX - centro.x) * 180 / Math.PI;
+
+  soleApp.addEventListener('pointerdown', e=>{
+    // Ogni tocco nuovo riparte pulito: se il ripristino stesse dopo i
+    // controlli qui sotto, un tocco al centro (che li salta) resterebbe
+    // marchiato come "fine di un giro" e non aprirebbe niente.
+    giroConScatti = false;
+    if(parcheggiato()) return;
+    const r = disegno.getBoundingClientRect();
+    const centro = { x:r.x + r.width/2, y:r.y + r.height/2 };
+    // Il dito deve partire sulla corona, non sul disco: al centro c'e' il tasto.
+    const distanza = Math.hypot(e.clientX - centro.x, e.clientY - centro.y);
+    if(distanza < r.width * 0.17) return;
+    // Senza questo il browser avvia il trascinamento nativo del disegno al
+    // primo movimento: da li' in poi non arrivano piu' ne' i movimenti ne' il
+    // rilascio, e la ghiera si blocca dopo il primo giro.
+    e.preventDefault();
+    giro = { centro, ultimo:angolo(e, centro), residuo:0 };
+    // I movimenti si ascoltano sulla finestra, non sul sole: girando, il dito
+    // esce e rientra dal disegno in continuazione, e dentro un <svg> il vuoto
+    // non riceve eventi. (setPointerCapture sembrava la strada giusta, ma
+    // reggeva un giro solo: dal secondo in poi i movimenti non arrivavano
+    // piu' e la ghiera restava ferma.)
+    window.addEventListener('pointermove', muoviGhiera);
+    window.addEventListener('pointerup', finisciGiro);
+    window.addEventListener('pointercancel', finisciGiro);
+  });
+
+  function muoviGhiera(e){
+    if(!giro) return;
+    const ora = angolo(e, giro.centro);
+    // Il salto fra +180 e -180 non e' mezzo giro del dito: va riportato dentro.
+    let delta = ora - giro.ultimo;
+    if(delta > 180) delta -= 360;
+    if(delta < -180) delta += 360;
+    giro.ultimo = ora;
+    giro.residuo += delta;
+
+    while(Math.abs(giro.residuo) >= GRADI_PER_SCATTO){
+      const verso = giro.residuo > 0 ? 1 : -1;
+      giro.residuo -= verso * GRADI_PER_SCATTO;
+      scatta(verso);
+      giroConScatti = true;
+    }
+  }
+
+  function finisciGiro(){
+    giro = null;
+    window.removeEventListener('pointermove', muoviGhiera);
+    window.removeEventListener('pointerup', finisciGiro);
+    window.removeEventListener('pointercancel', finisciGiro);
+  }
+
+  /* --- la rotella del mouse fa lo stesso lavoro del dito --- */
+  soleApp.addEventListener('wheel', e=>{
+    if(parcheggiato()) return;
+    e.preventDefault();
+    scatta(e.deltaY > 0 || e.deltaX > 0 ? 1 : -1);
+  }, { passive:false });
+
+  /* --- il tasto centrale, e il ritorno quando il sole e' parcheggiato --- */
+  soleApp.addEventListener('click', e=>{
+    if(daRaggio(e)) return;      // il raggio si apre da solo
+    if(giroConScatti) return;    // era la fine di un giro, non un tocco
+    if(parcheggiato()){ tocco(8); sw('sole'); return; }
+    // A casa, un tocco che non e' su un raggio preme il tasto centrale: apre
+    // quello che il disco sta mostrando.
+    apriRaggio(RAGGI[selezione]);
+  });
+
+  disegno.setAttribute('tabindex','0');
+  disegno.setAttribute('role','application');
+  disegno.setAttribute('aria-label','Ghiera: frecce per scorrere le funzioni, Invio per aprire');
+  disegno.addEventListener('keydown', e=>{
+    if(daRaggio(e)) return;
+    if(parcheggiato()){
+      if(e.key==='Enter'||e.key===' '){ e.preventDefault(); tocco(8); sw('sole'); }
+      return;
+    }
+    // Le frecce girano la ghiera, Invio preme al centro: la stessa cosa del
+    // dito, per chi non ce l'ha sullo schermo.
+    if(e.key==='ArrowRight'||e.key==='ArrowDown'){ e.preventDefault(); scatta(1); }
+    else if(e.key==='ArrowLeft'||e.key==='ArrowUp'){ e.preventDefault(); scatta(-1); }
+    else if(e.key==='Enter'||e.key===' '){ e.preventDefault(); apriRaggio(RAGGI[selezione]); }
+  });
+}
+
+mostraSelezione();
 
 document.querySelectorAll('#toneChips .chip').forEach(c=>{
   const pick=()=>{
@@ -2019,7 +2114,6 @@ function renderHistory(){
 // La pagina si apre sul sole: la classe la mette sw(), ma al primo giro sw()
 // non e' ancora passata di qui.
 document.body.classList.add('home');
-muoviIndicatore('sole');
 
 // Un solo listener sulla lista invece di un onclick costruito per ogni riga.
 document.getElementById('historyList').addEventListener('click', e => {
