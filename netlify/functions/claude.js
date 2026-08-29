@@ -1,4 +1,3 @@
-const https = require('https');
 const S = require('./lib/shared');
 
 // Le chiavi NON stanno nel codice.
@@ -517,62 +516,14 @@ function listaGroq(deadline) {
 
 /* ============================== HTTP ============================== */
 
-// Le istanze delle function vengono riusate a caldo: tenendo viva la connessione
-// ci risparmiamo handshake TCP+TLS a ogni richiesta.
-const agent = new https.Agent({ keepAlive: true, keepAliveMsecs: 1500, maxSockets: 10 });
-
 async function richiestaHttp(opzioni, payload, deadline) {
   try {
-    return await inviaHttp(opzioni, payload, deadline);
+    return await S.inviaHttp(opzioni, payload, deadline);
   } catch (e) {
     // Un socket riusato puo' essere stato chiuso dal server mentre la function
     // era congelata. In quel caso ritentiamo una volta, col tempo che resta.
     const socketMorto = e && (e.code === 'ECONNRESET' || e.code === 'EPIPE');
     if (!socketMorto || deadline - Date.now() < MIN_ATTEMPT_MS) throw e;
-    return inviaHttp(opzioni, payload, deadline);
+    return S.inviaHttp(opzioni, payload, deadline);
   }
-}
-
-function inviaHttp(opzioni, payload, deadline) {
-  return new Promise((resolve, reject) => {
-    let guard = null;
-    const settle = (fn) => (arg) => { clearTimeout(guard); fn(arg); };
-    const ok = settle(resolve);
-    const ko = settle(reject);
-
-    const headers = Object.assign({}, opzioni.headers);
-    if (payload) headers['Content-Length'] = Buffer.byteLength(payload);
-
-    const req = https.request({
-      hostname: opzioni.hostname,
-      path: opzioni.path,
-      method: opzioni.method,
-      agent,
-      headers,
-      timeout: Math.max(1000, deadline - Date.now())
-    }, (res) => {
-      let data = '';
-      res.setEncoding('utf8');
-      res.on('data', chunk => { data += chunk; });
-      res.on('end', () => ok({ status: res.statusCode, body: data }));
-    });
-
-    // Il timeout di http.request misura l'inattivita' del socket, non la durata
-    // totale: da solo non impedisce a una risposta lenta ma continua di
-    // scavalcare la deadline. Questo e' il tetto assoluto.
-    guard = setTimeout(() => {
-      const err = new Error('Deadline richiesta AI superata');
-      err.code = 'AI_TIMEOUT';
-      req.destroy(err);
-    }, Math.max(1000, deadline - Date.now()));
-
-    req.on('timeout', () => {
-      const err = new Error('Timeout richiesta AI');
-      err.code = 'AI_TIMEOUT';
-      req.destroy(err);
-    });
-    req.on('error', ko);
-    if (payload) req.write(payload);
-    req.end();
-  });
 }
