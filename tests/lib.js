@@ -15,17 +15,30 @@ function chromium() {
 
   const basi = [process.env.PLAYWRIGHT_BROWSERS_PATH, '/opt/pw-browsers',
                 path.join(process.env.HOME || '', '.cache', 'ms-playwright')].filter(Boolean);
+  // Il percorso dentro la cartella cambia con la versione di Playwright: le
+  // build vecchie mettono chrome-linux/chrome, quelle nuove (Chrome for
+  // Testing) chrome-linux64/chrome. Cercarne uno solo faceva fallire i test
+  // sui runner di GitHub, dove il browser c'era ma in un'altra cartella.
+  const percorsi = [
+    'chrome-linux/chrome',
+    'chrome-linux64/chrome',
+    'chrome-mac/Chromium.app/Contents/MacOS/Chromium',
+    'chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing'
+  ];
+  const guardato = [];
   for (const base of basi) {
     let voci = [];
     try { voci = fs.readdirSync(base); } catch { continue; }
+    guardato.push(base);
     for (const v of voci.filter(v => v.startsWith('chromium-')).sort().reverse()) {
-      for (const rel of ['chrome-linux/chrome', 'chrome-mac/Chromium.app/Contents/MacOS/Chromium']) {
+      for (const rel of percorsi) {
         const p = path.join(base, v, rel);
         if (fs.existsSync(p)) return p;
       }
     }
   }
-  throw new Error('Chromium non trovato. Imposta CHROMIUM_PATH, oppure PLAYWRIGHT_BROWSERS_PATH alla cartella dei browser.');
+  throw new Error('Chromium non trovato. Imposta CHROMIUM_PATH, oppure PLAYWRIGHT_BROWSERS_PATH '
+    + 'alla cartella dei browser.' + (guardato.length ? ' Ho guardato in: ' + guardato.join(', ') : ''));
 }
 
 function serviSito(porta) {
