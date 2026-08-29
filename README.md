@@ -7,6 +7,7 @@ Netlify Function.
 ```
 public/index.html             tutta l'interfaccia (markup, stile, script)
 public/_headers               header di sicurezza (CSP, ecc.)
+public/img/                   i disegni: il sole e la versione sole+luna
 netlify/functions/claude.js   proxy verso i modelli AI (Groq / Gemini)
 netlify/functions/lens.js     ricerca per immagine (Google Lens via SerpApi)
 netlify/functions/ricerca.js  ricerca testuale online, lo strumento dell'agente
@@ -26,7 +27,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-288 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+320 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia

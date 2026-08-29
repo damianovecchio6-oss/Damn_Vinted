@@ -14,7 +14,8 @@ const SUITE = [
   ['interfaccia', 'ui.js', 'accessibilita, doppio invio, storico'],
   ['analisi foto', 'photo.js', 'codifica adattiva, miniatura, passaggio annuncio'],
   ['etichetta e Lens', 'nuove.js', 'lettura dedicata, merge, identificazione prodotto'],
-  ['agente di ricerca', 'agente.js', 'piano, ricerche, raffinamento, rapporto']
+  ['agente di ricerca', 'agente.js', 'piano, ricerche, raffinamento, rapporto'],
+  ['micro-interazioni', 'interazioni.js', 'indicatore, attesa, focus, vibrazione, motion']
 ];
 
 let totale = 0, falliti = 0, suiteKo = [];
