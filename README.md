@@ -26,7 +26,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-288 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+312 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia

@@ -68,8 +68,17 @@ body{
 .nav{
   position:fixed;bottom:0;left:0;right:0;
   background:#111111;
-  border-top:2px solid var(--t);
+  border-top:2px solid var(--bd);
   display:flex;padding-bottom:var(--sb);z-index:100;
+}
+/* La riga d'oro non attraversa piu' tutta la barra: sta sotto la scheda in cui
+   sei, e ci scorre quando cambi. La posizione la misura sw() sul bottone vero,
+   cosi' regge qualunque numero di schede e qualunque larghezza. */
+.nav::before{
+  content:'';position:absolute;top:-2px;left:0;height:2px;
+  width:var(--nbw,20%);transform:translateX(var(--nbx,0));
+  background:var(--t);
+  transition:transform .28s cubic-bezier(.4,0,.2,1),width .28s cubic-bezier(.4,0,.2,1);
 }
 .nb{
   flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
@@ -82,7 +91,11 @@ body{
 .nb .ic{font-size:22px;line-height:1;transition:transform .2s}
 .nb.on .ic{transform:scale(1.15)}
 
-.tp{display:none}.tp.on{display:block}
+.tp{display:none}
+.tp.on{display:block;animation:tabIn .22s ease-out}
+.tp.on.daDestra{animation-name:tabInDx}
+@keyframes tabIn{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:none}}
+@keyframes tabInDx{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
 
 /* upload */
 .ubox{
@@ -142,7 +155,14 @@ body{
   -webkit-appearance:none;outline:none;
   transition:border-color .2s;
 }
-.fc:focus{border-color:var(--t);}
+.fc:focus{border-color:var(--t);box-shadow:0 0 0 3px var(--tl)}
+/* Il focus da tastiera deve vedersi: outline:none sui campi lo aveva tolto
+   senza rimettere niente al suo posto, e col mouse non se ne accorge nessuno. */
+.fc:focus-visible,.btn:focus-visible,.cbtn:focus-visible,.nb:focus-visible,
+.chip:focus-visible,.pd:focus-visible,.pt:focus-visible,.hDel:focus-visible,
+.ubox:focus-within{outline:2px solid var(--t);outline-offset:2px}
+/* L'etichetta si accende col suo campo: dice dove sei senza aggiungere niente. */
+.fg:focus-within .fl{color:var(--t)}
 textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .fg{margin-bottom:13px}
@@ -159,6 +179,12 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
 }
 .btn:disabled{opacity:.3;pointer-events:none}
 .btn:active{transform:scale(.97)}
+/* Il bottone premuto tiene la sua scritta e si mette accanto lo spinner: senza,
+   restava spento come tutti gli altri e non si capiva quale stesse lavorando. */
+.btn.attesa,.btn.attesa:disabled{opacity:.8}
+.bspin{width:15px;height:15px;border-width:2px}
+/* Dentro il bottone il fondo e' oro: lo spinner d'oro sarebbe invisibile. */
+.btn .bspin{border-color:rgba(0,0,0,.22);border-top-color:#111}
 
 /* chips */
 .chip{
@@ -200,6 +226,7 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
   transition:all .2s;
 }
 .cbtn:active{border-color:var(--t);color:var(--t)}
+.cbtn.fatto{border-color:var(--t);color:var(--t);background:var(--tl)}
 .cbtn.vinted{background:var(--t);color:#111;border-color:var(--t);font-family:'Orbitron',sans-serif;font-size:11px}
 
 /* error */
@@ -212,6 +239,9 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
 .pbar{height:6px;border-radius:4px;background:var(--bd);overflow:hidden;margin-bottom:16px}
 .pf{height:100%;background:var(--t);border-radius:4px;transition:width .8s cubic-bezier(.34,1.56,.64,1)}
 .fli{display:flex;align-items:flex-start;gap:8px;font-size:14px;padding:7px 0;border-bottom:1px solid var(--bd);color:#ffffff}
+/* Entrano una dopo l'altra, non tutte insieme: la lista si legge nell'ordine
+   in cui e' scritta. Lo scarto e' piccolo apposta, --i lo mette chi renderizza. */
+.fli,.lr{animation:fu .26s ease both;animation-delay:calc(var(--i,0) * 45ms)}
 .fli:last-child{border:none}
 .fdot{width:6px;height:6px;border-radius:0;background:var(--t);margin-top:5px;flex-shrink:0;transform:rotate(45deg)}
 .tip{margin-top:14px;padding:12px 14px;background:rgba(232,200,74,.08);border-left:3px solid var(--t);border-radius:0 8px 8px 0;font-size:14px;color:#ffffff;line-height:1.5}
@@ -230,6 +260,16 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
 @media(max-width:480px){.row{grid-template-columns:1fr}}
+
+/* Chi ha chiesto meno animazioni al sistema le vuole meno anche qui. Lo spinner
+   resta l'eccezione: e' l'unico modo che ha la pagina di dire "sto lavorando". */
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms!important;animation-delay:0ms!important;
+    animation-iteration-count:1!important;transition-duration:.01ms!important;
+  }
+  .spin{animation-duration:.9s!important;animation-iteration-count:infinite!important}
+}
 
 /* storico */
 .hItem{background:var(--card);border:1px solid var(--bd);border-left:3px solid var(--t);border-radius:12px;padding:16px;margin-bottom:12px}
@@ -271,7 +311,7 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
       <div class="rt" id="rFotoTxt"></div>
       <div id="rFotoModel" style="font-size:10px;color:var(--mu);margin-top:12px;letter-spacing:.5px;text-transform:uppercase"></div>
       <div class="crow">
-        <button class="cbtn" onclick="cpField('rFotoTxt')">📋 Copia</button>
+        <button class="cbtn" onclick="cpField('rFotoTxt',this)">📋 Copia</button>
         <button class="cbtn" id="btnL" onclick="identificaProdotto()">🔎 Identifica prodotto</button>
         <button class="cbtn" onclick="toRicerca()">🤖 Ricerca online</button>
         <button class="cbtn" onclick="toAnnuncio()">➡️ Usa per annuncio</button>
@@ -324,9 +364,9 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
       <div id="rAnnHash" style="font-size:13px;color:#009B77;line-height:1.8"></div>
       <div class="crow" style="margin-top:14px">
         <button class="cbtn" id="btnR" onclick="genAnnuncio()">🔄 Rigenera</button>
-        <button class="cbtn" onclick="cpField('rAnnTitolo')">📋 Copia Titolo</button>
-        <button class="cbtn" onclick="cpField('rAnnDesc')">📋 Copia Descrizione</button>
-        <button class="cbtn" onclick="cpField('rAnnHash')">📋 Copia Hashtag</button>
+        <button class="cbtn" onclick="cpField('rAnnTitolo',this)">📋 Copia Titolo</button>
+        <button class="cbtn" onclick="cpField('rAnnDesc',this)">📋 Copia Descrizione</button>
+        <button class="cbtn" onclick="cpField('rAnnHash',this)">📋 Copia Hashtag</button>
         <button class="cbtn" onclick="shareAnnuncio()">📤 Condividi</button>
         <button class="cbtn vinted" onclick="openVinted()">🛍️ APRI VINTED</button>
       </div>
@@ -405,7 +445,7 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
       <div id="rRicBody"></div>
       <div class="crow">
         <button class="cbtn" onclick="usaRicercaPerPrezzo()">💶 Usa per la stima prezzo</button>
-        <button class="cbtn" onclick="copiaRicerca()">📋 Copia rapporto</button>
+        <button class="cbtn" onclick="copiaRicerca(this)">📋 Copia rapporto</button>
       </div>
     </div>
   </div>
@@ -437,14 +477,48 @@ let lastItemSig=null, lastAnnuncioText='', prevUrls=[], lastModel=null, lastProv
 // Quale foto ritrae l'etichetta, e cosa ci si e' letto sopra.
 let labelIndex=-1, lastEtichetta=null, lastLens=null;
 
+const SCHEDE=['foto','annuncio','prezzo','ricerca','storico'];
+let schedaCorrente='foto';
+
+// Meno movimento se il sistema lo chiede: vale anche per lo scorrimento, che
+// il CSS non puo' fermare.
+const menoMovimento=()=>window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 function sw(n){
-  document.querySelectorAll('.tp').forEach(p=>p.classList.remove('on'));
+  const pannello=document.getElementById('tab-'+n);
+  if(!pannello) return;
+  // La scheda entra dal lato da cui l'hai chiamata: seguire il movimento costa
+  // meno che ritrovare da capo dove sei finito.
+  const daDestra=SCHEDE.indexOf(n) > SCHEDE.indexOf(schedaCorrente);
+  schedaCorrente=n;
+
+  document.querySelectorAll('.tp').forEach(p=>p.classList.remove('on','daDestra'));
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
-  document.getElementById('tab-'+n).classList.add('on');
+  pannello.classList.add('on');
+  pannello.classList.toggle('daDestra', daDestra);
   document.getElementById('nav-'+n).classList.add('on');
+  muoviIndicatore(n);
+
   if(n==='storico') renderHistory();
   if(n==='ricerca') prefillRicerca();
-  window.scrollTo({top:0,behavior:'smooth'});
+  window.scrollTo({top:0,behavior:menoMovimento()?'auto':'smooth'});
+}
+
+// L'indicatore lo misuriamo sul bottone vero invece di dividere per il numero
+// di schede: cosi' non va rifatto ogni volta che se ne aggiunge una.
+function muoviIndicatore(n){
+  const nav=document.querySelector('.nav'), b=document.getElementById('nav-'+n);
+  if(!nav||!b) return;
+  nav.style.setProperty('--nbx', b.offsetLeft+'px');
+  nav.style.setProperty('--nbw', b.offsetWidth+'px');
+}
+window.addEventListener('resize', ()=>muoviIndicatore(schedaCorrente));
+window.addEventListener('load', ()=>muoviIndicatore(schedaCorrente));
+
+// Una vibrazione corta sui momenti che valgono l'attesa: analisi finita,
+// rapporto pronto, prezzo stimato. Non a ogni tocco, o diventa rumore.
+function tocco(ms){
+  try{ if(navigator.vibrate && !menoMovimento()) navigator.vibrate(ms||12); }catch(e){}
 }
 
 document.querySelectorAll('#toneChips .chip').forEach(c=>{
@@ -633,11 +707,24 @@ function busy(key, btnIds){
   if(running[key]) return false;
   running[key]=true;
   btnIds.forEach(id=>{ const b=document.getElementById(id); if(b) b.disabled=true; });
+  attesaBottone(btnIds[0], true);
   return true;
 }
 function idle(key, btnIds){
   running[key]=false;
   btnIds.forEach(id=>{ const b=document.getElementById(id); if(b) b.disabled=false; });
+  attesaBottone(btnIds[0], false);
+}
+
+// Disabilitati lo diventano tutti: quello che sta lavorando si riconosce dallo
+// spinner. La scritta resta la sua, cosi' non balla la larghezza del bottone.
+function attesaBottone(id, attiva){
+  const b=id && document.getElementById(id);
+  if(!b) return;
+  b.classList.toggle('attesa', attiva);
+  const gia=b.querySelector('.bspin');
+  if(attiva && !gia) b.insertAdjacentHTML('afterbegin','<span class="spin bspin" aria-hidden="true"></span>');
+  if(!attiva && gia) gia.remove();
 }
 const BTN_FOTO=['btnA'], BTN_ANN=['btnG','btnR'], BTN_PRE=['btnP'], BTN_LENS=['btnL'];
 const LENS_URL='/.netlify/functions/lens';
@@ -775,6 +862,7 @@ Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo 
       `🏷️ TIPO DI CAPO: ${obj.tipo||''}\n👔 BRAND / MARCA: ${obj.brand||''}\n🎨 COLORE/I: ${obj.colore||''}\n🧵 MATERIALE: ${obj.materiale||''}\n⭐ CONDIZIONE STIMATA: ${obj.condizione||''}\n📐 TAGLIE PROBABILI: ${obj.taglie||''}\n🗓️ STAGIONE: ${obj.stagione||''}\n✨ STILE: ${obj.stile||''}\n💰 FASCIA DI PREZZO ORIGINALE STIMATA: ${obj.fasciaPrezzo||''}\n💡 NOTE: ${obj.note||''}${vintageLine}${et}`;
     showModelUsed();
     show('rFoto');
+    tocco();
   }catch(e){
     document.getElementById('eFoto').textContent='⚠️ '+e.message;
     show('eFoto');
@@ -901,8 +989,8 @@ function renderLens(d){
     + (p?`<div class="tip">Prezzi di listino trovati: <strong>${p.mediana}€</strong> di mediana `
         + `(da ${p.min}€ a ${p.max}€, su ${p.n} ${p.n===1?'risultato':'risultati'}). `
         + `Su Vinted un usato vale una frazione di questo.</div>`:'');
-  const righe=risultati.map(r=>`
-    <div class="lr">
+  const righe=risultati.map((r,i)=>`
+    <div class="lr" style="--i:${i}">
       ${r.thumbnail?`<img src="${esc(r.thumbnail)}" alt="" loading="lazy" onerror="this.remove()"/>`:''}
       <div style="flex:1;min-width:0">
         <div class="lrt">${r.link?`<a href="${esc(r.link)}" target="_blank" rel="noopener noreferrer" style="color:inherit">${esc(r.titolo)}</a>`:esc(r.titolo)}</div>
@@ -1030,6 +1118,7 @@ Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo 
     document.getElementById('rAnnDesc').textContent = d.descrizione || '';
     document.getElementById('rAnnHash').textContent = d.hashtag || '';
     show('rAnn');
+    tocco();
 
     upsertHistoryItem(itemIdFor(v('aNome'), v('aMarca')), {
       nome: v('aNome'), marca: v('aMarca'), taglia: v('aTaglia'), condizione: v('aCond'),
@@ -1115,9 +1204,10 @@ Rispondi SOLO con questo JSON valido senza backtick ne markdown:
     setTimeout(()=>document.getElementById('pBar').style.width=perc+'%',80);
     // L'output del modello e' testo non fidato: va sempre escapato prima di finire in innerHTML.
     const fattori=Array.isArray(d.fattori)?d.fattori:[];
-    document.getElementById('pFact').innerHTML=fattori.map(f=>`<li class="fli"><span class="fdot"></span>${esc(f)}</li>`).join('');
+    document.getElementById('pFact').innerHTML=fattori.map((f,i)=>`<li class="fli" style="--i:${i}"><span class="fdot"></span>${esc(f)}</li>`).join('');
     document.getElementById('pTip').innerHTML=d.consiglio?`💡 <strong>Consiglio:</strong> ${esc(d.consiglio)}`:'';
     show('rPre');
+    tocco();
 
     upsertHistoryItem(itemIdFor(v('pNome'), v('pMarca')), {
       nome: v('pNome'), marca: v('pMarca'), condizione: v('pCond'),
@@ -1160,7 +1250,20 @@ function legacyCopy(txt){
   toast(ok?'✅ Copiato!':'⚠️ Copia non riuscita');
   return ok;
 }
-function cpField(id){ copyText(document.getElementById(id)?.textContent||''); }
+function cpField(id, btn){
+  copyText(document.getElementById(id)?.textContent||'').then(ok=>{ if(ok) confermaBottone(btn); });
+}
+
+// Il toast sta in fondo allo schermo, il pollice e' sul bottone: la conferma
+// va data dove sta guardando chi ha premuto.
+function confermaBottone(btn){
+  if(!btn || btn.classList.contains('fatto')) return;
+  const originale=btn.textContent;
+  btn.classList.add('fatto');
+  btn.textContent='✓ Fatto';
+  tocco(10);
+  setTimeout(()=>{ btn.classList.remove('fatto'); btn.textContent=originale; }, 1300);
+}
 function openVinted(){
   const titolo=document.getElementById('rAnnTitolo')?.textContent||'';
   const apri=()=>window.open('https://www.vinted.it/items/new','_blank');
@@ -1276,6 +1379,7 @@ async function avviaAgente(){
     lastRicerca={ capo, prove:citate, prezzi:prezziDelle(citate), rapporto };
     renderRicerca();
     show('rRic');
+    tocco();
   }catch(e){
     if(e && e.nonConfigurato){
       // Senza SERPAPI_KEY l'agente non ha strumenti: il bottone sparisce
@@ -1496,11 +1600,11 @@ function renderRicerca(){
       `<div class="agm">${valori.map(x=>`<div class="agv"><div class="agvn">${esc(x.n)}</div><div class="agvl">${esc(x.l)}</div></div>`).join('')}</div>`
     + (d.riassunto?`<p style="font-size:14px;line-height:1.7;color:#fff;margin-bottom:12px">${esc(d.riassunto)}</p>`:'')
     + (d.domanda?`<div class="hSub" style="margin-bottom:10px">Domanda sul mercato: ${esc(d.domanda)}</div>`:'')
-    + (osservazioni.length?`<ul style="list-style:none;margin-bottom:6px">${osservazioni.map(o=>`<li class="fli"><span class="fdot"></span>${esc(o)}</li>`).join('')}</ul>`:'')
+    + (osservazioni.length?`<ul style="list-style:none;margin-bottom:6px">${osservazioni.map((o,i)=>`<li class="fli" style="--i:${i}"><span class="fdot"></span>${esc(o)}</li>`).join('')}</ul>`:'')
     + consigli.map(c=>`<div class="tip">💡 ${esc(c)}</div>`).join('')
     + `<div class="rl" style="margin:18px 0 0">🔗 Su cosa si basa</div>`
     + prove.map((r,n)=>`
-      <div class="lr">
+      <div class="lr" style="--i:${n}">
         <div class="lrn" aria-hidden="true">${n+1}</div>
         <div style="flex:1;min-width:0">
           <div class="lrt">${r.link?`<a href="${esc(r.link)}" target="_blank" rel="noopener noreferrer" style="color:inherit">${esc(r.titolo)}</a>`:esc(r.titolo)}</div>
@@ -1528,7 +1632,7 @@ function renderRicerca(){
   ].filter(Boolean).join('\n').trim();
 }
 
-function copiaRicerca(){ copyText(agTesto); }
+function copiaRicerca(btn){ copyText(agTesto).then(ok=>{ if(ok) confermaBottone(btn); }); }
 
 // I prezzi trovati valgono per il capo su cui l'agente ha cercato. Se nella
 // scheda prezzo c'e' un altro capo - si stimano piu' capi di seguito - quei
