@@ -1,22 +1,14 @@
 const https = require('https');
+const S = require('./lib/shared');
 
-// La chiave NON sta nel codice.
-// Su Netlify: Site settings > Environment variables > GROQ_API_KEY
-// Accettiamo anche GROQ_KEY: e' il nome usato storicamente su questo sito,
-// e la rinomina del codice a GROQ_API_KEY aveva lasciato la function senza chiave.
-const GROQ_KEY = process.env.GROQ_API_KEY || process.env.GROQ_KEY;
-
-// Allowlist per le chiamate CROSS-ORIGIN, cioe' da un dominio diverso da quello
-// che serve la function. Le chiamate della nostra pagina passano gia' dal
-// controllo same-site (vedi isSameSite) e non hanno bisogno di stare qui.
-// Restano fuori tutti gli altri siti: la chiave non e' un proxy aperto.
-const ALLOWED_ORIGINS = buildAllowlist();
-
-// Rate limit best-effort per IP. Le function sono stateless tra istanze diverse,
-// quindi non e' una protezione forte: serve a tagliare gli abusi banali.
-const RATE_LIMIT_PER_MIN = Number(process.env.RATE_LIMIT_PER_MIN || 20);
-const RATE_WINDOW_MS = 60 * 1000;
-const hits = new Map();
+// Le chiavi NON stanno nel codice.
+// Su Netlify: Site settings > Environment variables.
+//   GROQ_API_KEY   - obbligatoria (accettata anche col vecchio nome GROQ_KEY)
+//   GEMINI_API_KEY - opzionale. Se c'e', le foto le guarda Gemini invece di
+//                    Groq: legge molto meglio il testo piccolo di un'etichetta,
+//                    che e' da dove arrivano marca, composizione e taglia.
+const GROQ_KEY = S.GROQ_KEY;
+const GEMINI_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY;
 
 const MAX_BODY = 6 * 1024 * 1024;   // 6MB, limite Netlify
 const MAX_PROMPT = 8000;            // caratteri
@@ -27,162 +19,78 @@ const MAX_IMAGES = 4;
 // pagina di timeout di Netlify. Alzabile se l'account ha il limite esteso.
 const TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || 9000);
 
-// Punto di partenza, non una certezza: Groq ritira i modelli senza preavviso.
-// Se non esistono piu', la function chiede il catalogo e ripiega da sola.
-// Questi due sono quelli verificati sul campo su questo account: partire da
-// un modello morto costava un 404 piu' una richiesta del catalogo a ogni
-// container nuovo. Le env var, se impostate, hanno la precedenza.
+// Punto di partenza, non una certezza: i provider ritirano i modelli senza
+// preavviso. Se non esistono piu', la function chiede il catalogo e ripiega
+// da sola. Le env var, se impostate, hanno la precedenza.
 const MODEL_TEXT = process.env.GROQ_MODEL_TEXT || 'openai/gpt-oss-120b';
-const MODEL_VISION = process.env.GROQ_MODEL_VISION || 'qwen/qwen3.8-27b';
+const MODEL_VISION = process.env.GROQ_MODEL_VISION || 'meta-llama/llama-4-scout-17b-16e-instruct';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || '';
 
-// Ordine di gradimento, applicato a quello che Groq dichiara disponibile.
+// Ordine di gradimento, applicato a quello che il provider dichiara disponibile.
 const MODEL_PREFERENCES = {
   image: [/llama-4-scout/i, /llama-4-maverick/i, /llama-4/i, /vision/i, /qwen/i],
   text: [/llama-3\.3-70b/i, /llama-3\.[12]-70b/i, /^openai\/gpt-oss/i, /llama-3/i]
 };
 
-// Un modello che non esiste piu' non torna esistente entro la vita del
-// container: memorizziamo la scelta invece di richiedere la lista ogni volta.
-const resolvedModel = {};
-let availableModels = null;
+const POSITIVE_TTL_MS = 30 * 60 * 1000;  // "questo modello funziona"
+const NEGATIVE_TTL_MS = 5 * 60 * 1000;   // "nessun modello funziona"
+const CATALOG_TTL_MS = 10 * 60 * 1000;   // elenco modelli dell'account
 
-// Quanti modelli provare al massimo, e entro quanto tempo. Un modello
-// sbagliato viene rifiutato in poche centinaia di ms, ma non possiamo
-// sforare il limite di Netlify mentre cerchiamo.
-// Un modello che rifiuta risponde in poche centinaia di ms, quindi possiamo
-// permetterci di provarne diversi; e' il budget di tempo a fermarci davvero.
+// Quanti modelli provare al massimo. Un modello sbagliato viene rifiutato in
+// poche centinaia di ms, quindi possiamo permetterci di provarne diversi;
+// e' il budget di tempo a fermarci davvero (vedi la deadline unica).
 const MAX_MODEL_ATTEMPTS = 8;
-const PROBE_BUDGET_MS = 5000;
+// Sotto questo margine non ha senso iniziare un altro tentativo: non farebbe
+// in tempo a rispondere prima che Netlify chiuda la function.
+const MIN_ATTEMPT_MS = 1200;
 
-function buildAllowlist() {
-  const list = (process.env.ALLOWED_ORIGINS || '')
-    .split(',')
-    .map(s => normalizeOrigin(s))
-    .filter(Boolean);
-
-  // Netlify popola queste da sola: URL = sito di produzione,
-  // DEPLOY_PRIME_URL / DEPLOY_URL = deploy preview e branch deploy.
-  for (const key of ['URL', 'DEPLOY_PRIME_URL', 'DEPLOY_URL']) {
-    const val = normalizeOrigin(process.env[key]);
-    if (val) list.push(val);
-  }
-
-  if (process.env.NETLIFY_DEV) {
-    list.push('http://localhost:8888', 'http://127.0.0.1:8888');
-  }
-
-  return Array.from(new Set(list));
-}
-
-function normalizeOrigin(value) {
-  const raw = (value || '').trim();
-  if (!raw) return '';
-  try {
-    return new URL(raw).origin;
-  } catch {
-    return raw.replace(/\/+$/, '');
-  }
-}
-
-// La pagina che chiama la function e' servita dallo stesso host della function:
-// se Origin e Host coincidono la richiesta arriva dal nostro sito, qualunque
-// esso sia. Cosi' funzionano produzione, deploy preview, branch deploy e domini
-// custom senza doverli elencare da nessuna parte, mentre un altro sito resta
-// fuori perche' il suo Origin non corrispondera' mai al nostro Host.
-function isSameSite(origin, headers) {
-  if (!origin) return false;
-  const host = (headers['x-forwarded-host'] || headers.host || '').trim().toLowerCase();
-  if (!host) return false;
-  try {
-    return new URL(origin).host.toLowerCase() === host;
-  } catch {
-    return false;
-  }
-}
-
-function isAllowed(origin, headers) {
-  if (!origin) return false;
-  return isSameSite(origin, headers) || ALLOWED_ORIGINS.includes(origin);
-}
-
-function corsFor(origin, headers) {
-  const out = {
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Vary': 'Origin'
-  };
-  if (isAllowed(origin, headers)) out['Access-Control-Allow-Origin'] = origin;
-  return out;
-}
-
-function clientIp(headers) {
-  return headers['x-nf-client-connection-ip']
-    || (headers['x-forwarded-for'] || '').split(',')[0].trim()
-    || 'unknown';
-}
-
-function rateLimited(ip) {
-  if (!RATE_LIMIT_PER_MIN) return false;
-  const now = Date.now();
-  const recent = (hits.get(ip) || []).filter(t => now - t < RATE_WINDOW_MS);
-  recent.push(now);
-  hits.set(ip, recent);
-
-  if (hits.size > 500) {
-    for (const [key, times] of hits) {
-      if (!times.length || now - times[times.length - 1] > RATE_WINDOW_MS) hits.delete(key);
-    }
-  }
-  return recent.length > RATE_LIMIT_PER_MIN;
+// Un modello che funziona lo teniamo a lungo, un "non ce n'e' nessuno" poco:
+// il secondo e' molto piu' spesso una condizione temporanea.
+function resolvedModel(key) {
+  const hit = S.cachePeek(key);
+  if (!hit) return undefined;
+  return S.cacheGet(key, hit.value === false ? NEGATIVE_TTL_MS : POSITIVE_TTL_MS);
 }
 
 exports.handler = async (event) => {
-  const headers = lowerKeys(event.headers || {});
-  // Su una POST il browser manda sempre Origin, anche same-origin.
-  // Il Referer e' solo una rete di sicurezza per i webview che lo omettono.
-  const origin = normalizeOrigin(headers.origin) || normalizeOrigin(headers.referer);
-  const cors = corsFor(origin, headers);
+  const g = S.checkRequest(event, { metodi: ['GET', 'POST'], richiediToken: event.httpMethod === 'POST' });
+  if (g.risposta) return g.risposta;
+  const cors = g.cors;
 
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 204, headers: cors, body: '' };
+  if (!GROQ_KEY && !GEMINI_KEY) {
+    return S.json(500, cors, { error: 'Nessuna chiave AI configurata sul server (GROQ_API_KEY o GEMINI_API_KEY)' });
   }
-  if (event.httpMethod !== 'POST') {
-    return json(405, cors, { error: 'Metodo non consentito' });
-  }
-  if (!isAllowed(origin, headers)) {
-    return json(403, cors, { error: 'Origine non autorizzata' });
-  }
-  if (!GROQ_KEY) {
-    return json(500, cors, { error: 'Chiave AI non configurata sul server (GROQ_API_KEY o GROQ_KEY)' });
-  }
-  if (rateLimited(clientIp(headers))) {
-    return json(429, cors, { error: 'Troppe richieste, aspetta un minuto.' });
+
+  // GET = "dammi un token per le prossime richieste".
+  if (event.httpMethod === 'GET') {
+    return S.json(200, cors, { token: S.issueToken(g.ip), expiresIn: S.SESSION_TTL_MS });
   }
 
   const rawBody = event.isBase64Encoded
     ? Buffer.from(event.body || '', 'base64').toString('utf8')
     : (event.body || '');
   if (Buffer.byteLength(rawBody) > MAX_BODY) {
-    return json(413, cors, { error: 'Immagini troppo pesanti' });
+    return S.json(413, cors, { error: 'Immagini troppo pesanti' });
   }
 
-  const startedAt = Date.now();
+  // Una sola deadline per tutta la richiesta, tentativi di fallback inclusi.
+  const deadline = Date.now() + TIMEOUT_MS;
 
   try {
     let body;
     try {
       body = JSON.parse(rawBody || '{}');
     } catch {
-      return json(400, cors, { error: 'Richiesta non valida' });
+      return S.json(400, cors, { error: 'Richiesta non valida' });
     }
 
     const { type, prompt } = body;
 
     if (typeof prompt !== 'string' || !prompt.trim()) {
-      return json(400, cors, { error: 'Prompt mancante' });
+      return S.json(400, cors, { error: 'Prompt mancante' });
     }
     if (prompt.length > MAX_PROMPT) {
-      return json(400, cors, { error: 'Prompt troppo lungo' });
+      return S.json(400, cors, { error: 'Prompt troppo lungo' });
     }
 
     // Accetta sia il formato nuovo (images: [...]) sia quello vecchio (imageBase64)
@@ -190,154 +98,352 @@ exports.handler = async (event) => {
     if (!images.length && body.imageBase64) {
       images = [{ base64: body.imageBase64, mime: body.imageMime }];
     }
-    images = images.slice(0, MAX_IMAGES);
-
-    let messages;
-    if (type === 'image') {
-      if (!images.length) return json(400, cors, { error: 'Nessuna immagine ricevuta' });
-      const content = [{ type: 'text', text: prompt }];
-      for (const img of images) {
-        if (!img || typeof img.base64 !== 'string' || !img.base64) continue;
-        const mime = img.mime === 'image/png' ? 'image/png' : 'image/jpeg';
-        content.push({
-          type: 'image_url',
-          image_url: { url: `data:${mime};base64,${img.base64}` }
-        });
-      }
-      if (content.length < 2) return json(400, cors, { error: 'Immagini non valide' });
-      messages = [{ role: 'user', content }];
-    } else {
-      messages = [{ role: 'user', content: prompt }];
-    }
+    images = images.slice(0, MAX_IMAGES)
+      .filter(img => img && typeof img.base64 === 'string' && img.base64)
+      .map(img => ({ base64: img.base64, mime: img.mime === 'image/png' ? 'image/png' : 'image/jpeg' }));
 
     const kind = type === 'image' ? 'image' : 'text';
-
-    // Se abbiamo gia' scoperto che nessun modello va bene, non rifacciamo
-    // tutto il giro di tentativi a ogni foto: rispondiamo subito.
-    if (resolvedModel[kind] === false) {
-      return json(502, cors, { error: noUsableModelMessage(kind, []) });
+    if (kind === 'image' && !images.length) {
+      return S.json(400, cors, { error: 'Nessuna immagine valida ricevuta' });
     }
 
-    const request = {
-      model: resolvedModel[kind] || (kind === 'image' ? MODEL_VISION : MODEL_TEXT),
-      messages,
-      temperature: type === 'image' ? 0.2 : (body.creative ? 0.85 : 0.6),
+    const richiesta = {
+      prompt,
+      images: kind === 'image' ? images : [],
+      temperature: kind === 'image' ? 0.2 : (body.creative ? 0.85 : 0.6),
       // Il JSON dell'analisi foto ha molti campi con testo libero: a 1024
       // token rischiava di troncarsi a meta' e diventare impossibile da
       // interpretare, il che si vede come "analisi imprecisa".
-      max_tokens: type === 'image' ? 2048 : 1024
+      maxTokens: kind === 'image' ? 2048 : 1024,
+      json: body.json === true
     };
 
-    // JSON mode: solo per il testo. Sul multimodale non e' garantito,
-    // li' ci affidiamo al parsing tollerante lato client.
-    const wantsJson = body.json === true && type !== 'image';
-    if (wantsJson) request.response_format = { type: 'json_object' };
+    // Gemini guarda le foto meglio di quello che offre Groq, quindi quando la
+    // chiave c'e' le immagini vanno li'. Il testo resta su Groq, che e' piu'
+    // veloce e ha limiti piu' larghi: cosi' non bruciamo la quota gratuita di
+    // Gemini con le stime di prezzo.
+    const usaGemini = GEMINI_KEY && (kind === 'image' || !GROQ_KEY);
 
-    let result = await callGroq(request);
-
-    // Il catalogo di Groq non dice quali modelli accettano immagini, e i nomi
-    // non bastano a indovinarlo. Se il modello e' stato ritirato o rifiuta le
-    // foto, proviamo i candidati successivi finche' uno risponde davvero.
-    if (needsAnotherModel(result, kind)) {
-      const tried = [request.model];
-      const candidates = await candidateModels(kind, tried);
-      // Distinguiamo "provati tutti" da "finito il tempo": solo nel primo
-      // caso possiamo concludere che non esiste un modello adatto.
-      let exhausted = true;
-      for (const candidate of candidates) {
-        if (Date.now() - startedAt > PROBE_BUDGET_MS) { exhausted = false; break; }
-        request.model = candidate;
-        tried.push(candidate);
-        result = await callGroq(request);
-        if (!needsAnotherModel(result, kind)) {
-          console.log(`Modello ${tried[0]} non utilizzabile, passo a ${candidate}`);
-          resolvedModel[kind] = candidate;
-          break;
-        }
+    let esito;
+    if (usaGemini) {
+      esito = await tentaGemini(richiesta, kind, deadline);
+      // Quota giornaliera finita o modello sparito: se abbiamo anche Groq e
+      // resta tempo, meglio una risposta di Groq che un errore.
+      if (!esito.ok && GROQ_KEY && deadline - Date.now() >= MIN_ATTEMPT_MS) {
+        console.error(`Gemini non utilizzabile (${esito.motivo}), ripiego su Groq`);
+        esito = await tentaGroq(richiesta, kind, deadline);
       }
-      if (needsAnotherModel(result, kind)) {
-        // Abbiamo esaurito i candidati: ricordiamocelo, cosi' la prossima
-        // richiesta non ripete tutti i tentativi. Se invece ci siamo fermati
-        // per il tempo, non concludiamo niente e riproveremo.
-        if (exhausted) resolvedModel[kind] = false;
-        return json(502, cors, { error: noUsableModelMessage(kind, tried) });
-      }
+    } else {
+      esito = await tentaGroq(richiesta, kind, deadline);
     }
 
-    // Se il modello non digerisce response_format, riprova una volta senza.
-    if (wantsJson && result.status >= 400 && /response_format|json/i.test(result.body || '')) {
-      delete request.response_format;
-      result = await callGroq(request);
-    }
+    if (!esito.ok) return S.json(esito.status || 502, cors, { error: esito.error });
 
-    let data;
-    try {
-      data = JSON.parse(result.body);
-    } catch {
-      return json(502, cors, { error: `Risposta non valida dal modello (HTTP ${result.status})` });
-    }
-
-    if (result.status >= 400 || data.error) {
-      const msg = typeof data.error === 'string'
-        ? data.error
-        : (data.error && data.error.message) || `Errore API (HTTP ${result.status})`;
-      const friendly = result.status === 429
-        ? 'Troppe richieste, riprova tra qualche secondo.'
-        : msg;
-      return json(result.status >= 400 ? result.status : 502, cors, { error: friendly });
-    }
-
-    const text = data.choices && data.choices[0] && data.choices[0].message
-      ? data.choices[0].message.content
-      : null;
-    if (!text) return json(502, cors, { error: 'Il modello ha restituito una risposta vuota' });
-
-    // Rimandiamo anche quale modello ha risposto: serve a capire da cosa
-    // dipende la qualita' dell'analisi e quale conviene fissare a mano.
-    return json(200, cors, { text, model: request.model });
+    // Rimandiamo anche chi ha risposto: serve a capire da cosa dipende la
+    // qualita' dell'analisi e quale modello conviene fissare a mano.
+    return S.json(200, cors, { text: esito.text, model: esito.model, provider: esito.provider });
 
   } catch (e) {
     console.error('claude fn error:', e);
     if (e && e.code === 'AI_TIMEOUT') {
-      return json(504, cors, { error: 'L\'AI ci ha messo troppo. Riprova.' });
+      return S.json(504, cors, { error: 'L\'AI ci ha messo troppo. Riprova.' });
     }
     // Non rimandiamo mai stack o dettagli interni al client
-    return json(500, cors, { error: 'Errore interno del server' });
+    return S.json(500, cors, { error: 'Errore interno del server' });
   }
 };
 
-function lowerKeys(obj) {
-  const out = {};
-  for (const key of Object.keys(obj)) out[key.toLowerCase()] = obj[key];
+/* ============================ GEMINI ============================ */
+
+const GEMINI_HOST = 'generativelanguage.googleapis.com';
+
+// I nomi dei modelli Gemini cambiano spesso (2.5, 3.5, 3.7 flash...), quindi
+// non ne cabliamo nessuno: chiediamo il catalogo e prendiamo il flash piu'
+// recente che sappia fare generateContent. GEMINI_MODEL scavalca tutto.
+const NON_TESTUALI = /embedding|aqa|imagen|veo|tts|native-audio|live-|image-generation/i;
+
+function punteggioGemini(name) {
+  const versione = (name.match(/gemini-(\d+(?:\.\d+)?)/i) || [])[1];
+  let p = versione ? Number(versione) * 100 : 0;
+  // Flash: veloce e con limiti gratuiti piu' generosi. Pro: piu' bravo ma
+  // molto piu' lento, e i 10s di Netlify non lo perdonano.
+  if (/flash/i.test(name)) p += 50;
+  if (/pro/i.test(name)) p += 20;
+  // Il lite va in fondo: e' proprio sul testo piccolo di un'etichetta che
+  // perde, ed e' l'unica cosa per cui siamo qui. Penalita' abbastanza grossa
+  // da non pareggiare mai con un pro o un preview della stessa generazione.
+  if (/lite/i.test(name)) p -= 80;
+  if (/preview|exp/i.test(name)) p -= 10;
+  return p;
+}
+
+function listaGemini(deadline) {
+  const cached = S.cacheGet('gemini:catalog', CATALOG_TTL_MS);
+  if (cached) return Promise.resolve(cached);
+
+  const budget = Math.min(4000, deadline - Date.now());
+  if (budget < 500) return Promise.resolve([]);
+
+  return richiestaHttp({
+    hostname: GEMINI_HOST,
+    path: '/v1beta/models?pageSize=200',
+    method: 'GET',
+    headers: { 'x-goog-api-key': GEMINI_KEY }
+  }, null, Date.now() + budget).then(res => {
+    let lista = [];
+    try {
+      const parsed = JSON.parse(res.body);
+      lista = (parsed.models || [])
+        .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+        .map(m => String(m.name || '').replace(/^models\//, ''))
+        .filter(id => id && !NON_TESTUALI.test(id))
+        .sort((a, b) => punteggioGemini(b) - punteggioGemini(a));
+    } catch {
+      lista = [];
+    }
+    if (lista.length) S.cacheSet('gemini:catalog', lista);
+    return lista;
+  }).catch(() => []);
+}
+
+// Il formato di Gemini non e' quello di OpenAI: contents/parts invece di
+// messages, e le immagini vanno in inline_data gia' decodificate dal data URL.
+function corpoGemini(richiesta) {
+  const parts = [{ text: richiesta.prompt }];
+  for (const img of richiesta.images) {
+    parts.push({ inline_data: { mime_type: img.mime, data: img.base64 } });
+  }
+  const generationConfig = {
+    temperature: richiesta.temperature,
+    maxOutputTokens: richiesta.maxTokens
+  };
+  // Qui sta un guadagno che con Groq non avevamo: Gemini garantisce il JSON
+  // anche sulle richieste con immagini, quindi l'analisi foto smette di
+  // dipendere dal parsing tollerante lato client.
+  if (richiesta.json) generationConfig.responseMimeType = 'application/json';
+  return { contents: [{ role: 'user', parts }], generationConfig };
+}
+
+function testoGemini(data) {
+  const cand = data && data.candidates && data.candidates[0];
+  if (!cand) return null;
+  const parts = (cand.content && cand.content.parts) || [];
+  const testo = parts.map(p => p.text || '').join('').trim();
+  return testo || null;
+}
+
+async function tentaGemini(richiesta, kind, deadline) {
+  const candidati = [];
+  if (GEMINI_MODEL) candidati.push(GEMINI_MODEL);
+  const cacheKey = `gemini:model:${kind}`;
+  const noto = resolvedModel(cacheKey);
+  if (noto === false) return { ok: false, motivo: 'nessun modello (in cache)' };
+  if (noto) candidati.push(noto);
+  for (const id of await listaGemini(deadline)) candidati.push(id);
+
+  const provati = [];
+  for (const modello of candidati.slice(0, MAX_MODEL_ATTEMPTS)) {
+    if (provati.includes(modello)) continue;
+    if (deadline - Date.now() < MIN_ATTEMPT_MS) break;
+    provati.push(modello);
+
+    const res = await richiestaHttp({
+      hostname: GEMINI_HOST,
+      path: `/v1beta/models/${encodeURIComponent(modello)}:generateContent`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_KEY }
+    }, JSON.stringify(corpoGemini(richiesta)), deadline).catch(e => {
+      if (e && e.code === 'AI_TIMEOUT') throw e;
+      return { status: 0, body: String(e && e.message || e) };
+    });
+
+    // 404 = modello inesistente, si prova il prossimo. 429 = quota gratuita
+    // finita per oggi: cambiare modello non aiuta, si esce subito.
+    if (res.status === 404) continue;
+    if (res.status === 429) return { ok: false, motivo: 'quota giornaliera esaurita' };
+    if (res.status >= 400 || res.status === 0) {
+      console.error(`Gemini ${res.status} su ${modello}: ${(res.body || '').slice(0, 300)}`);
+      return { ok: false, motivo: `HTTP ${res.status}` };
+    }
+
+    let data;
+    try { data = JSON.parse(res.body); } catch { return { ok: false, motivo: 'risposta non JSON' }; }
+    const text = testoGemini(data);
+    if (!text) {
+      // Succede quando il filtro di sicurezza blocca la risposta: e' un caso
+      // reale su foto di persone, e cambiare modello non lo risolve.
+      const stop = data.candidates && data.candidates[0] && data.candidates[0].finishReason;
+      console.error(`Gemini ha risposto vuoto su ${modello} (finishReason: ${stop})`);
+      return { ok: false, motivo: `risposta vuota (${stop || 'ignoto'})` };
+    }
+    S.cacheSet(cacheKey, modello);
+    return { ok: true, text, model: modello, provider: 'gemini' };
+  }
+
+  if (provati.length) S.cacheSet(cacheKey, false);
+  console.error(`Nessun modello Gemini utilizzabile per "${kind}". Provati: ${provati.join(', ') || 'nessuno'}`);
+  return { ok: false, motivo: 'nessun modello utilizzabile' };
+}
+
+/* ============================= GROQ ============================= */
+
+const GROQ_HOST = 'api.groq.com';
+
+function corpoGroq(richiesta, modello) {
+  let content;
+  if (richiesta.images.length) {
+    content = [{ type: 'text', text: richiesta.prompt }];
+    for (const img of richiesta.images) {
+      content.push({ type: 'image_url', image_url: { url: `data:${img.mime};base64,${img.base64}` } });
+    }
+  } else {
+    content = richiesta.prompt;
+  }
+  const out = {
+    model: modello,
+    messages: [{ role: 'user', content }],
+    temperature: richiesta.temperature,
+    max_tokens: richiesta.maxTokens
+  };
+  // JSON mode: solo per il testo. Sul multimodale di Groq non e' garantito,
+  // li' ci affidiamo al parsing tollerante lato client.
+  if (richiesta.json && !richiesta.images.length) out.response_format = { type: 'json_object' };
   return out;
 }
 
-// Messaggio utile invece di un 404 criptico: cosa abbiamo provato, quale
-// variabile impostare e l'elenco COMPLETO dei modelli dell'account.
-function noUsableModelMessage(kind, tried) {
-  const all = availableModels || [];
-  return (kind === 'image'
-            ? 'Nessun modello di questo account Groq accetta immagini. '
-            : 'Nessun modello di testo utilizzabile su Groq. ')
-       + (tried.length ? `Provati: ${tried.join(', ')}. ` : '')
+function chiamataGroq(richiesta, modello, deadline) {
+  return richiestaHttp({
+    hostname: GROQ_HOST,
+    path: '/openai/v1/chat/completions',
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_KEY}` }
+  }, JSON.stringify(corpoGroq(richiesta, modello)), deadline);
+}
+
+async function tentaGroq(richiesta, kind, deadline) {
+  const cacheKey = `groq:model:${kind}`;
+  const noto = resolvedModel(cacheKey);
+
+  // Se poco fa abbiamo scoperto che nessun modello va bene, non rifacciamo
+  // tutto il giro di tentativi a ogni foto: rispondiamo subito. Passata la
+  // scadenza della cache negativa, invece, si riprova da capo.
+  if (noto === false) {
+    return { ok: false, status: 502, error: messaggioNessunModello(kind), motivo: 'nessun modello (in cache)' };
+  }
+
+  let modello = noto || (kind === 'image' ? MODEL_VISION : MODEL_TEXT);
+  let res = await chiamataGroq(richiesta, modello, deadline);
+
+  // Il catalogo di Groq non dice quali modelli accettano immagini, e i nomi
+  // non bastano a indovinarlo. Se il modello e' stato ritirato o rifiuta le
+  // foto, proviamo i candidati successivi finche' uno risponde davvero.
+  if (serveUnAltroModello(res, kind)) {
+    const provati = [modello];
+    const candidati = await candidatiGroq(kind, provati, deadline);
+    // Distinguiamo "provati tutti" da "finito il tempo": solo nel primo caso
+    // possiamo concludere che non esiste un modello adatto.
+    let esauriti = true;
+    for (const candidato of candidati) {
+      if (deadline - Date.now() < MIN_ATTEMPT_MS) { esauriti = false; break; }
+      modello = candidato;
+      provati.push(candidato);
+      res = await chiamataGroq(richiesta, candidato, deadline);
+      if (!serveUnAltroModello(res, kind)) {
+        console.log(`Modello ${provati[0]} non utilizzabile, passo a ${candidato}`);
+        S.cacheSet(cacheKey, candidato);
+        break;
+      }
+    }
+    if (serveUnAltroModello(res, kind)) {
+      if (esauriti) S.cacheSet(cacheKey, false);
+      // Il dettaglio (cosa abbiamo provato, cosa offre l'account) serve a chi
+      // gestisce il sito e sta nei log: al client non diciamo com'e' fatto
+      // dentro. Le env var sono GROQ_MODEL_TEXT / GROQ_MODEL_VISION.
+      console.error(dettaglioNessunModello(kind, provati));
+      return { ok: false, status: 502, error: messaggioNessunModello(kind), motivo: 'nessun modello utilizzabile' };
+    }
+  }
+
+  // Se il modello non digerisce response_format, riprova una volta senza.
+  if (richiesta.json && !richiesta.images.length && res.status >= 400
+      && /response_format|json/i.test(res.body || '')
+      && deadline - Date.now() >= MIN_ATTEMPT_MS) {
+    res = await chiamataGroq(Object.assign({}, richiesta, { json: false }), modello, deadline);
+  }
+
+  let data;
+  try {
+    data = JSON.parse(res.body);
+  } catch {
+    console.error(`Risposta non JSON da Groq (HTTP ${res.status}): ${(res.body || '').slice(0, 300)}`);
+    return { ok: false, status: 502, error: 'Il servizio AI ha risposto in modo inatteso. Riprova.', motivo: 'risposta non JSON' };
+  }
+
+  if (res.status >= 400 || data.error) {
+    const dettaglio = typeof data.error === 'string'
+      ? data.error
+      : (data.error && data.error.message) || `HTTP ${res.status}`;
+    // Il testo di Groq puo' contenere id di organizzazione, nomi di modello e
+    // dettagli di quota: resta nei log, al client va un messaggio nostro.
+    console.error(`Groq ${res.status} su ${modello}: ${dettaglio}`);
+    return { ok: false, status: statusPerIlClient(res.status), error: erroreLeggibile(res.status), motivo: `HTTP ${res.status}` };
+  }
+
+  const text = data.choices && data.choices[0] && data.choices[0].message
+    ? data.choices[0].message.content
+    : null;
+  if (!text) return { ok: false, status: 502, error: 'Il modello ha restituito una risposta vuota', motivo: 'risposta vuota' };
+
+  return { ok: true, text, model: modello, provider: 'groq' };
+}
+
+// Lo status del provider non va rimandato tale e quale: un 401 upstream
+// (chiave nostra scaduta) davanti al client significherebbe "token di sessione
+// non valido" e lo manderebbe a rinnovarlo per niente.
+function statusPerIlClient(status) {
+  if (status === 429) return 429;
+  if (status === 408 || status === 504) return 504;
+  return 502;
+}
+
+function erroreLeggibile(status) {
+  if (status === 429) return 'Troppe richieste, riprova tra qualche secondo.';
+  if (status === 401 || status === 403) return 'Il servizio AI ha rifiutato le credenziali del sito.';
+  if (status === 413) return 'Richiesta troppo pesante per il modello. Prova con meno foto.';
+  if (status === 400) return 'Il modello ha rifiutato la richiesta. Riprova.';
+  return 'Servizio AI non disponibile al momento. Riprova tra poco.';
+}
+
+// Al client basta sapere che ora non si puo' fare e che vale la pena riprovare.
+function messaggioNessunModello(kind) {
+  return kind === 'image'
+    ? 'Nessun modello disponibile per l\'analisi foto in questo momento. Riprova tra qualche minuto.'
+    : 'Nessun modello di testo disponibile in questo momento. Riprova tra qualche minuto.';
+}
+
+// Questo invece finisce solo nei log della function.
+function dettaglioNessunModello(kind, provati) {
+  const tutti = S.cacheGet('groq:catalog', CATALOG_TTL_MS) || [];
+  return `Nessun modello Groq utilizzabile per "${kind}". `
+       + (provati.length ? `Provati: ${provati.join(', ')}. ` : '')
        + `Imposta ${kind === 'image' ? 'GROQ_MODEL_VISION' : 'GROQ_MODEL_TEXT'} `
-       + `con uno di questi ${all.length} modelli: ${all.join(', ')}`;
+       + `con uno di questi ${tutti.length} modelli: ${tutti.join(', ')}`;
 }
 
 // Groq risponde 404 con "does not exist or you do not have access to it"
 // quando il modello e' stato ritirato dal catalogo.
-function isModelMissing(result) {
-  if (!result || result.status !== 404) return false;
-  return /does not exist|model_not_found|decommissioned/i.test(result.body || '');
+function modelloSparito(res) {
+  if (!res || res.status !== 404) return false;
+  return /does not exist|model_not_found|decommissioned/i.test(res.body || '');
 }
 
 // Vale la pena provare un altro modello? Sia se questo non esiste piu', sia
 // se esiste ma rifiuta le immagini: Groq lo segnala con un 400 che parla di
 // image/vision/multimodal.
-function needsAnotherModel(result, kind) {
-  if (isModelMissing(result)) return true;
-  if (kind !== 'image' || !result || result.status !== 400) return false;
-  return /image|vision|multimodal|modality/i.test(result.body || '');
+function serveUnAltroModello(res, kind) {
+  if (modelloSparito(res)) return true;
+  if (kind !== 'image' || !res || res.status !== 400) return false;
+  return /image|vision|multimodal|modality/i.test(res.body || '');
 }
 
 // Modelli che non sono chat completion: sintesi vocale, trascrizione,
@@ -348,14 +454,9 @@ const NOT_CHAT = /orpheus|whisper|tts|prompt-guard|guard|embed|rerank|distil/i;
 // ultime, per non bruciare i tentativi prima di arrivare a un multimodale.
 const TEXT_ONLY_HINT = /gpt-oss|allam|compound/i;
 
-// Ordine in cui provare: prima i nomi che promettono visione, poi gli altri
-// modelli di chat, per ultimi quelli che con ogni probabilita' non vedono.
-// Il catalogo di Groq non dichiara le modalita', quindi l'unica prova certa
-// e' mandare la richiesta vera.
 // Dentro la stessa famiglia il numero piu' alto e' il modello piu' recente
 // (qwen3.8 batte qwen3.6) o il piu' grande (gpt-oss-120b batte gpt-oss-20b).
-// In ordine alfabetico finivano prima i piu' vecchi, e la ricerca si fermava
-// li'. Le famiglie restano nell'ordine di prima.
+// In ordine alfabetico finivano prima i piu' vecchi, e la ricerca si fermava li'.
 function familyKey(id) { return id.replace(/\d+(\.\d+)?/g, '#'); }
 function versionScore(id) {
   const nums = id.match(/\d+(?:\.\d+)?/g);
@@ -369,11 +470,11 @@ function newestFirst(ids) {
   });
 }
 
-async function candidateModels(kind, exclude) {
-  const models = await listModels();
-  const pool = newestFirst(models.filter(id => !exclude.includes(id) && !NOT_CHAT.test(id)));
-  const ordered = [];
-  const push = id => { if (!ordered.includes(id)) ordered.push(id); };
+async function candidatiGroq(kind, escludi, deadline) {
+  const modelli = await listaGroq(deadline);
+  const pool = newestFirst(modelli.filter(id => !escludi.includes(id) && !NOT_CHAT.test(id)));
+  const ordinati = [];
+  const push = id => { if (!ordinati.includes(id)) ordinati.push(id); };
 
   for (const pattern of MODEL_PREFERENCES[kind] || []) {
     for (const id of pool) if (pattern.test(id)) push(id);
@@ -382,95 +483,96 @@ async function candidateModels(kind, exclude) {
     for (const id of pool) if (!TEXT_ONLY_HINT.test(id)) push(id);
   }
   for (const id of pool) push(id);
-  return ordered.slice(0, MAX_MODEL_ATTEMPTS);
+  return ordinati.slice(0, MAX_MODEL_ATTEMPTS);
 }
 
-function listModels() {
-  if (availableModels) return Promise.resolve(availableModels);
-  return new Promise((resolve) => {
-    const req = https.request({
-      hostname: 'api.groq.com',
-      path: '/openai/v1/models',
-      method: 'GET',
-      agent,
-      headers: { 'Authorization': `Bearer ${GROQ_KEY}` },
-      timeout: 4000
-    }, (res) => {
-      let data = '';
-      res.setEncoding('utf8');
-      res.on('data', c => { data += c; });
-      res.on('end', () => {
-        try {
-          const parsed = JSON.parse(data);
-          availableModels = Array.isArray(parsed.data)
-            ? parsed.data.map(m => m.id).filter(Boolean).sort()
-            : [];
-        } catch {
-          availableModels = [];
-        }
-        resolve(availableModels);
-      });
-    });
-    // Se la lista non arriva restituiamo un elenco vuoto: il chiamante
-    // riportera' l'errore originale invece di restare appeso.
-    req.on('timeout', () => req.destroy(new Error('timeout')));
-    req.on('error', () => resolve([]));
-    req.end();
-  });
+function listaGroq(deadline) {
+  const cached = S.cacheGet('groq:catalog', CATALOG_TTL_MS);
+  if (cached) return Promise.resolve(cached);
+
+  // Anche la lista deve stare dentro la deadline: se non c'e' piu' tempo,
+  // tanto vale non chiederla.
+  const budget = Math.min(4000, deadline - Date.now());
+  if (budget < 500) return Promise.resolve([]);
+
+  return richiestaHttp({
+    hostname: GROQ_HOST,
+    path: '/openai/v1/models',
+    method: 'GET',
+    headers: { 'Authorization': `Bearer ${GROQ_KEY}` }
+  }, null, Date.now() + budget).then(res => {
+    let lista = [];
+    try {
+      const parsed = JSON.parse(res.body);
+      lista = Array.isArray(parsed.data) ? parsed.data.map(m => m.id).filter(Boolean).sort() : [];
+    } catch {
+      lista = [];
+    }
+    // Un elenco vuoto non lo mettiamo in cache: e' quasi sempre un errore di
+    // rete, e ricordarselo per dieci minuti servirebbe solo a peggiorare.
+    if (lista.length) S.cacheSet('groq:catalog', lista);
+    return lista;
+  }).catch(() => []);
 }
 
-function json(statusCode, cors, obj) {
-  return {
-    statusCode,
-    headers: { ...cors, 'Content-Type': 'application/json' },
-    body: JSON.stringify(obj)
-  };
-}
+/* ============================== HTTP ============================== */
 
 // Le istanze delle function vengono riusate a caldo: tenendo viva la connessione
-// ci risparmiamo handshake TCP+TLS verso Groq a ogni richiesta.
+// ci risparmiamo handshake TCP+TLS a ogni richiesta.
 const agent = new https.Agent({ keepAlive: true, keepAliveMsecs: 1500, maxSockets: 10 });
 
-async function callGroq(requestBody) {
-  const deadline = Date.now() + TIMEOUT_MS;
+async function richiestaHttp(opzioni, payload, deadline) {
   try {
-    return await sendToGroq(requestBody, deadline);
+    return await inviaHttp(opzioni, payload, deadline);
   } catch (e) {
     // Un socket riusato puo' essere stato chiuso dal server mentre la function
     // era congelata. In quel caso ritentiamo una volta, col tempo che resta.
-    const staleSocket = e && (e.code === 'ECONNRESET' || e.code === 'EPIPE');
-    if (!staleSocket || Date.now() >= deadline) throw e;
-    return sendToGroq(requestBody, deadline);
+    const socketMorto = e && (e.code === 'ECONNRESET' || e.code === 'EPIPE');
+    if (!socketMorto || deadline - Date.now() < MIN_ATTEMPT_MS) throw e;
+    return inviaHttp(opzioni, payload, deadline);
   }
 }
 
-function sendToGroq(requestBody, deadline) {
-  const payload = JSON.stringify(requestBody);
+function inviaHttp(opzioni, payload, deadline) {
   return new Promise((resolve, reject) => {
+    let guard = null;
+    const settle = (fn) => (arg) => { clearTimeout(guard); fn(arg); };
+    const ok = settle(resolve);
+    const ko = settle(reject);
+
+    const headers = Object.assign({}, opzioni.headers);
+    if (payload) headers['Content-Length'] = Buffer.byteLength(payload);
+
     const req = https.request({
-      hostname: 'api.groq.com',
-      path: '/openai/v1/chat/completions',
-      method: 'POST',
+      hostname: opzioni.hostname,
+      path: opzioni.path,
+      method: opzioni.method,
       agent,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROQ_KEY}`,
-        'Content-Length': Buffer.byteLength(payload)
-      },
+      headers,
       timeout: Math.max(1000, deadline - Date.now())
     }, (res) => {
       let data = '';
       res.setEncoding('utf8');
       res.on('data', chunk => { data += chunk; });
-      res.on('end', () => resolve({ status: res.statusCode, body: data }));
+      res.on('end', () => ok({ status: res.statusCode, body: data }));
     });
+
+    // Il timeout di http.request misura l'inattivita' del socket, non la durata
+    // totale: da solo non impedisce a una risposta lenta ma continua di
+    // scavalcare la deadline. Questo e' il tetto assoluto.
+    guard = setTimeout(() => {
+      const err = new Error('Deadline richiesta AI superata');
+      err.code = 'AI_TIMEOUT';
+      req.destroy(err);
+    }, Math.max(1000, deadline - Date.now()));
+
     req.on('timeout', () => {
       const err = new Error('Timeout richiesta AI');
       err.code = 'AI_TIMEOUT';
       req.destroy(err);
     });
-    req.on('error', reject);
-    req.write(payload);
+    req.on('error', ko);
+    if (payload) req.write(payload);
     req.end();
   });
 }

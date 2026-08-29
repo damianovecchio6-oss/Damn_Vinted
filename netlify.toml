@@ -1,10 +1,11 @@
 [build]
-  publish = "."
+  # Il publish dir NON e' la root del repo, ed e' importante che resti cosi':
+  # con publish = "." finivano serviti come file statici il sorgente delle
+  # function e qualunque altra cosa nel repo. Qui sotto ci sta solo il sito.
+  publish = "public"
   functions = "netlify/functions"
 
-# Il publish dir e' la root del repo, quindi il sorgente delle function sarebbe
-# raggiungibile come file statico su /netlify/functions/claude.js. Blocchiamolo.
-[[redirects]]
-  from = "/netlify/*"
-  to = "/index.html"
-  status = 404
+[build.environment]
+  # Senza questo Netlify sceglie da sola la versione di Node delle function,
+  # e puo' cambiarla sotto i piedi al primo deploy dopo un aggiornamento loro.
+  NODE_VERSION = "20"
