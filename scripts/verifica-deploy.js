@@ -44,6 +44,21 @@ function chiamata(percorso, metodo, corpo, headers) {
 
 const json = res => { try { return JSON.parse(res.body); } catch { return null; } };
 
+// Un sito che non risponde puo' essere rotto, spento, o semplicemente dietro a
+// una rete che non lo lascia passare: sono cose diverse e vanno dette diverse.
+function motivoIrraggiungibile(res) {
+  const corpo = (res.body || '').slice(0, 300);
+  if (/not in allowlist|egress|proxy/i.test(corpo)) {
+    return `la rete da cui stai lanciando il controllo non raggiunge questo host `
+         + `(HTTP ${res.status}: ${corpo.trim()}). Non e' un problema del sito: `
+         + `rilancia da una rete senza filtri.`;
+  }
+  if (res.status === 0) return `nessuna risposta: ${corpo || 'connessione fallita'}`;
+  if (res.status === 404) return `HTTP 404: l'indirizzo esiste ma non serve niente. Nome del sito giusto?`;
+  if (res.status >= 500) return `HTTP ${res.status}: il sito risponde ma con un errore. Guarda i log del deploy su Netlify.`;
+  return `HTTP ${res.status}. ${corpo.trim()}`;
+}
+
 let ok = 0, ko = 0;
 const esito = (nome, passato, dettaglio) => {
   if (passato) { ok++; console.log(`  ok   ${nome}`); }
@@ -55,7 +70,20 @@ const esito = (nome, passato, dettaglio) => {
 
   console.log('-- il sito --');
   const pagina = await chiamata('/', 'GET');
-  esito('la pagina risponde', pagina.status === 200, `HTTP ${pagina.status}`);
+
+  // Se la pagina non arriva, tutto quello che verrebbe dopo sarebbe una
+  // diagnosi inventata su una risposta che non c'e': "manca la scheda
+  // Ricerca", "publish dir sbagliato". Meglio una riga sola che dice la
+  // verita' - non ho raggiunto il sito - che quattro righe che accusano il
+  // deploy di colpe che non ha.
+  if (pagina.status !== 200) {
+    esito('la pagina risponde', false, motivoIrraggiungibile(pagina));
+    console.log('\nMi fermo qui: senza la pagina, i controlli che seguono non');
+    console.log('direbbero niente sul sito, solo su questa connessione.');
+    fine();
+    return;
+  }
+  esito('la pagina risponde', true);
   esito('e\' la versione con l\'agente', /AGENTE DI RICERCA/i.test(pagina.body),
     'la pagina non contiene la scheda Ricerca: il deploy e\' di un commit piu\' vecchio');
   esito('il sorgente delle function non e\' servito come file statico',
