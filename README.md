@@ -16,6 +16,11 @@ tests/                        suite di test, nessun framework
 scripts/verifica-deploy.js    controlla un sito gia' deployato: function e chiavi
 ```
 
+Le suite girano col mouse, tranne una: `tests/tocco.js` manda tocchi veri a un
+Chromium in modalita' telefono. Serve, perche' il telefono non e' un mouse
+piccolo: il click che il browser sintetizza dopo un tocco a volte non arriva, e
+col solo mouse quel buco non si vede.
+
 Il sito non ha build ne' dipendenze a runtime: `public/index.html` si apre e
 funziona. Il publish dir e' `public/` e non la root del repo, cosi' il sorgente
 delle function e i test non finiscono serviti come file statici.
@@ -27,7 +32,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-348 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+360 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
