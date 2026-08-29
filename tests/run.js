@@ -15,6 +15,7 @@ const SUITE = [
   ['analisi foto', 'photo.js', 'codifica adattiva, miniatura, passaggio annuncio'],
   ['etichetta e Lens', 'nuove.js', 'lettura dedicata, merge, identificazione prodotto'],
   ['agente di ricerca', 'agente.js', 'piano, ricerche, raffinamento, rapporto'],
+  ['scanner', 'scanner.js', 'identita e fonti, usato vs nuovo, giri, banda dei prezzi'],
   ['micro-interazioni', 'interazioni.js', 'ghiera, attesa, focus, vibrazione, motion'],
   ['dito sul telefono', 'tocco.js', 'tocchi veri: ghiera, tasto centrale, parcheggio']
 ];

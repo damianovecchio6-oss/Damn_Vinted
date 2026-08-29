@@ -123,6 +123,35 @@ body{
 .agvn{font-family:'Orbitron',sans-serif;font-size:19px;font-weight:900;color:var(--t);line-height:1.1}
 .agvl{font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:1px;margin-top:3px}
 
+/* scanner: l'identita' del capo, campo per campo, con scritto da dove viene.
+   La fonte non e' un dettaglio da nascondere: "Carhartt letto sull'etichetta"
+   e "Carhartt dedotto dalla forma" sono due dati diversi, e chi vende deve
+   poterli distinguere prima di fidarsi del prezzo. */
+.sxr{display:flex;flex-wrap:wrap;gap:3px 10px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--bd)}
+.sxr:last-child{border:none}
+.sxk{font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:1px;width:74px;flex-shrink:0}
+.sxv{font-size:14px;color:#fff;line-height:1.4;flex:1 1 130px;min-width:0}
+.sxf{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--mu);border:1px solid var(--bd);border-radius:20px;padding:2px 7px;white-space:nowrap;flex-shrink:0;margin-left:auto}
+.sxf.letta{color:var(--t);border-color:var(--t)}
+
+/* La banda dei prezzi: il tratto e' da minimo a massimo dell'usato trovato,
+   il pieno e' il quartile centrale - dove sta davvero il mercato - e il segno
+   e' il prezzo consigliato. Un numero solo non direbbe quanto e' largo il
+   ventaglio dentro cui quel numero e' stato scelto. */
+.sxBand{position:relative;height:22px;margin:6px 0 4px}
+.sxTrack{position:absolute;top:8px;left:0;right:0;height:6px;border-radius:4px;background:var(--bd)}
+.sxIqr{position:absolute;top:8px;height:6px;border-radius:4px;background:var(--t);opacity:.55}
+.sxMark{position:absolute;top:2px;width:3px;height:18px;border-radius:2px;background:var(--t);box-shadow:0 0 8px rgba(232,200,74,.7)}
+.sxEnds{display:flex;justify-content:space-between;font-size:10px;color:var(--mu);letter-spacing:1px;margin-bottom:14px}
+
+/* Le prove non pesano tutte uguale: un annuncio Vinted dice quanto si vende,
+   una scheda di negozio dice quanto costa il nuovo, e un risultato che parla
+   di un altro capo non dice niente. Il tag lo scrive a lettere. */
+.sxT{font-size:9px;letter-spacing:1px;text-transform:uppercase;border-radius:20px;padding:2px 7px;white-space:nowrap;border:1px solid var(--bd);color:var(--mu);margin-top:4px;display:inline-block}
+.sxT.usato{color:var(--t);border-color:var(--t)}
+.sxT.fuori{color:#ff8888;border-color:var(--re)}
+.lr.fuori{opacity:.55}
+
 /* ===== IL SOLE =====
    E' un elemento fisso della pagina, non il contenuto di una scheda: quando
    scegli un raggio non sparisce, si rimpicciolisce e va a parcheggiarsi a
@@ -411,28 +440,34 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
       <text class="rEti" x="200.0" y="80.0">ANALIZZA</text>
     </g>
     <g class="raggio" data-scheda="annuncio" tabindex="0" role="button" aria-label="Scrivi l'annuncio">
-      <path class="lama" d="M263.4 161.9 L323.6 159.8 L273.7 193.6 Z"/>
-      <circle class="presa" cx="342.7" cy="153.6" r="36"/>
-      <text class="rIco" x="342.7" y="157.6">✍️</text>
-      <text class="rEti" x="342.7" y="183.6">ANNUNCIO</text>
+      <path class="lama" d="M254.1 149.5 L312.6 135.0 L270.8 178.4 Z"/>
+      <circle class="presa" cx="329.9" cy="125.0" r="36"/>
+      <text class="rIco" x="329.9" y="129.0">✍️</text>
+      <text class="rEti" x="329.9" y="155.0">ANNUNCIO</text>
     </g>
     <g class="raggio" data-scheda="prezzo" tabindex="0" role="button" aria-label="Stima il prezzo">
-      <path class="lama" d="M255.8 248.5 L276.4 305.2 L228.9 268.1 Z"/>
-      <circle class="presa" cx="288.2" cy="321.4" r="36"/>
-      <text class="rIco" x="288.2" y="325.4">💶</text>
-      <text class="rEti" x="288.2" y="351.4">PREZZO</text>
+      <path class="lama" d="M270.8 221.6 L312.6 265.0 L254.1 250.5 Z"/>
+      <circle class="presa" cx="329.9" cy="275.0" r="36"/>
+      <text class="rIco" x="329.9" y="279.0">💶</text>
+      <text class="rEti" x="329.9" y="305.0">PREZZO</text>
     </g>
     <g class="raggio" data-scheda="ricerca" tabindex="0" role="button" aria-label="L'agente cerca online quanto vale il capo">
-      <path class="lama" d="M171.1 268.1 L123.6 305.2 L144.2 248.5 Z"/>
-      <circle class="presa" cx="111.8" cy="321.4" r="36"/>
-      <text class="rIco" x="111.8" y="325.4">🤖</text>
-      <text class="rEti" x="111.8" y="351.4">RICERCA</text>
+      <path class="lama" d="M216.6 272.1 L200.0 330.0 L183.4 272.1 Z"/>
+      <circle class="presa" cx="200.0" cy="350.0" r="36"/>
+      <text class="rIco" x="200.0" y="354.0">🤖</text>
+      <text class="rEti" x="200.0" y="380.0">RICERCA</text>
     </g>
     <g class="raggio" data-scheda="storico" tabindex="0" role="button" aria-label="Rivedi quello che hai salvato">
-      <path class="lama" d="M126.3 193.6 L76.4 159.8 L136.6 161.9 Z"/>
-      <circle class="presa" cx="57.3" cy="153.6" r="36"/>
-      <text class="rIco" x="57.3" y="157.6">🗂️</text>
-      <text class="rEti" x="57.3" y="183.6">STORICO</text>
+      <path class="lama" d="M145.9 250.5 L87.4 265.0 L129.2 221.6 Z"/>
+      <circle class="presa" cx="70.1" cy="275.0" r="36"/>
+      <text class="rIco" x="70.1" y="279.0">🗂️</text>
+      <text class="rEti" x="70.1" y="305.0">STORICO</text>
+    </g>
+    <g class="raggio" data-scheda="scanner" tabindex="0" role="button" aria-label="Lo scanner guarda le foto, cerca a fondo e capisce il prezzo">
+      <path class="lama" d="M129.2 178.4 L87.4 135.0 L145.9 149.5 Z"/>
+      <circle class="presa" cx="70.1" cy="125.0" r="36"/>
+      <text class="rIco" x="70.1" y="129.0">🔬</text>
+      <text class="rEti" x="70.1" y="155.0">SCANNER</text>
     </g>
     <circle class="disco" cx="200" cy="200" r="72"/>
     <text class="dTitolo" x="200" y="190">DAMN</text>
@@ -630,6 +665,43 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
       <div>Ancora nessun annuncio salvato. Genera un annuncio per vederlo qui.</div>
     </div>
   </div>
+
+  <!-- SCANNER: le altre schede sono cinque strumenti, questa e' un agente che
+       li usa da solo. Dalle foto tira fuori l'identita' del capo, poi cerca
+       online finche' il quadro dei prezzi sta in piedi, e alla fine separa
+       quello che si chiede per l'usato da quello che costa il nuovo. -->
+  <div id="tab-scanner" class="tp">
+    <div class="card">
+      <div class="ct">🔬 Scanner</div>
+      <p style="font-size:13px;color:var(--mu);line-height:1.6;margin-bottom:16px">
+        Guarda le foto e l'etichetta, capisce che capo è, poi cerca online finché i prezzi non tornano — e tiene separato quello che chiedono per l'usato da quello che costa il nuovo. Un giro completo può costare fino a 6 ricerche del piano SerpApi.
+      </p>
+      <label class="ubox" id="sxBox">
+        <input type="file" id="sxFile" accept="image/*" multiple/>
+        <div style="font-size:36px;margin-bottom:8px;filter:drop-shadow(0 0 8px #00ff88)">🖼️</div>
+        <div style="font-size:15px;font-weight:600" id="sxLabel">Tocca per scegliere la foto</div>
+        <div style="font-size:12px;color:var(--mu);margin-top:3px">JPG · PNG · WEBP · max 4 immagini</div>
+      </label>
+      <div class="ps" id="sxPs"></div>
+      <div class="fg" style="margin-top:14px"><label class="fl" for="sxNote">Quello che sai tu e la foto non dice</label><input class="fc" id="sxNote" placeholder="Modello, anno, difetti, quanto l'hai pagato…"/></div>
+      <button class="btn" id="btnSx" disabled onclick="avviaScanner()">🔬 Scansiona e capisci il prezzo</button>
+    </div>
+    <div class="card" id="sxSteps" style="display:none">
+      <div class="rl">🧠 Cosa sta facendo lo scanner</div>
+      <ol class="ag" id="sxList" aria-live="polite"></ol>
+    </div>
+    <div class="err" id="eSx" role="alert" aria-live="assertive" style="display:none"></div>
+    <div class="res" id="rSx" style="display:none">
+      <svg class="alba" aria-hidden="true"><use href="#ico-sole"/></svg>
+      <div class="rl">🔬 Cosa ho capito del capo</div>
+      <div id="rSxBody"></div>
+      <div class="crow">
+        <button class="cbtn" onclick="scannerPerAnnuncio()">✍️ Usa per l'annuncio</button>
+        <button class="cbtn" onclick="scannerPerPrezzo()">💶 Usa per la stima prezzo</button>
+        <button class="cbtn" onclick="copiaScanner(this)">📋 Copia</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div id="toast" role="status" aria-live="polite"></div>
@@ -640,7 +712,7 @@ let lastItemSig=null, lastAnnuncioText='', prevUrls=[], lastModel=null, lastProv
 // Quale foto ritrae l'etichetta, e cosa ci si e' letto sopra.
 let labelIndex=-1, lastEtichetta=null, lastLens=null;
 
-const SCHEDE=['sole','foto','annuncio','prezzo','ricerca','storico'];
+const SCHEDE=['sole','foto','annuncio','prezzo','ricerca','storico','scanner'];
 let schedaCorrente='sole';
 
 // Meno movimento se il sistema lo chiede: vale anche per lo scorrimento, che
@@ -665,6 +737,7 @@ function sw(n){
 
   if(n==='storico') renderHistory();
   if(n==='ricerca') prefillRicerca();
+  if(n==='scanner') syncUploadUI();
   window.scrollTo({top:0,behavior:menoMovimento()?'auto':'smooth'});
 }
 
@@ -679,16 +752,17 @@ function tocco(ms){
 /* ===== LA GHIERA =====
    Il principio dell'iPod classic: la ruota sta ferma, il dito ci gira intorno
    e la selezione salta di voce in voce con uno scatto per volta. Qui le voci
-   sono i cinque raggi, il disco al centro fa da schermo (dice cosa stai per
+   sono i sei raggi, il disco al centro fa da schermo (dice cosa stai per
    aprire) e da tasto: si preme li' per entrare.
 
    Restano tutte le strade di prima: il tocco secco su un raggio lo apre, Tab e
    Invio pure. La ghiera si aggiunge, non sostituisce. */
 const RAGGI = Array.from(document.querySelectorAll('.raggio'));
-// Quanti gradi di dito valgono uno scatto. Con cinque voci un quinto di giro
-// (72°) sarebbe il rapporto "vero", ma il pollice su uno schermo piccolo fa
+// Quanti gradi di dito valgono uno scatto. Con sei voci un sesto di giro
+// (60°) sarebbe il rapporto "vero", ma il pollice su uno schermo piccolo fa
 // giri corti: 45° e' la distanza a cui gli scatti si sentono senza doversi
-// sbracciare.
+// sbracciare. E resta 45 anche adesso che i raggi sono sei: il numero di
+// scatti per fare il giro completo lo decide RAGGI.length, non questo.
 const GRADI_PER_SCATTO = 45;
 let selezione = 0;
 // Vero se il giro appena finito ha fatto scattare la ghiera. Il rilascio del
@@ -869,34 +943,54 @@ document.querySelectorAll('#toneChips .chip').forEach(c=>{
   });
 });
 
-document.getElementById('fileInput').addEventListener('change',function(e){
-  const picked=Array.from(e.target.files||[]);
-  // Azzerare il value permette di riselezionare lo stesso file una seconda volta.
-  e.target.value='';
-  if(!picked.length) return; // picker annullato: non buttiamo via quello che c'era
-  selFiles=picked.slice(0,4);
-  currentItemId=null; lastItemSig=null; lastAnalysis=null; lastThumbnail=null;
-  labelIndex=-1; lastEtichetta=null; lastLens=null;
-  // Foto nuove = capo nuovo: la ricerca di quello di prima non deve restare
-  // in giro, ne' nella scheda ne' dentro al prompt della stima.
-  resetRicerca();
-  renderPrev(); syncUploadUI();
+// Le foto sono le stesse per l'analisi e per lo scanner: chi le sceglie di la'
+// se le ritrova di qua, con lo stesso marcatore sull'etichetta. Due copie dello
+// stesso stato vorrebbero dire scegliere due volte le stesse quattro foto.
+const BOX_FOTO=[
+  { box:'ubox', label:'ulabel', ps:'ps', btn:'btnA' },
+  { box:'sxBox', label:'sxLabel', ps:'sxPs', btn:'btnSx' }
+];
+
+['fileInput','sxFile'].forEach(id=>{
+  const input=document.getElementById(id);
+  if(!input) return;
+  input.addEventListener('change',function(e){
+    const picked=Array.from(e.target.files||[]);
+    // Azzerare il value permette di riselezionare lo stesso file una seconda volta.
+    e.target.value='';
+    if(!picked.length) return; // picker annullato: non buttiamo via quello che c'era
+    selFiles=picked.slice(0,4);
+    currentItemId=null; lastItemSig=null; lastAnalysis=null; lastThumbnail=null;
+    labelIndex=-1; lastEtichetta=null; lastLens=null;
+    // Foto nuove = capo nuovo: la ricerca di quello di prima non deve restare
+    // in giro, ne' nella scheda ne' dentro al prompt della stima.
+    resetRicerca(); resetScanner();
+    renderPrev(); syncUploadUI();
+  });
 });
 
 function syncUploadUI(){
-  document.getElementById('ubox').classList.toggle('has',selFiles.length>0);
-  document.getElementById('ulabel').textContent=selFiles.length
+  const testo=selFiles.length
     ? (labelIndex>=0
         ? `${selFiles.length} foto — etichetta: la ${labelIndex+1}ª`
         : `${selFiles.length} foto — 🏷️ segna quale mostra l'etichetta`)
     : 'Tocca per scegliere la foto';
-  document.getElementById('btnA').disabled=selFiles.length===0;
+  BOX_FOTO.forEach(b=>{
+    const box=document.getElementById(b.box);
+    if(box) box.classList.toggle('has',selFiles.length>0);
+    const label=document.getElementById(b.label);
+    if(label) label.textContent=testo;
+    const btn=document.getElementById(b.btn);
+    if(btn) btn.disabled=selFiles.length===0;
+  });
 }
 
 function renderPrev(){
   prevUrls.forEach(u=>URL.revokeObjectURL(u));
   prevUrls=[];
-  document.getElementById('ps').innerHTML=selFiles.map((f,i)=>{
+  // Un solo URL per foto, mostrato in tutte e due le schede: revocarlo alla
+  // scelta successiva li spegne entrambi insieme.
+  const html=selFiles.map((f,i)=>{
     const url=URL.createObjectURL(f);
     prevUrls.push(url);
     const tag=i===labelIndex;
@@ -907,6 +1001,10 @@ function renderPrev(){
       + `title="Questa foto mostra l'etichetta" aria-label="Segna la foto ${i+1} come etichetta">🏷️</button>`
       + `</div>`;
   }).join('');
+  BOX_FOTO.forEach(b=>{
+    const ps=document.getElementById(b.ps);
+    if(ps) ps.innerHTML=html;
+  });
 }
 
 // La foto marcata viene mandata in una richiesta a parte, a piena risoluzione:
@@ -1121,11 +1219,11 @@ function encodeAll(bitmaps){
   }
 }
 
-async function analyzePhoto(){
-  if(!selFiles.length) return;
-  if(!busy('foto',BTN_FOTO)) return;
-  show('lFoto'); hide('rFoto'); hide('eFoto');
-  try{
+// Codifica le foto e le legge: analisi del capo e trascrizione dell'etichetta
+// partono insieme. Sta qui fuori e non dentro analyzePhoto perche' la usano in
+// due - la scheda Analizza e lo scanner - e il prompt sotto e' lungo e tarato
+// riga per riga: due copie divergerebbero alla prima correzione.
+async function leggiFoto(){
     const files=selFiles.slice(0,4);
     // Decodifica in parallelo: le foto non si aspettano piu' a vicenda.
     const bitmaps=await Promise.all(files.map(decodeImage));
@@ -1173,6 +1271,16 @@ Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo 
       }),
       fotoEtichetta ? leggiEtichetta(fotoEtichetta) : Promise.resolve(null)
     ]);
+    return { risposta, etichetta, cercataEtichetta: !!fotoEtichetta };
+}
+
+async function analyzePhoto(){
+  if(!selFiles.length) return;
+  if(!busy('foto',BTN_FOTO)) return;
+  show('lFoto'); hide('rFoto'); hide('eFoto');
+  try{
+    const letto = await leggiFoto();
+    const risposta = letto.risposta, etichetta = letto.etichetta;
     lastEtichetta = etichetta;
     if(!risposta.ok){
       // Il modello non ha risposto in JSON: meglio il testo grezzo che niente.
@@ -1191,7 +1299,7 @@ Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo 
       : '';
     const et = etichetta && etichettaUtile(etichetta)
       ? `\n\n🏷️ LETTO SULL'ETICHETTA (leggibilità ${etichetta.leggibilita||'non indicata'}):\n${(etichetta.testoLetto||'').trim()}`
-      : (fotoEtichetta ? '\n\n🏷️ ETICHETTA: non sono riuscito a leggerla. Riprova con una foto più ravvicinata e a fuoco.' : '');
+      : (letto.cercataEtichetta ? '\n\n🏷️ ETICHETTA: non sono riuscito a leggerla. Riprova con una foto più ravvicinata e a fuoco.' : '');
     document.getElementById('rFotoTxt').textContent =
       `🏷️ TIPO DI CAPO: ${obj.tipo||''}\n👔 BRAND / MARCA: ${obj.brand||''}\n🎨 COLORE/I: ${obj.colore||''}\n🧵 MATERIALE: ${obj.materiale||''}\n⭐ CONDIZIONE STIMATA: ${obj.condizione||''}\n📐 TAGLIE PROBABILI: ${obj.taglie||''}\n🗓️ STAGIONE: ${obj.stagione||''}\n✨ STILE: ${obj.stile||''}\n💰 FASCIA DI PREZZO ORIGINALE STIMATA: ${obj.fasciaPrezzo||''}\n💡 NOTE: ${obj.note||''}${vintageLine}${et}`;
     showModelUsed();
@@ -1482,6 +1590,20 @@ async function stimaPrezzo(){
         + `\n- mediana ${p.mediana}€, minimo ${p.min}€, massimo ${p.max}€ (su ${p.n} risultati)`
         + (lastLens.ipotesi?`\n- prodotto riconosciuto: ${lastLens.ipotesi}`:'')
         + `\nUsa questi numeri come ancora: sono prezzi del NUOVO o di rivenditori, quindi l'usato su Vinted vale una frazione. Parti da qui invece che dalla tua memoria dei prezzi.`;
+    }
+
+    // Lo scanner e' il dato migliore che possiamo passare: sono annunci veri,
+    // gia' separati fra usato e negozio e ripuliti dagli estremi. Vale lo
+    // stesso vincolo dell'agente: solo se la scheda parla dello stesso capo.
+    if(lastScan && lastScan.mercato && lastScan.mercato.usato
+       && stessoCapo({ nome:sxNomeCapo(), marca:sxVal(lastScan.identita.marca) }, { nome:v('pNome'), marca:v('pMarca') })){
+      const u=lastScan.mercato.usato, nz=lastScan.mercato.nuovo;
+      mercato += `\n\nSCANSIONE appena fatta su annunci reali del mercato italiano, separati per tipo di mercato:`
+        + `\n- annunci dell'USATO: ${u.n} con un prezzo, mediana ${u.mediana}€, meta' fra ${u.q1}€ e ${u.q3}€ (da ${u.min}€ a ${u.max}€)`
+        + (nz?`\n- prezzi di NEGOZIO (nuovo): mediana ${nz.mediana}€ su ${nz.n} risultati`:'')
+        + (lastScan.mercato.tenuta?`\n- l'usato vale circa il ${lastScan.mercato.tenuta}% del nuovo`:'')
+        + (lastScan.prezzo!==null&&lastScan.prezzo!==undefined?`\n- prezzo concluso dallo scanner: ${lastScan.prezzo}€, fiducia ${lastScan.fiducia?lastScan.fiducia.livello:'non dichiarata'}`:'')
+        + `\nLa mediana dell'usato e' il mercato su cui si vende qui: pesala piu' di qualunque altra cosa, e usa il prezzo di negozio solo come tetto.`;
     }
 
     // Il rapporto dell'agente pesa piu' dei listini di Lens: sono annunci
@@ -2012,6 +2134,690 @@ function toRicerca(nome){
   sw('ricerca');
   toast('🤖 Controlla i dati e avvia la ricerca');
 }
+
+/* ===== LO SCANNER =====
+   Le altre schede sono strumenti: una guarda le foto, una cerca online, una
+   stima. Qui c'e' un agente che li usa da solo e in fila, perche' sono la
+   stessa domanda spezzata in tre - "quanto ci ricavo?" - e farla in tre
+   schede vuol dire ricopiare a mano gli stessi dati due volte.
+
+   Tre fasi, che sono i tre verbi:
+
+   1. SCANSIONA - le foto, l'etichetta a piena risoluzione, e Google Lens.
+      Ne esce un'identita' del capo in cui ogni campo si porta dietro da dove
+      arriva: letto sull'etichetta, dedotto dalla foto, riconosciuto da Lens,
+      detto da te. "Carhartt letto sul cartellino" e "Carhartt dedotto dalla
+      forma" portano allo stesso prezzo con due affidabilita' diverse, e chi
+      vende deve poterle distinguere.
+
+   2. CERCA a giri, e ogni giro parte da cosa manca ancora invece che da una
+      lista fissa: pochi annunci dell'usato, risultati che parlano di un altro
+      capo, prezzi troppo sparsi, mediana che si muove ancora. Si ferma quando
+      il quadro sta in piedi, non dopo un numero fisso di ricerche - ma il
+      budget di ricerche resta, perche' ognuna costa quota.
+
+   3. CAPISCE I PREZZI, ed e' qui la differenza vera con l'agente della scheda
+      Ricerca, che di tutti i prezzi trovati fa una mediana sola. Un annuncio
+      Vinted a 30€ e una scheda Zalando a 89€ non sono lo stesso numero: il
+      primo dice a quanto si vende, il secondo quanto costa nuovo. Lo scanner
+      li separa, scarta gli estremi con i quartili, e il prezzo lo sceglie
+      dentro la banda degli annunci veri. Il nuovo resta solo come tetto.
+
+   Come l'altro agente, il ciclo gira nel browser: Netlify chiude le function
+   a 10s e un giro intero non ci starebbe mai. */
+
+const BTN_SX=['btnSx'];
+// Quattro giri al massimo e sei ricerche in tutto: il primo giro ne spende
+// fino a tre, gli altri una a testa e solo se serve. Sul piano gratuito di
+// SerpApi sono 250 ricerche al mese, quindi il tetto e' un limite vero, non
+// una precauzione.
+const SX_MAX_GIRI=4, SX_MAX_RICERCHE=6, SX_QUERY_PRIMO_GIRO=3;
+// Sotto i cinque annunci dell'usato una mediana non e' una mediana, e' un
+// aneddoto.
+const SX_USATI_OK=5;
+// Quanto puo' essere largo il quartile centrale rispetto alla mediana prima
+// che il numero smetta di voler dire qualcosa, e di quanto puo' ancora
+// muoversi la mediana perche' il quadro si consideri fermo.
+const SX_SPARSI=0.9, SX_STABILE=0.10;
+const SX_PROVE_PROMPT=12;
+
+let lastScan=null, sxPassi=[], sxTesto='';
+
+/* --- il diario, come per l'altro agente: e' quello che lo rende
+       controllabile invece di uno spinner lungo un minuto --- */
+function sxPasso(testo){
+  sxPassi.push({ testo, stato:'corso', nota:'' });
+  sxRenderPassi();
+  return sxPassi.length-1;
+}
+
+function sxChiudi(i, stato, nota){
+  if(!sxPassi[i]) return;
+  sxPassi[i].stato=stato;
+  sxPassi[i].nota=nota||'';
+  sxRenderPassi();
+}
+
+function sxRenderPassi(){
+  const el=document.getElementById('sxList');
+  if(!el) return;
+  el.innerHTML=sxPassi.map(p=>`
+    <li class="agp ${p.stato}">
+      <span class="agi" aria-hidden="true">${p.stato==='corso'?'<span class="spin agspin"></span>':AG_SEGNI[p.stato]}</span>
+      <span style="flex:1;min-width:0">${esc(p.testo)}${p.nota?`<div class="agn">${esc(p.nota)}</div>`:''}</span>
+    </li>`).join('');
+}
+
+// Foto nuove: quello che lo scanner aveva capito del capo di prima non deve
+// restare ne' a schermo ne' dentro al prompt della stima.
+function resetScanner(){
+  lastScan=null; sxPassi=[]; sxTesto=''; sxFatte.clear();
+  sxRenderPassi();
+  hide('sxSteps'); hide('rSx'); hide('eSx');
+}
+
+async function avviaScanner(){
+  if(!selFiles.length){ toast('SERVONO LE FOTO DEL CAPO'); return; }
+  if(!busy('scanner',BTN_SX)) return;
+  lastScan=null; sxPassi=[]; sxTesto=''; sxFatte.clear(); sxRenderPassi();
+  show('sxSteps'); hide('eSx'); hide('rSx');
+  try{
+    const identita=await sxScansione();
+    const { prove, motivoStop, erroreRicerca }=await sxIndagine(identita);
+    const mercato=sxMercato(prove);
+
+    lastScan={ identita, prove:sxOrdina(prove), mercato, motivoStop, erroreRicerca, verdetto:null };
+    // Senza un solo prezzo dell'usato non c'e' niente da concludere: il
+    // modello inventerebbe un numero, ed e' esattamente quello che questo
+    // agente esiste per non fare. L'identita' pero' vale gia' da sola.
+    if(mercato.usato) lastScan.verdetto=await sxVerdetto(identita, mercato, lastScan.prove);
+    sxDisegna();
+    show('rSx');
+    tocco();
+  }catch(e){
+    document.getElementById('eSx').textContent='⚠️ '+e.message;
+    show('eSx');
+  }finally{
+    idle('scanner',BTN_SX);
+  }
+}
+
+/* ============ 1. LA SCANSIONE: che capo e' ============ */
+
+async function sxScansione(){
+  const iFoto=sxPasso(`Guardo ${selFiles.length===1?'la foto':`le ${selFiles.length} foto`}${labelIndex>=0?' e l\'etichetta':''}`);
+  let letto;
+  try{
+    letto=await leggiFoto();
+  }catch(e){
+    sxChiudi(iFoto,'ko',e.message);
+    throw new Error('Non sono riuscito a leggere le foto: '+e.message);
+  }
+  if(!letto.risposta.ok){
+    sxChiudi(iFoto,'ko','il modello non ha risposto in JSON');
+    throw new Error('Analisi delle foto non interpretabile, riprova.');
+  }
+  const analisi=letto.risposta.data;
+  if(letto.etichetta) applicaEtichetta(analisi, letto.etichetta);
+  // La scheda Analizza e' la stessa cosa vista da un'altra parte: quello che
+  // lo scanner ha letto vale anche di la', senza rifare la richiesta.
+  lastAnalysis=analisi; lastEtichetta=letto.etichetta;
+  sxChiudi(iFoto,'fatto', [analisi.tipo, analisi.brand].filter(campoLetto).join(' · ')
+    + (letto.etichetta && etichettaUtile(letto.etichetta) ? ' · etichetta letta' : ''));
+
+  // Lens e' un lusso: dice il nome del modello, che e' la chiave della
+  // ricerca, ma senza SERPAPI_KEY non c'e'. Il giro va avanti lo stesso.
+  const iLente=sxPasso('Cerco il prodotto con la foto');
+  let lens=null;
+  try{
+    lens=await identificaConLens();
+    const quanti=(lens && Array.isArray(lens.risultati)) ? lens.risultati.length : 0;
+    if(quanti){
+      lastLens=lens;
+      sxChiudi(iLente,'fatto', (lens.ipotesi||`${quanti} prodotti simili`)
+        + (lens.prezzi?` · listino mediano ${lens.prezzi.mediana}€`:''));
+    }else{
+      lens=null;
+      sxChiudi(iLente,'ko','nessun prodotto riconosciuto da questa foto');
+    }
+  }catch(e){
+    sxChiudi(iLente,'ko', e.nonConfigurato ? 'ricerca per immagine non configurata (SERPAPI_KEY)' : e.message);
+  }
+
+  const iId=sxPasso('Metto insieme l\'identita\' del capo');
+  const identita=sxIdentita(analisi, letto.etichetta, lens, v('sxNote'));
+  sxChiudi(iId,'fatto', sxDescrizioneBreve(identita));
+  return identita;
+}
+
+// Lens vuole il capo intero, non l'etichetta: la stessa scelta di
+// identificaProdotto, qui senza toccare la scheda Analizza.
+async function identificaConLens(){
+  const idx=selFiles.findIndex((f,i)=>i!==labelIndex);
+  const bmp=await decodeImage(selFiles[idx>=0?idx:0]);
+  let base64;
+  try{ base64=sottoPeso(bmp, 460*1024); }
+  finally{ releaseImage(bmp); }
+  return chiamaEndpoint(LENS_URL,{ image: base64 });
+}
+
+// Ogni campo tiene la sua provenienza. L'ordine e' sempre lo stesso: quello
+// che c'e' scritto batte quello che si e' dedotto guardando.
+function sxCampo(valore, fonte){
+  return campoLetto(valore) ? { v:String(valore).trim().slice(0,120), f:fonte } : null;
+}
+
+function sxVal(campo){ return campo ? campo.v : ''; }
+
+function sxIdentita(analisi, etichetta, lens, note){
+  const a=analisi||{}, e=etichetta||{};
+  const vintage = a.vintageStima && !/non vintage/i.test(a.vintageStima)
+    && /media|alta/i.test(a.vintageConfidenza||'') ? a.vintageStima : '';
+  return {
+    tipo:       sxCampo(a.tipo, 'foto'),
+    marca:      sxCampo(e.marca, 'etichetta') || sxCampo(a.brand, 'foto'),
+    modello:    sxCampo(lens && lens.ipotesi, 'lente'),
+    materiale:  sxCampo(e.composizione, 'etichetta') || sxCampo(a.materiale, 'foto'),
+    taglia:     sxCampo(e.taglia, 'etichetta') || sxCampo(a.taglie, 'foto'),
+    colore:     sxCampo(a.colore, 'foto'),
+    condizione: sxCampo(a.condizione, 'foto'),
+    epoca:      sxCampo(vintage, 'foto'),
+    difetti:    sxCampo(a.note, 'foto'),
+    tuo:        sxCampo(note, 'tu'),
+    // Il listino di Lens non e' il prezzo dell'usato, ma e' un tetto vero:
+    // sotto quello si vende, sopra no.
+    listino:    (lens && lens.prezzi) ? lens.prezzi : null
+  };
+}
+
+function sxDescrizioneBreve(id){
+  return [sxVal(id.marca), sxVal(id.modello) || sxVal(id.tipo), sxVal(id.taglia)]
+    .filter(Boolean).join(' · ');
+}
+
+function sxDescrivi(id){
+  const righe=[
+    ['Capo', sxVal(id.tipo)], ['Marca', sxVal(id.marca)], ['Modello riconosciuto', sxVal(id.modello)],
+    ['Materiale', sxVal(id.materiale)], ['Taglia', sxVal(id.taglia)], ['Colore', sxVal(id.colore)],
+    ['Condizione', sxVal(id.condizione)], ['Epoca', sxVal(id.epoca)],
+    ['Difetti visti', sxVal(id.difetti)], ['Detto dal venditore', sxVal(id.tuo)]
+  ];
+  return righe.filter(r=>r[1]).map(r=>`- ${r[0]}: ${r[1]}`).join('\n') || '- nessun dato leggibile dalle foto';
+}
+
+/* ============ 2. L'INDAGINE: cercare finche' i conti tornano ============ */
+
+async function sxIndagine(identita){
+  const prove=[], correlate=[];
+  let ricerche=0, lacuna=null, medianaPrima=null, motivoStop='', erroreRicerca=null;
+
+  for(let giro=1; giro<=SX_MAX_GIRI && ricerche<SX_MAX_RICERCHE; giro++){
+    const quante=Math.min(giro===1?SX_QUERY_PRIMO_GIRO:1, SX_MAX_RICERCHE-ricerche);
+    const queries=await sxPiano(identita, prove, correlate, lacuna, quante, giro);
+    if(!queries.length){ motivoStop='non avevo altre ricerche sensate da provare'; break; }
+
+    const esito=await sxEsegui(queries, prove, correlate);
+    ricerche+=queries.length;
+    if(esito.errore) erroreRicerca=esito.errore;
+    // Tutte fallite e niente in mano: e' un guasto vero (chiave, quota, rete),
+    // ma non e' un motivo per buttare via la scansione. Si esce dal giro e il
+    // rapporto dice cosa e' successo, con l'identita' del capo che resta.
+    if(esito.errore && !prove.length){
+      motivoStop='la ricerca online non ha risposto: '+esito.errore.message;
+      break;
+    }
+
+    sxValuta(prove, identita);
+    const mercato=sxMercato(prove);
+    lacuna=sxLacuna(mercato, prove, medianaPrima);
+    medianaPrima=mercato.usato ? mercato.usato.mediana : null;
+
+    if(!lacuna){ motivoStop='i prezzi dell\'usato tornano fra loro'; break; }
+    if(giro===SX_MAX_GIRI || ricerche>=SX_MAX_RICERCHE){
+      motivoStop='ho finito il budget di ricerche con '+lacuna;
+      break;
+    }
+    sxChiudi(sxPasso('Non mi basta: '+lacuna), 'fatto', 'faccio un altro giro');
+  }
+
+  sxValuta(prove, identita);
+  return { prove, motivoStop, erroreRicerca };
+}
+
+async function sxPiano(identita, prove, correlate, lacuna, quante, giro){
+  const i=sxPasso(giro===1?'Decido cosa cercare':'Cambio strategia di ricerca');
+  let queries=[];
+  try{
+    const r=await callAIJson({
+      type:'text',
+      json:true,
+      prompt:`Sei un agente che deve scoprire a quanto si vende DAVVERO questo capo usato sul mercato italiano dell'usato (Vinted, Subito, Depop, eBay).
+
+CAPO, come l'ho scansionato dalle foto:
+${sxDescrivi(identita)}
+
+${lacuna?`COSA NON TORNA ANCORA: ${lacuna}.\nLe ricerche fatte finora hanno dato ${prove.length} risultati, di cui ${sxDiTipo(prove,'usato').length} annunci dell'usato con un prezzo. Titoli visti:\n${prove.slice(0,8).map((p,n)=>`${n+1}. ${String(p.titolo).slice(0,80)}${p.prezzo?` — ${p.prezzo.valore}€`:''}`).join('\n')}\n\nRicerche correlate suggerite da Google: ${correlate.length?correlate.slice(0,4).join(', '):'nessuna'}\n\nCambia strategia: se i risultati parlavano di un altro capo restringi (nome del modello, marca esatta); se erano pochi allarga (categoria e materiale invece del modello); se erano tutti di negozi punta esplicitamente ai siti dell'usato.`:'E\' il primo giro: parti dalle ricerche che hanno piu\' probabilita\' di far uscire annunci veri con un prezzo.'}
+
+Scrivi ${quante===1?'UNA sola ricerca':`al massimo ${quante} ricerche`} da dare a Google, in italiano.
+- almeno una deve puntare agli annunci dell'usato (per esempio con "vinted" o "subito" nel testo)
+- solo parole chiave, come le scriverebbe una persona: niente domande, niente frasi
+- non ripetere una ricerca gia' fatta
+
+Rispondi SOLO con questo JSON valido, senza backtick né markdown:
+{"queries":[{"q":"testo della ricerca","tipo":"web","perche":"cosa ti aspetti di trovare"}]}
+Il campo tipo vale "web" per i risultati normali (dove stanno gli annunci dell'usato), "shopping" per le schede prodotto col prezzo di listino.`
+    });
+    queries=normalizzaQueries(r.ok && r.data ? r.data.queries : null).slice(0, quante);
+  }catch(e){
+    // Il piano e' un lusso: se il modello non risponde si cerca lo stesso.
+  }
+  queries=queries.filter(q=>!sxGiaFatta(q.q));
+  if(!queries.length) queries=sxRiserva(identita, correlate).slice(0, quante);
+  sxChiudi(i, queries.length?'fatto':'ko',
+    queries.length?queries.map(q=>q.q).join(' · '):'nessuna ricerca nuova da provare');
+  return queries;
+}
+
+// Le query gia' spese non si rifanno: la function le servirebbe dalla cache,
+// ma sarebbe comunque un giro buttato di un budget da sei.
+const sxFatte=new Set();
+function sxGiaFatta(q){ return sxFatte.has(String(q).toLowerCase()); }
+
+function sxRiserva(identita, correlate){
+  const base=[sxVal(identita.marca), sxVal(identita.modello)||sxVal(identita.tipo)]
+    .filter(Boolean).join(' ').trim() || sxVal(identita.tipo) || sxVal(identita.tuo);
+  const proposte=[
+    { q:`${base} usato vinted prezzo`, tipo:'web' },
+    { q:`${base} subito usato`, tipo:'web' },
+    { q:`${base} prezzo`, tipo:'shopping' }
+  ].concat(correlate.map(c=>({ q:c, tipo:'web' })));
+  return proposte.filter(p=>p.q.trim() && !sxGiaFatta(p.q));
+}
+
+async function sxEsegui(queries, prove, correlate){
+  const indici=queries.map(q=>sxPasso(`Cerco: ${q.q}`));
+  queries.forEach(q=>sxFatte.add(q.q.toLowerCase()));
+  const esiti=await Promise.all(queries.map(q=>
+    chiamaEndpoint(RICERCA_URL,{ query:q.q, tipo:q.tipo })
+      .then(d=>({ ok:true, d, q }))
+      .catch(e=>({ ok:false, e }))
+  ));
+
+  let errore=null;
+  esiti.forEach((esito,k)=>{
+    if(!esito.ok){
+      errore=errore||esito.e;
+      sxChiudi(indici[k],'ko', esito.e.message);
+      return;
+    }
+    const trovati=Array.isArray(esito.d.risultati)?esito.d.risultati:[];
+    let nuovi=0;
+    for(const r of trovati){
+      if(!r || !r.titolo || prove.some(p=>p.titolo===r.titolo)) continue;
+      // Da che tipo di ricerca arriva conta: una scheda shopping e' un
+      // listino, non un annuncio, anche quando il dominio non lo dice.
+      prove.push(Object.assign({}, r, { daShopping: esito.q.tipo==='shopping' }));
+      nuovi++;
+    }
+    for(const c of (Array.isArray(esito.d.correlate)?esito.d.correlate:[])){
+      if(c && !correlate.includes(c)) correlate.push(c);
+    }
+    sxChiudi(indici[k],'fatto',
+      `${nuovi} risultati nuovi, ${trovati.filter(r=>r&&r.prezzo).length} con prezzo`);
+  });
+  return { errore };
+}
+
+/* ============ 3. CAPIRE I PREZZI ============ */
+
+// Dove finisce l'usato e dove comincia il negozio. Il dominio e' il segnale
+// piu' affidabile che abbiamo: su vinted.it si vende usato qualunque cosa
+// dica il titolo, su zalando.it si vende nuovo lo stesso.
+const SX_USATO=/vinted|subito\.it|subito|depop|wallapop|ebay|kijiji|mercatino|vestiaire|micolet|humana|rebelle|videdressing|vinokilo|swap/i;
+const SX_NEGOZIO=/zalando|amazon|asos|farfetch|yoox|zara|h&m|hm\.com|uniqlo|nike\.com|adidas|footlocker|about-?you|luisaviaroma|mytheresa|ssense|shein|decathlon|cisalfa|snipes|foot\s?district/i;
+// Quando il dominio non basta, lo dice il testo. "Nuovo con cartellino" su
+// Vinted resta usato: e' il posto a decidere, non l'aggettivo.
+const SX_TESTO_USATO=/\busat[oaie]\b|seconda mano|second[\s-]?hand|pre[\s-]?owned|pre[\s-]?loved|vintage/i;
+
+function sxDoveSta(prova){
+  const dove=`${prova.fonte||''} ${prova.link||''}`;
+  if(SX_USATO.test(dove)) return 'usato';
+  if(SX_NEGOZIO.test(dove)) return 'nuovo';
+  if(prova.daShopping) return 'nuovo';
+  if(SX_TESTO_USATO.test(`${prova.titolo||''} ${prova.snippet||''}`)) return 'usato';
+  // Un sito qualunque che espone un prezzo, quasi sempre, e' un negozio: ma
+  // "quasi sempre" non e' "sempre", e un incerto contato come usato
+  // sposterebbe la mediana di nascosto. Resta fuori dai conti.
+  return 'incerto';
+}
+
+function sxParole(testo){
+  return String(testo||'').toLowerCase().replace(/[^a-zà-ù0-9]+/g,' ').split(' ').filter(w=>w.length>2);
+}
+
+// Un risultato che non nomina ne' la marca ne' il tipo di capo non parla di
+// questo capo. Resta in elenco, marcato, ma fuori dalla mediana: e' proprio
+// il modo in cui una stima "basata su dati veri" diventa sbagliata.
+function sxPertinente(prova, identita){
+  const testo=`${prova.titolo||''} ${prova.snippet||''}`.toLowerCase();
+  const marca=sxVal(identita.marca).toLowerCase().trim();
+  if(marca && testo.includes(marca)) return true;
+  const parole=sxParole(sxVal(identita.tipo)).concat(sxParole(sxVal(identita.modello)));
+  return parole.some(p=>testo.includes(p));
+}
+
+function sxValuta(prove, identita){
+  for(const p of prove){
+    p.mercato=sxDoveSta(p);
+    p.pertinente=sxPertinente(p, identita);
+  }
+}
+
+function sxDiTipo(prove, mercato){
+  return prove.filter(p=>p.pertinente && p.mercato===mercato && p.prezzo
+    && typeof p.prezzo.valore==='number' && p.prezzo.valuta==='€');
+}
+
+// Quartili per interpolazione: con pochi valori prendere l'elemento a indice
+// intero salterebbe da un annuncio all'altro invece di stare in mezzo.
+function sxQuantile(ordinati, q){
+  if(!ordinati.length) return null;
+  const pos=(ordinati.length-1)*q, base=Math.floor(pos), resto=pos-base;
+  const a=ordinati[base], b=ordinati[Math.min(base+1, ordinati.length-1)];
+  return Math.round((a + (b-a)*resto)*100)/100;
+}
+
+// Un lotto stock a 400€ in mezzo a dieci felpe da 30 non e' il mercato, e'
+// rumore: la regola dei quartili (Tukey) lo toglie senza dover scegliere a
+// mano una soglia. Sotto i quattro valori non si filtra niente: con tre
+// numeri il "fuori scala" non esiste.
+function sxSenzaEstremi(valori){
+  const ordinati=valori.slice().sort((a,b)=>a-b);
+  if(ordinati.length<4) return { tenuti:ordinati, scartati:[] };
+  const q1=sxQuantile(ordinati,0.25), q3=sxQuantile(ordinati,0.75), iqr=q3-q1;
+  if(!(iqr>0)) return { tenuti:ordinati, scartati:[] };
+  const basso=q1-1.5*iqr, alto=q3+1.5*iqr;
+  return {
+    tenuti: ordinati.filter(v=>v>=basso && v<=alto),
+    scartati: ordinati.filter(v=>v<basso || v>alto)
+  };
+}
+
+function sxStatistiche(valori){
+  const { tenuti, scartati }=sxSenzaEstremi(valori);
+  if(!tenuti.length) return null;
+  return {
+    n: tenuti.length,
+    min: tenuti[0],
+    max: tenuti[tenuti.length-1],
+    q1: sxQuantile(tenuti,0.25),
+    mediana: sxQuantile(tenuti,0.5),
+    q3: sxQuantile(tenuti,0.75),
+    scartati
+  };
+}
+
+function sxMercato(prove){
+  const usati=sxDiTipo(prove,'usato').map(p=>p.prezzo.valore);
+  const nuovi=sxDiTipo(prove,'nuovo').map(p=>p.prezzo.valore);
+  const usato=sxStatistiche(usati), nuovo=sxStatistiche(nuovi);
+  const pertinenti=prove.filter(p=>p.pertinente).length;
+  return {
+    usato, nuovo,
+    // Quanto vale l'usato rispetto al nuovo: e' il numero che dice se il capo
+    // tiene il prezzo o lo perde, e non si puo' leggere da una mediana sola.
+    tenuta: (usato && nuovo && nuovo.mediana>0) ? Math.round(usato.mediana/nuovo.mediana*100) : null,
+    pertinenti, totale: prove.length
+  };
+}
+
+// Cosa manca ancora perche' il numero voglia dire qualcosa. E' anche la
+// domanda con cui si scrive la ricerca del giro dopo: un agente che sa cosa
+// gli manca cerca meglio di uno che ripete la stessa query con altre parole.
+function sxLacuna(mercato, prove, medianaPrima){
+  if(prove.length && mercato.pertinenti < prove.length/2){
+    return 'piu\' di meta\' dei risultati parla di un altro capo';
+  }
+  if(!mercato.usato || mercato.usato.n < SX_USATI_OK){
+    return `ho solo ${mercato.usato?mercato.usato.n:0} annunci dell'usato con un prezzo, ne servono ${SX_USATI_OK}`;
+  }
+  const larghezza=(mercato.usato.q3-mercato.usato.q1)/mercato.usato.mediana;
+  if(larghezza>SX_SPARSI) return 'i prezzi dell\'usato sono troppo sparsi per dire un numero';
+  if(medianaPrima && Math.abs(mercato.usato.mediana-medianaPrima)/medianaPrima > SX_STABILE){
+    return 'la mediana si sta ancora muovendo';
+  }
+  return null;
+}
+
+// La fiducia la calcola il codice dai dati, non la dichiara il modello: un
+// modello a cui si chiede quanto e' sicuro risponde quasi sempre "media".
+function sxFiducia(mercato){
+  if(!mercato.usato || mercato.usato.n<3){
+    return { livello:'bassa', perche:`solo ${mercato.usato?mercato.usato.n:0} annunci dell'usato con un prezzo leggibile` };
+  }
+  const largh=(mercato.usato.q3-mercato.usato.q1)/mercato.usato.mediana;
+  if(mercato.usato.n>=8 && largh<=0.45){
+    return { livello:'alta', perche:`${mercato.usato.n} annunci dell'usato, e i prezzi stanno vicini fra loro` };
+  }
+  if(mercato.usato.n>=SX_USATI_OK && largh<=SX_SPARSI){
+    return { livello:'media', perche:`${mercato.usato.n} annunci dell'usato, prezzi abbastanza vicini` };
+  }
+  return { livello:'bassa', perche:`${mercato.usato.n} annunci, ma con prezzi molto diversi fra loro` };
+}
+
+/* ============ 4. IL VERDETTO ============ */
+
+// Prima gli annunci dell'usato con un prezzo: se la lista va tagliata, si
+// perde un listino di negozio, non la prova su cui si decide.
+function sxOrdina(prove){
+  const peso=p=>(p.pertinente?4:0)+(p.mercato==='usato'?2:0)+(p.prezzo?1:0);
+  return prove.slice().sort((a,b)=>peso(b)-peso(a)).slice(0,SX_PROVE_PROMPT);
+}
+
+async function sxVerdetto(identita, mercato, prove){
+  const i=sxPasso('Leggo i prezzi e decido');
+  const u=mercato.usato, n=mercato.nuovo;
+  const elenco=prove.map((r,k)=>
+    `${k+1}. [${r.pertinente?r.mercato:'fuori tema'}] ${String(r.titolo).slice(0,80)} — ${r.fonte||'fonte ignota'}`
+    + (r.prezzo?` — ${r.prezzo.valore}${r.prezzo.valuta}`:' — prezzo non leggibile')).join('\n');
+
+  const r=await callAIJson({
+    type:'text',
+    json:true,
+    prompt:`Sei un esperto del mercato italiano dell'usato e devi dire a quanto mettere in vendita questo capo su Vinted Italia.
+
+CAPO SCANSIONATO:
+${sxDescrivi(identita)}
+
+PREZZI DEGLI ANNUNCI DELL'USATO (gia' separati dai listini dei negozi e ripuliti dagli estremi):
+- ${u.n} annunci, da ${u.min}€ a ${u.max}€
+- meta' degli annunci sta fra ${u.q1}€ e ${u.q3}€, la mediana e' ${u.mediana}€
+${n?`\nPREZZI DEI NEGOZI (il NUOVO, che fa da tetto): mediana ${n.mediana}€ su ${n.n} risultati.${mercato.tenuta?` L'usato vale circa il ${mercato.tenuta}% del nuovo.`:''}`:'\nNessun prezzo del nuovo trovato.'}
+
+RISULTATI SU CUI SI BASA TUTTO (numerati, col mercato di provenienza fra parentesi quadre):
+${elenco}
+
+REGOLE:
+- il prezzo consigliato deve stare fra ${u.q1}€ e ${u.q3}€, che e' dove sta meta' del mercato: se esci da li' devi dire nel campo "perche" quale risultato lo giustifica
+- usa SOLO i numeri qui sopra, mai la tua memoria dei prezzi
+- i risultati marcati "nuovo" sono prezzi di negozio, i "fuori tema" non parlano di questo capo: non contarli come prova di quanto si vende
+- cita i risultati per numero, es. "(3)"
+- "veloce" e' il prezzo per vendere in pochi giorni, "paziente" quello per cui vale la pena aspettare: sono due numeri diversi, ed e' la cosa piu' utile da sapere per chi vende
+
+Rispondi SOLO con questo JSON valido, senza backtick né markdown:
+{"lettura":"3-4 frasi su cosa dice il mercato per questo capo, con i numeri","prezzoConsigliato":${u.mediana},"prezzoVeloce":${u.q1},"prezzoPaziente":${u.q3},"perche":["osservazione col numero del risultato che la sostiene"],"rischi":["cosa potrebbe rendere sbagliata questa stima"],"consigli":["consiglio pratico per vendere questo capo"]}`
+  });
+
+  if(!r.ok){
+    sxChiudi(i,'ko','il modello non ha risposto in JSON');
+    throw new Error('Verdetto non interpretabile, riprova.');
+  }
+  sxChiudi(i,'fatto');
+  return r.data;
+}
+
+/* ============ LA RESA A SCHERMO ============ */
+
+// Il prezzo del modello riportato dentro la banda degli annunci veri. Non e'
+// un ritocco nascosto: quando succede la pagina lo scrive, perche' un numero
+// corretto di nascosto e' peggio di uno sbagliato in chiaro.
+function sxDentroBanda(valore, u){
+  if(valore===null || !u) return { valore, spostato:false };
+  if(valore>=u.min && valore<=u.max) return { valore, spostato:false };
+  return { valore: Math.min(u.max, Math.max(u.min, valore)), spostato:true };
+}
+
+function sxDisegna(){
+  const s=lastScan, d=s.verdetto||{}, u=s.mercato.usato, n=s.mercato.nuovo;
+  const fiducia=u?sxFiducia(s.mercato):{ livello:'nessuna', perche:'nessun annuncio dell\'usato trovato' };
+
+  const grezzo=num(d.prezzoConsigliato,null,0,100000);
+  const corretto=sxDentroBanda(grezzo,u);
+  const prezzo=corretto.valore;
+  const veloce=sxDentroBanda(num(d.prezzoVeloce,null,0,100000),u).valore;
+  const paziente=sxDentroBanda(num(d.prezzoPaziente,null,0,100000),u).valore;
+
+  const identita=[
+    ['Capo', s.identita.tipo], ['Marca', s.identita.marca], ['Modello', s.identita.modello],
+    ['Materiale', s.identita.materiale], ['Taglia', s.identita.taglia], ['Colore', s.identita.colore],
+    ['Condizione', s.identita.condizione], ['Epoca', s.identita.epoca], ['Difetti', s.identita.difetti]
+  ].filter(r=>r[1]);
+
+  const fonti={ etichetta:'letto sull\'etichetta', foto:'visto in foto', lente:'riconosciuto da Lens', tu:'detto da te' };
+  let html='<div class="rl" style="margin-top:0">🧾 Identità del capo</div>'
+    + identita.map(r=>`<div class="sxr"><span class="sxk">${esc(r[0])}</span>`
+      + `<span class="sxv">${esc(r[1].v)}</span>`
+      + `<span class="sxf${r[1].f==='etichetta'?' letta':''}">${esc(fonti[r[1].f]||r[1].f)}</span></div>`).join('');
+
+  if(u){
+    html+=`<div class="rl" style="margin-top:20px">💶 Il prezzo</div>`
+      + `<div class="ph"><span class="pn">${prezzo!==null?prezzo+'€':'—'}</span>`
+      + `<span class="pr">${veloce!==null&&paziente!==null?`veloce ${veloce}€ · paziente ${paziente}€`:''}</span></div>`
+      + sxBanda(u, prezzo)
+      + `<div class="agm">`
+      + sxValore(u.mediana+'€', `Mediana di ${u.n} annunci usati`)
+      + sxValore(`${u.q1}–${u.q3}€`, 'Dove sta metà del mercato')
+      + (n?sxValore(n.mediana+'€', `Nuovo in negozio${s.mercato.tenuta?` · l'usato ne vale il ${s.mercato.tenuta}%`:''}`):'')
+      + sxValore(fiducia.livello, 'Fiducia')
+      + `</div>`
+      + `<div class="hSub" style="margin-bottom:12px">Fiducia ${esc(fiducia.livello)}: ${esc(fiducia.perche)}.</div>`;
+    if(corretto.spostato){
+      html+=`<div class="tip">⚠️ Il prezzo proposto dal modello era ${grezzo}€, fuori dai prezzi trovati: l'ho riportato dentro la banda degli annunci veri (${u.min}–${u.max}€).</div>`;
+    }
+    if(u.scartati.length){
+      html+=`<div class="hSub" style="margin:10px 0">Scartati come fuori scala: ${u.scartati.map(x=>x+'€').join(', ')}.</div>`;
+    }
+  }else{
+    html+=`<div class="tip">⚠️ Non ho trovato nessun annuncio dell'usato con un prezzo leggibile, quindi non dico un numero: sarebbe inventato. `
+      + esc(s.erroreRicerca ? s.erroreRicerca.message : 'Riprova col nome del modello, o aggiungi la foto dell\'etichetta.')+`</div>`;
+  }
+
+  if(d.lettura) html+=`<p style="font-size:14px;line-height:1.7;color:#fff;margin:14px 0 12px">${esc(d.lettura)}</p>`;
+  const perche=Array.isArray(d.perche)?d.perche:[];
+  if(perche.length){
+    html+=`<ul style="list-style:none;margin-bottom:6px">${perche.map((o,i)=>`<li class="fli" style="--i:${i}"><span class="fdot"></span>${esc(o)}</li>`).join('')}</ul>`;
+  }
+  (Array.isArray(d.rischi)?d.rischi:[]).forEach(r=>{ html+=`<div class="tip">⚠️ ${esc(r)}</div>`; });
+  (Array.isArray(d.consigli)?d.consigli:[]).forEach(c=>{ html+=`<div class="tip">💡 ${esc(c)}</div>`; });
+
+  if(s.motivoStop) html+=`<div class="hSub" style="margin-top:14px">Mi sono fermato qui perché ${esc(s.motivoStop)}.</div>`;
+
+  const etichette={ usato:'annuncio usato', nuovo:'negozio, prezzo del nuovo', incerto:'mercato non chiaro' };
+  const scartati=(u && u.scartati) ? u.scartati : [];
+  const marca=r=>{
+    if(!r.pertinente) return { classe:'fuori', testo:'parla di un altro capo' };
+    if(r.prezzo && r.mercato==='usato' && scartati.includes(r.prezzo.valore)){
+      return { classe:'fuori', testo:'prezzo fuori scala, non conta' };
+    }
+    return { classe:r.mercato==='usato'?'usato':'', testo:etichette[r.mercato]||r.mercato };
+  };
+  html+=`<div class="rl" style="margin:20px 0 0">🔗 Su cosa si basa</div>`
+    + s.prove.map((r,k)=>`
+      <div class="lr${marca(r).classe==='fuori'?' fuori':''}" style="--i:${k}">
+        <div class="lrn" aria-hidden="true">${k+1}</div>
+        <div style="flex:1;min-width:0">
+          <div class="lrt">${r.link?`<a href="${esc(r.link)}" target="_blank" rel="noopener noreferrer" style="color:inherit">${esc(r.titolo)}</a>`:esc(r.titolo)}</div>
+          <div class="lrs">${esc(r.fonte)}</div>
+          <span class="sxT ${marca(r).classe}">${esc(marca(r).testo)}</span>
+        </div>
+        ${r.prezzo?`<div class="lrp">${r.prezzo.valore}${esc(r.prezzo.valuta)}</div>`:''}
+      </div>`).join('');
+
+  document.getElementById('rSxBody').innerHTML=html;
+
+  lastScan.prezzo=prezzo; lastScan.veloce=veloce; lastScan.paziente=paziente; lastScan.fiducia=fiducia;
+
+  upsertHistoryItem(itemIdFor(sxNomeCapo(), sxVal(s.identita.marca)), {
+    nome: sxNomeCapo(), marca: sxVal(s.identita.marca),
+    taglia: sxVal(s.identita.taglia), condizione: sxVal(s.identita.condizione),
+    prezzoSuggerito: prezzo === null ? undefined : prezzo,
+    rangeMin: veloce === null ? undefined : veloce,
+    rangeMax: paziente === null ? undefined : paziente,
+    consiglio: (Array.isArray(d.consigli) && d.consigli[0]) || undefined,
+    foto: lastThumbnail || undefined
+  });
+
+  sxTesto=[
+    sxDescrizioneBreve(s.identita),
+    prezzo!==null?`Prezzo consigliato: ${prezzo}€${veloce!==null&&paziente!==null?` (veloce ${veloce}€, paziente ${paziente}€)`:''}`:'',
+    u?`Mediana di ${u.n} annunci usati: ${u.mediana}€, metà del mercato fra ${u.q1}€ e ${u.q3}€`:'',
+    n?`Nuovo in negozio: ${n.mediana}€`:'',
+    `Fiducia ${fiducia.livello}: ${fiducia.perche}`,
+    d.lettura||'',
+    perche.length?'\n'+perche.map(o=>'- '+o).join('\n'):''
+  ].filter(Boolean).join('\n').trim();
+}
+
+function sxValore(numero, etichetta){
+  return `<div class="agv"><div class="agvn">${esc(String(numero))}</div><div class="agvl">${esc(etichetta)}</div></div>`;
+}
+
+// La banda: il tratto va dal minimo al massimo degli annunci usati, il pieno
+// e' il quartile centrale, il segno e' il prezzo scelto.
+function sxBanda(u, prezzo){
+  const larghezza=Math.max(1, u.max-u.min);
+  const pos=x=>Math.max(0, Math.min(100, (x-u.min)/larghezza*100));
+  const a=pos(u.q1), b=pos(u.q3);
+  return `<div class="sxBand" role="img" aria-label="Gli annunci usati vanno da ${u.min} a ${u.max} euro, metà stanno fra ${u.q1} e ${u.q3}${prezzo!==null?`, prezzo scelto ${prezzo}`:''}">`
+    + `<div class="sxTrack"></div>`
+    + `<div class="sxIqr" style="left:${a}%;width:${Math.max(2,b-a)}%"></div>`
+    + (prezzo!==null?`<div class="sxMark" style="left:calc(${pos(prezzo)}% - 1px)"></div>`:'')
+    + `</div><div class="sxEnds"><span>${u.min}€</span><span>${u.max}€</span></div>`;
+}
+
+function sxNomeCapo(){
+  const id=lastScan?lastScan.identita:{};
+  return sxVal(id.modello) || sxVal(id.tipo) || 'Capo scansionato';
+}
+
+function copiaScanner(btn){ copyText(sxTesto).then(ok=>{ if(ok) confermaBottone(btn); }); }
+
+// Lo scanner ha gia' letto tutto quello che l'annuncio chiede: passare di la'
+// non deve voler dire riscriverlo a mano.
+function scannerPerAnnuncio(){
+  if(!lastScan) return;
+  const id=lastScan.identita;
+  const set=(campo,valore)=>{ const el=document.getElementById(campo); if(el && valore) el.value=String(valore).slice(0,80); };
+  set('aNome', sxVal(id.tipo)); set('aMarca', sxVal(id.marca));
+  set('aTaglia', sxVal(id.taglia)); set('aColore', sxVal(id.colore));
+  set('aMat', sxVal(id.materiale));
+  document.getElementById('aNote').value=[sxVal(id.difetti), sxVal(id.tuo)].filter(Boolean).join('. ').slice(0,300);
+  applyCondizione('aCond', sxVal(id.condizione));
+  sw('annuncio');
+  toast('✍️ Dati passati all\'annuncio');
+}
+
+function scannerPerPrezzo(){
+  if(!lastScan) return;
+  const id=lastScan.identita;
+  if(!v('pNome')) document.getElementById('pNome').value=sxNomeCapo().slice(0,80);
+  if(sxVal(id.marca) && !v('pMarca')) document.getElementById('pMarca').value=sxVal(id.marca).slice(0,80);
+  if(sxVal(id.tipo) && !v('pCat')) document.getElementById('pCat').value=sxVal(id.tipo).slice(0,80);
+  applyCondizione('pCond', sxVal(id.condizione));
+  sw('prezzo');
+  toast('💶 Scansione agganciata alla stima');
+}
+
 
 /* ===== STORICO (localStorage, solo su questo device) ===== */
 const HISTORY_KEY = 'vintedAiHistory';

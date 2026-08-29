@@ -32,13 +32,13 @@ async function apri(browser, opzioni) {
   console.log('\n-- il sole e la home: i raggi sono le funzioni --');
   check('la pagina si apre sul sole', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-sole', await page.evaluate(() => document.querySelector('.tp.on').id));
   check('il sole vive fuori dalle schede, non dentro la home', await page.evaluate(() => !document.getElementById('tab-sole').querySelector('.soleWrap') && !!document.querySelector('#soleApp .soleWrap')));
-  check('cinque raggi, una funzione ciascuno', await page.evaluate(() => document.querySelectorAll('.raggio').length) === 5);
+  check('sei raggi, una funzione ciascuno', await page.evaluate(() => document.querySelectorAll('.raggio').length) === 6);
   const raggi = await page.evaluate(() => Array.from(document.querySelectorAll('.raggio')).map(r => ({
     scheda: r.dataset.scheda, ruolo: r.getAttribute('role'), nome: r.getAttribute('aria-label'),
     etichetta: r.querySelector('.rEti').textContent, tab: r.getAttribute('tabindex')
   })));
   check('sono bottoni veri, non disegni', raggi.every(r => r.ruolo === 'button' && r.tab === '0' && r.nome && r.nome.length > 5), raggi);
-  check('e dicono a voce cosa fanno', raggi.map(r => r.etichetta).join(',') === 'ANALIZZA,ANNUNCIO,PREZZO,RICERCA,STORICO', raggi.map(r => r.etichetta));
+  check('e dicono a voce cosa fanno', raggi.map(r => r.etichetta).join(',') === 'ANALIZZA,ANNUNCIO,PREZZO,RICERCA,STORICO,SCANNER', raggi.map(r => r.etichetta));
 
   const doveSta = () => page.evaluate(() => {
     const d = document.querySelector('#soleApp .disco').getBoundingClientRect();
@@ -251,8 +251,10 @@ async function apri(browser, opzioni) {
     return getComputedStyle(s).color === 'rgb(232, 200, 74)';
   }), await page.evaluate(() => getComputedStyle(document.querySelector('.soleSpin')).color));
   check('gira mentre l\'app lavora', await page.evaluate(() => getComputedStyle(document.querySelector('.soleSpin')).animationName) === 'spin');
-  check('sorge dietro ogni risultato', await page.evaluate(() => document.querySelectorAll('.res .alba').length) === 4,
-    await page.evaluate(() => document.querySelectorAll('.res .alba').length));
+  check('sorge dietro ogni risultato', await page.evaluate(() => {
+    const res = Array.from(document.querySelectorAll('.res'));
+    return res.length >= 4 && res.every(r => r.querySelector(':scope > .alba'));
+  }), await page.evaluate(() => Array.from(document.querySelectorAll('.res')).map(r => r.id + ':' + !!r.querySelector(':scope > .alba'))));
   check('ma resta dietro: non si puo cliccare', await page.evaluate(() => getComputedStyle(document.querySelector('.alba')).pointerEvents) === 'none');
   check('e non lo legge chi usa uno screen reader', await page.evaluate(() => Array.from(document.querySelectorAll('.alba,.soleSpin,.soleLogo')).every(e => e.getAttribute('aria-hidden') === 'true')));
   await page.evaluate(() => sw('storico'));

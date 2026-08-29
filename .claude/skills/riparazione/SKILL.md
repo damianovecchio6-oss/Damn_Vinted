@@ -48,6 +48,10 @@ lanciare. `(x || {}).campo` invece di `x.campo` costa niente e salva un'ora.
 | un raggio si apre da solo finendo un giro | la guardia `giroConScatti`, che si azzera a ogni tocco nuovo |
 | lo storico perde dei campi | `soloNoti()`: un patch non cancella quello che non contiene |
 | dati di un capo nella stima di un altro | `stessoCapo()` |
+| lo scanner dice un prezzo che non c'entra | la separazione usato/nuovo: `sxDoveSta()` (dominio prima del testo) e `sxPertinente()` |
+| una mediana tirata da un solo annuncio strano | `sxSenzaEstremi()`, la regola dei quartili |
+| lo scanner brucia quota | `SX_MAX_GIRI`/`SX_MAX_RICERCHE`, e `sxFatte` che impedisce di ripetere una query |
+| lo scanner non si ferma mai, o si ferma subito | `sxLacuna()`: e' lei a decidere se il quadro sta in piedi |
 | risorse esterne che non caricano una volta pubblicate | la CSP in `public/_headers` |
 
 **Il deploy**
