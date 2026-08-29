@@ -681,6 +681,11 @@ let selezione = 0;
 // click lo aprirebbe: qui si distingue "ho girato" da "ho toccato". A tempo
 // (un quarto di secondo) mangiava anche i tocchi veri subito dopo un giro.
 let giroConScatti = false;
+// Il tocco lo gestiamo sul rilascio del dito e non sul click, perche' il click
+// sul telefono non arriva sempre: dopo un giro il browser lo sopprime, e il
+// tasto centrale non apriva niente. Il click resta per mouse e tastiera, con
+// questa spia che evita di fare la stessa cosa due volte.
+let attivatoDaTocco = false, partenza = null;
 
 function nomeDi(raggio){
   const eti = raggio.querySelector('.rEti');
@@ -716,10 +721,6 @@ function apriRaggio(raggio){
 }
 
 RAGGI.forEach(raggio=>{
-  raggio.addEventListener('click', ()=>{
-    if(giroConScatti) return;   // era la fine di un giro, non un tocco
-    apriRaggio(raggio);
-  });
   raggio.addEventListener('keydown', e=>{
     if(e.key==='Enter'||e.key===' '){ e.preventDefault(); apriRaggio(raggio); }
   });
@@ -736,21 +737,23 @@ if(soleApp){
 
   const angolo = (e, centro)=>Math.atan2(e.clientY - centro.y, e.clientX - centro.x) * 180 / Math.PI;
 
+  // Un disegno e' trascinabile di default, e il trascinamento nativo si mangia
+  // movimenti e rilascio: la ghiera si bloccava dopo il primo giro. Va fermato
+  // qui e non sul pointerdown, dove porterebbe via anche il tap sul telefono.
+  soleApp.addEventListener('dragstart', e=>e.preventDefault());
+
   soleApp.addEventListener('pointerdown', e=>{
     // Ogni tocco nuovo riparte pulito: se il ripristino stesse dopo i
     // controlli qui sotto, un tocco al centro (che li salta) resterebbe
     // marchiato come "fine di un giro" e non aprirebbe niente.
     giroConScatti = false;
+    partenza = { x:e.clientX, y:e.clientY };
     if(parcheggiato()) return;
     const r = disegno.getBoundingClientRect();
     const centro = { x:r.x + r.width/2, y:r.y + r.height/2 };
     // Il dito deve partire sulla corona, non sul disco: al centro c'e' il tasto.
     const distanza = Math.hypot(e.clientX - centro.x, e.clientY - centro.y);
     if(distanza < r.width * 0.17) return;
-    // Senza questo il browser avvia il trascinamento nativo del disegno al
-    // primo movimento: da li' in poi non arrivano piu' ne' i movimenti ne' il
-    // rilascio, e la ghiera si blocca dopo il primo giro.
-    e.preventDefault();
     giro = { centro, ultimo:angolo(e, centro), residuo:0 };
     // I movimenti si ascoltano sulla finestra, non sul sole: girando, il dito
     // esce e rientra dal disegno in continuazione, e dentro un <svg> il vuoto
@@ -794,14 +797,28 @@ if(soleApp){
     scatta(e.deltaY > 0 || e.deltaX > 0 ? 1 : -1);
   }, { passive:false });
 
-  /* --- il tasto centrale, e il ritorno quando il sole e' parcheggiato --- */
-  soleApp.addEventListener('click', e=>{
-    if(daRaggio(e)) return;      // il raggio si apre da solo
-    if(giroConScatti) return;    // era la fine di un giro, non un tocco
+  /* --- l'attivazione: un raggio, il tasto centrale, o il ritorno --- */
+  function attiva(e){
     if(parcheggiato()){ tocco(8); sw('sole'); return; }
-    // A casa, un tocco che non e' su un raggio preme il tasto centrale: apre
-    // quello che il disco sta mostrando.
-    apriRaggio(RAGGI[selezione]);
+    const raggio = e.target && e.target.closest && e.target.closest('.raggio');
+    // Fuori dai raggi si e' premuto il centro: apre quello che il disco mostra.
+    apriRaggio(raggio || RAGGI[selezione]);
+  }
+
+  soleApp.addEventListener('pointerup', e=>{
+    const da = partenza;
+    partenza = null;
+    if(giroConScatti) return;                 // era un giro, non un tocco
+    if(da && Math.hypot(e.clientX - da.x, e.clientY - da.y) > 12) return;
+    attivatoDaTocco = true;
+    setTimeout(()=>{ attivatoDaTocco = false; }, 500);
+    attiva(e);
+  });
+
+  soleApp.addEventListener('click', e=>{
+    if(attivatoDaTocco) return;  // ci ha gia' pensato il rilascio del dito
+    if(giroConScatti) return;    // era la fine di un giro
+    attiva(e);
   });
 
   disegno.setAttribute('tabindex','0');
