@@ -2,9 +2,17 @@
   publish = "."
   functions = "netlify/functions"
 
+[build.environment]
+  # Senza questo Netlify sceglie da sola la versione di Node delle function,
+  # e puo' cambiarla sotto i piedi al primo deploy dopo un aggiornamento loro.
+  NODE_VERSION = "20"
+
 # Il publish dir e' la root del repo, quindi il sorgente delle function sarebbe
 # raggiungibile come file statico su /netlify/functions/claude.js. Blocchiamolo.
+# force = true e' obbligatorio: senza, Netlify serve il file esistente e la
+# regola non scatta mai (i redirect valgono solo per i percorsi senza file).
 [[redirects]]
   from = "/netlify/*"
   to = "/index.html"
   status = 404
+  force = true

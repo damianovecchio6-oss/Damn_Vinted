@@ -3,3 +3,10 @@
   Referrer-Policy: strict-origin-when-cross-origin
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+
+# Le foto passano dal file picker di sistema, non da getUserMedia: negare la
+# camera qui non toglie niente all'app.
+
+/index.html
+  Cache-Control: no-cache
