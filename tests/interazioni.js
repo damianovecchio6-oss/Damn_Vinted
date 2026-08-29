@@ -29,6 +29,36 @@ async function apri(browser, opzioni) {
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
 
+  console.log('\n-- il sole e la home: i raggi sono le funzioni --');
+  check('la pagina si apre sul sole', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-sole', await page.evaluate(() => document.querySelector('.tp.on').id));
+  check('e la barra in basso si toglie di mezzo', await page.evaluate(() => getComputedStyle(document.querySelector('.nav')).display) === 'none');
+  check('nessuna voce in basso risulta accesa', await page.evaluate(() => document.querySelectorAll('.nb.on').length) === 0);
+  check('cinque raggi, una funzione ciascuno', await page.evaluate(() => document.querySelectorAll('.raggio').length) === 5);
+  const raggi = await page.evaluate(() => Array.from(document.querySelectorAll('.raggio')).map(r => ({
+    scheda: r.dataset.scheda, ruolo: r.getAttribute('role'), nome: r.getAttribute('aria-label'),
+    etichetta: r.querySelector('.rEti').textContent, tab: r.getAttribute('tabindex')
+  })));
+  check('sono bottoni veri, non disegni', raggi.every(r => r.ruolo === 'button' && r.tab === '0' && r.nome && r.nome.length > 5), raggi);
+  check('e dicono a voce cosa fanno', raggi.map(r => r.etichetta).join(',') === 'ANALIZZA,ANNUNCIO,PREZZO,RICERCA,STORICO', raggi.map(r => r.etichetta));
+
+  await page.click('.raggio[data-scheda="ricerca"] .presa');
+  await page.waitForTimeout(320);
+  check('toccare un raggio apre la sua funzione', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-ricerca');
+  check('e la barra in basso torna', await page.evaluate(() => getComputedStyle(document.querySelector('.nav')).display) !== 'none');
+  check('col raggio giusto acceso in basso', await page.evaluate(() => document.querySelector('.nb.on').id) === 'nav-ricerca');
+
+  await page.click('.logo');
+  await page.waitForTimeout(120);
+  check('il logo riporta al sole', await page.evaluate(() => document.body.classList.contains('home')));
+  check('e la riga della barra si ritira invece di restare accesa', await page.evaluate(() => document.querySelector('.nav').style.getPropertyValue('--nbw')) === '0px');
+
+  await page.evaluate(() => document.querySelector('.raggio[data-scheda="prezzo"]').focus());
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(320);
+  check('i raggi si aprono anche da tastiera', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-prezzo');
+
+  // Da qui in poi si prova la navigazione dentro le funzioni: si resta fuori
+  // dalla home, dove la barra in basso non c'e'.
   console.log('\n-- la riga della nav segue la scheda --');
   const barra = () => page.evaluate(() => {
     const nav = document.querySelector('.nav');

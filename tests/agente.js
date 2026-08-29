@@ -58,6 +58,9 @@ const RISULTATO = (titolo, prezzo, fonte) => ({
   });
 
   await page.goto('http://127.0.0.1:8896/', { waitUntil: 'load' });
+  // La pagina ora si apre sul sole: le prove che seguono partono da dentro una
+  // funzione, come se ci fossi arrivato toccando il suo raggio.
+  await page.evaluate(() => sw('foto'));
   const reset = () => { aiPost = []; ricPost = []; };
   const compila = async (nome, marca) => {
     await page.fill('#sNome', nome); await page.fill('#sMarca', marca);

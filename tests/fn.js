@@ -79,10 +79,17 @@ const hdr = (ip, extra) => Object.assign({ origin: SITE, host: HOST, 'x-nf-clien
 
   console.log('\n-- rate limit --');
   let last;
+  // Il tempo resta fermo mentre si bussa 22 volte: su una macchina carica quel
+  // giro puo' durare piu' di un minuto, la finestra scorre e il 429 non arriva.
+  // E' il test a essere fragile, non il rate limit.
+  const oraFissa = Date.now();
+  const veroNow = Date.now;
+  Date.now = () => oraFissa;
   for (let i = 0; i < 22; i++) last = await fn.handler(ev({ httpMethod: 'GET', headers: hdr('4.0.0.1') }));
   check('oltre 20 richieste/min -> 429', last.statusCode === 429, last.statusCode);
   r = await fn.handler(ev({ httpMethod: 'GET', headers: hdr('4.0.0.2') }));
   check('altro IP non e\' penalizzato', r.statusCode === 200, r.statusCode);
+  Date.now = veroNow;
 
   console.log('\n-- nessun errore rimanda dettagli interni --');
   const leaky = [];
