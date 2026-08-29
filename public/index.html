@@ -202,8 +202,24 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
 .spin{width:22px;height:22px;border:3px solid var(--bd);border-top-color:var(--t);border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* il sole del foglio: logo, attesa, e l'alba dietro il risultato */
+.soleLogo{width:30px;height:30px;color:#111}
+/* La seconda versione del foglio, il sole con la luna sopra: sta dove non c'e'
+   ancora niente da vedere. */
+.soleVuoto{width:56px;height:56px;color:var(--bd);display:block;margin:0 auto 12px}
+.soleSpin{width:26px;height:26px;color:var(--t);flex-shrink:0;animation:spin 3.2s linear infinite}
+/* Dietro al risultato, all'angolo: sorge quando la card compare e resta li'
+   come texture. Al 9% e' presenza, non decorazione che urla. */
+.alba{
+  position:absolute;top:-30px;right:-22px;width:116px;height:116px;
+  color:var(--t);opacity:.12;pointer-events:none;
+  animation:alba .9s cubic-bezier(.2,.8,.2,1) both;
+}
+@keyframes alba{from{transform:translateY(46px) rotate(-28deg);opacity:0}to{transform:none;opacity:.12}}
+
 /* result */
 .res{
+  position:relative;overflow:hidden;
   background:var(--card);border:1px solid var(--bd);
   border-left:3px solid var(--t);
   border-radius:12px;padding:20px;margin-top:14px;
@@ -284,10 +300,28 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
 </style>
 </head>
 <body>
+<!-- I due disegni del foglio, ridisegnati al pulito: raggi irregolari come a
+     matita. Stanno qui come <symbol> e non come <img> perche' cosi' prendono
+     il colore dal CSS (currentColor) e non costano una richiesta in piu'. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="ico-sole" viewBox="0 0 100 100">
+    <circle cx="50" cy="50" r="30"/>
+    <path d="M44.3 20.6 L50.0 4.0 L55.7 20.6 Z M68.9 26.7 L81.2 21.9 L75.2 33.7 Z M79.5 44.8 L97.0 51.6 L79.1 57.3 Z M73.6 68.5 L78.5 79.5 L67.6 74.3 Z M55.2 79.5 L50.0 95.0 L44.8 79.5 Z M33.2 74.9 L20.1 80.9 L25.7 67.6 Z M20.8 56.7 L2.0 51.7 L20.4 45.3 Z M24.8 33.7 L18.8 21.9 L31.1 26.7 Z"/>
+  </symbol>
+  <symbol id="ico-sole-luna" viewBox="0 0 100 100">
+    <mask id="mascheraLuna">
+      <rect width="100" height="100" fill="#fff"/>
+      <circle cx="66" cy="40" r="26" fill="#000"/>
+    </mask>
+    <circle cx="50" cy="50" r="30" mask="url(#mascheraLuna)"/>
+    <path d="M44.3 20.6 L50.0 4.0 L55.7 20.6 Z M68.9 26.7 L81.2 21.9 L75.2 33.7 Z M79.5 44.8 L97.0 51.6 L79.1 57.3 Z M73.6 68.5 L78.5 79.5 L67.6 74.3 Z M55.2 79.5 L50.0 95.0 L44.8 79.5 Z M33.2 74.9 L20.1 80.9 L25.7 67.6 Z M20.8 56.7 L2.0 51.7 L20.4 45.3 Z M24.8 33.7 L18.8 21.9 L31.1 26.7 Z"/>
+  </symbol>
+</svg>
+
 <div class="shell">
   <div style="font-family:'Bebas Neue',sans-serif;font-size:72px;font-weight:400;color:#ffffff;letter-spacing:8px;text-align:center;padding-top:32px;line-height:1;background:linear-gradient(180deg,#ffffff 0%,#e8c84a 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">DAMN</div>
 <div class="hdr">
-    <div class="logo">🛹</div>
+    <div class="logo"><svg class="soleLogo" aria-hidden="true"><use href="#ico-sole"/></svg></div>
     <div><h1>VINTED AI</h1><p>// Street Fashion Assistant</p></div>
   </div>
 
@@ -304,9 +338,10 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
       <div class="ps" id="ps"></div>
       <button class="btn" id="btnA" disabled onclick="analyzePhoto()" style="margin-top:16px">🔍 Analizza con AI</button>
     </div>
-    <div class="loader" id="lFoto" role="status" aria-live="polite" style="display:none"><div class="spin"></div>Analisi immagine…</div>
+    <div class="loader" id="lFoto" role="status" aria-live="polite" style="display:none"><svg class="soleSpin" aria-hidden="true"><use href="#ico-sole"/></svg>Analisi immagine…</div>
     <div class="err" id="eFoto" role="alert" aria-live="assertive" style="display:none"></div>
     <div class="res" id="rFoto" style="display:none">
+      <svg class="alba" aria-hidden="true"><use href="#ico-sole"/></svg>
       <div class="rl">✨ Risultato Analisi</div>
       <div class="rt" id="rFotoTxt"></div>
       <div id="rFotoModel" style="font-size:10px;color:var(--mu);margin-top:12px;letter-spacing:.5px;text-transform:uppercase"></div>
@@ -316,7 +351,7 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
         <button class="cbtn" onclick="toRicerca()">🤖 Ricerca online</button>
         <button class="cbtn" onclick="toAnnuncio()">➡️ Usa per annuncio</button>
       </div>
-      <div class="loader" id="lLens" role="status" aria-live="polite" style="display:none"><div class="spin"></div>Cerco il prodotto…</div>
+      <div class="loader" id="lLens" role="status" aria-live="polite" style="display:none"><svg class="soleSpin" aria-hidden="true"><use href="#ico-sole"/></svg>Cerco il prodotto…</div>
       <div class="err" id="eLens" role="alert" aria-live="assertive" style="display:none"></div>
       <div class="lens" id="rLens" style="display:none"></div>
     </div>
@@ -355,9 +390,10 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
       <div class="fg"><label class="fl" for="aNote">Dettagli aggiuntivi</label><textarea class="fc" id="aNote" placeholder="Difetti, misure, motivo della vendita…"></textarea></div>
       <button class="btn" id="btnG" onclick="genAnnuncio()">✨ Genera Annuncio AI</button>
     </div>
-    <div class="loader" id="lAnn" role="status" aria-live="polite" style="display:none"><div class="spin"></div>Scrittura annuncio…</div>
+    <div class="loader" id="lAnn" role="status" aria-live="polite" style="display:none"><svg class="soleSpin" aria-hidden="true"><use href="#ico-sole"/></svg>Scrittura annuncio…</div>
     <div class="err" id="eAnn" role="alert" aria-live="assertive" style="display:none"></div>
     <div class="res" id="rAnn" style="display:none">
+      <svg class="alba" aria-hidden="true"><use href="#ico-sole"/></svg>
       <div class="rl">📝 Il tuo Annuncio</div>
       <div id="rAnnTitolo" style="font-size:16px;font-weight:700;margin-bottom:6px;color:#ffffff"></div>
       <div id="rAnnDesc" style="font-size:14px;line-height:1.8;white-space:pre-wrap;color:#ffffff;margin-bottom:8px"></div>
@@ -396,9 +432,10 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
       </div>
       <button class="btn" id="btnP" onclick="stimaPrezzo()">💡 Stima Prezzo AI</button>
     </div>
-    <div class="loader" id="lPre" role="status" aria-live="polite" style="display:none"><div class="spin"></div>Analisi mercato…</div>
+    <div class="loader" id="lPre" role="status" aria-live="polite" style="display:none"><svg class="soleSpin" aria-hidden="true"><use href="#ico-sole"/></svg>Analisi mercato…</div>
     <div class="err" id="ePre" role="alert" aria-live="assertive" style="display:none"></div>
     <div class="res" id="rPre" style="display:none">
+      <svg class="alba" aria-hidden="true"><use href="#ico-sole"/></svg>
       <div class="rl">💶 Stima di Mercato Vinted</div>
       <div class="ph"><span class="pn" id="pNum">—</span><span class="pr" id="pRng"></span></div>
       <div class="pbar"><div class="pf" id="pBar" style="width:0%"></div></div>
@@ -441,6 +478,7 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
     </div>
     <div class="err" id="eRic" role="alert" aria-live="assertive" style="display:none"></div>
     <div class="res" id="rRic" style="display:none">
+      <svg class="alba" aria-hidden="true"><use href="#ico-sole"/></svg>
       <div class="rl">📊 Rapporto di mercato</div>
       <div id="rRicBody"></div>
       <div class="crow">
@@ -458,7 +496,10 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
       <button class="btn" style="background:transparent;border:1px solid var(--re);color:var(--re)" onclick="clearHistoryConfirm()">🗑️ Cancella tutto lo storico</button>
     </div>
     <div id="historyList"></div>
-    <div id="historyEmpty" class="card" style="display:none;text-align:center;color:var(--mu)">Ancora nessun annuncio salvato. Genera un annuncio per vederlo qui.</div>
+    <div id="historyEmpty" class="card" style="display:none;text-align:center;color:var(--mu)">
+      <svg class="soleVuoto" aria-hidden="true"><use href="#ico-sole-luna"/></svg>
+      <div>Ancora nessun annuncio salvato. Genera un annuncio per vederlo qui.</div>
+    </div>
   </div>
 </div>
 

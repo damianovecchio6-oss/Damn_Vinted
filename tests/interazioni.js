@@ -140,6 +140,25 @@ async function apri(browser, opzioni) {
   }) === false);
   await fermo.close();
 
+  console.log('\n-- il sole del foglio --');
+  check('il disegno e definito una volta sola', await page.evaluate(() => document.querySelectorAll('#ico-sole').length) === 1);
+  check('e riusato dove serve', await page.evaluate(() => document.querySelectorAll('use[href="#ico-sole"]').length) >= 5,
+    await page.evaluate(() => document.querySelectorAll('use[href="#ico-sole"]').length));
+  check('prende il colore dal CSS, non dal file', await page.evaluate(() => {
+    const s = document.querySelector('.soleSpin');
+    return getComputedStyle(s).color === 'rgb(232, 200, 74)';
+  }), await page.evaluate(() => getComputedStyle(document.querySelector('.soleSpin')).color));
+  check('gira mentre l\'app lavora', await page.evaluate(() => getComputedStyle(document.querySelector('.soleSpin')).animationName) === 'spin');
+  check('sorge dietro ogni risultato', await page.evaluate(() => document.querySelectorAll('.res .alba').length) === 4,
+    await page.evaluate(() => document.querySelectorAll('.res .alba').length));
+  check('ma resta dietro: non si puo cliccare', await page.evaluate(() => getComputedStyle(document.querySelector('.alba')).pointerEvents) === 'none');
+  check('e non lo legge chi usa uno screen reader', await page.evaluate(() => Array.from(document.querySelectorAll('.alba,.soleSpin,.soleLogo')).every(e => e.getAttribute('aria-hidden') === 'true')));
+  await page.click('#nav-storico');
+  check('la versione sole+luna sta dove non c\'e ancora niente', await page.evaluate(() => {
+    const vuoto = document.getElementById('historyEmpty');
+    return vuoto.style.display !== 'none' ? !!vuoto.querySelector('use[href="#ico-sole-luna"]') : true;
+  }));
+
   console.log('\n-- errori JS accumulati --');
   check('nessun errore JS in tutta la sessione', errors.length === 0, errors);
 
