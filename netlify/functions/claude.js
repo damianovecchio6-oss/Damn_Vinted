@@ -27,8 +27,23 @@ const MAX_IMAGES = 4;
 // pagina di timeout di Netlify. Alzabile se l'account ha il limite esteso.
 const TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || 9000);
 
+// Groq ritira i modelli senza preavviso e l'app si spacca con
+// "the model does not exist". Questi sono solo i preferiti: se non esistono
+// piu', la function chiede a Groq quali ci sono e ripiega da sola (vedi
+// resolveModel). Le env var, se impostate, vengono provate per prime.
 const MODEL_TEXT = process.env.GROQ_MODEL_TEXT || 'llama-3.3-70b-versatile';
 const MODEL_VISION = process.env.GROQ_MODEL_VISION || 'meta-llama/llama-4-scout-17b-16e-instruct';
+
+// Ordine di gradimento, applicato a quello che Groq dichiara disponibile.
+const MODEL_PREFERENCES = {
+  image: [/llama-4-scout/i, /llama-4-maverick/i, /llama-4/i, /vision/i],
+  text: [/llama-3\.3-70b/i, /llama-3\.[12]-70b/i, /llama-3\.1-8b/i, /^openai\/gpt-oss/i, /llama-3/i]
+};
+
+// Un modello che non esiste piu' non torna esistente entro la vita del
+// container: memorizziamo la scelta invece di richiedere la lista ogni volta.
+const resolvedModel = {};
+let availableModels = null;
 
 function buildAllowlist() {
   const list = (process.env.ALLOWED_ORIGINS || '')
@@ -184,8 +199,9 @@ exports.handler = async (event) => {
       messages = [{ role: 'user', content: prompt }];
     }
 
+    const kind = type === 'image' ? 'image' : 'text';
     const request = {
-      model: type === 'image' ? MODEL_VISION : MODEL_TEXT,
+      model: resolvedModel[kind] || (kind === 'image' ? MODEL_VISION : MODEL_TEXT),
       messages,
       temperature: type === 'image' ? 0.2 : (body.creative ? 0.85 : 0.6),
       max_tokens: 1024
@@ -197,6 +213,24 @@ exports.handler = async (event) => {
     if (wantsJson) request.response_format = { type: 'json_object' };
 
     let result = await callGroq(request);
+
+    // Modello ritirato da Groq: chiediamo quali esistono e riproviamo con
+    // il migliore disponibile, invece di restituire un errore all'utente.
+    if (isModelMissing(result)) {
+      const fallback = await resolveModel(kind, request.model);
+      if (fallback) {
+        console.log(`Modello ${request.model} non disponibile, passo a ${fallback}`);
+        resolvedModel[kind] = fallback;
+        request.model = fallback;
+        result = await callGroq(request);
+      } else {
+        return json(502, cors, {
+          error: `Nessun modello ${kind === 'image' ? 'con visione' : 'di testo'} disponibile su Groq. `
+               + `Imposta ${kind === 'image' ? 'GROQ_MODEL_VISION' : 'GROQ_MODEL_TEXT'} con uno di: `
+               + (availableModels || []).slice(0, 12).join(', ')
+        });
+      }
+    }
 
     // Se il modello non digerisce response_format, riprova una volta senza.
     if (wantsJson && result.status >= 400 && /response_format|json/i.test(result.body || '')) {
@@ -242,6 +276,62 @@ function lowerKeys(obj) {
   const out = {};
   for (const key of Object.keys(obj)) out[key.toLowerCase()] = obj[key];
   return out;
+}
+
+// Groq risponde 404 con "does not exist or you do not have access to it"
+// quando il modello e' stato ritirato dal catalogo.
+function isModelMissing(result) {
+  if (!result || result.status !== 404) return false;
+  return /does not exist|model_not_found|decommissioned/i.test(result.body || '');
+}
+
+// Chiede a Groq il catalogo e sceglie il primo modello che soddisfa le
+// preferenze per questo tipo di richiesta, escludendo quello appena fallito.
+async function resolveModel(kind, failedModel) {
+  const models = await listModels();
+  if (!models.length) return null;
+  const candidates = models.filter(id => id !== failedModel);
+  for (const pattern of MODEL_PREFERENCES[kind] || []) {
+    const hit = candidates.find(id => pattern.test(id));
+    if (hit) return hit;
+  }
+  // Per il testo qualunque modello e' meglio di un errore; per le immagini
+  // no: un modello senza visione rifiuterebbe comunque la richiesta.
+  return kind === 'text' ? (candidates[0] || null) : null;
+}
+
+function listModels() {
+  if (availableModels) return Promise.resolve(availableModels);
+  return new Promise((resolve) => {
+    const req = https.request({
+      hostname: 'api.groq.com',
+      path: '/openai/v1/models',
+      method: 'GET',
+      agent,
+      headers: { 'Authorization': `Bearer ${GROQ_KEY}` },
+      timeout: 4000
+    }, (res) => {
+      let data = '';
+      res.setEncoding('utf8');
+      res.on('data', c => { data += c; });
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          availableModels = Array.isArray(parsed.data)
+            ? parsed.data.map(m => m.id).filter(Boolean).sort()
+            : [];
+        } catch {
+          availableModels = [];
+        }
+        resolve(availableModels);
+      });
+    });
+    // Se la lista non arriva restituiamo un elenco vuoto: il chiamante
+    // riportera' l'errore originale invece di restare appeso.
+    req.on('timeout', () => req.destroy(new Error('timeout')));
+    req.on('error', () => resolve([]));
+    req.end();
+  });
 }
 
 function json(statusCode, cors, obj) {
