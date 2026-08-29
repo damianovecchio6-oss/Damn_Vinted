@@ -100,6 +100,17 @@ body{
 .pw{position:relative;width:78px;height:78px}
 .pi{width:78px;height:78px;border-radius:8px;object-fit:cover;border:2px solid var(--t)}
 .pd{position:absolute;top:-7px;right:-7px;width:22px;height:22px;background:var(--re);color:#fff;border-radius:50%;border:none;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700}
+/* Marcatore "questa e' l'etichetta": la foto marcata viene mandata a parte e
+   a piena risoluzione, che e' cio' che fa la differenza sulla lettura. */
+.pt{position:absolute;bottom:-7px;left:-7px;width:24px;height:24px;background:var(--bg2);border:1px solid var(--bd);color:var(--mu);border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.pt.on{background:var(--t);border-color:var(--t);color:#111}
+.pw.tag .pi{border-color:#fff}
+.lens{margin-top:12px}
+.lr{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--bd)}
+.lr img{width:44px;height:44px;border-radius:6px;object-fit:cover;flex-shrink:0;background:var(--bg2)}
+.lrt{font-size:13px;color:#fff;line-height:1.4}
+.lrs{font-size:11px;color:var(--mu);margin-top:2px}
+.lrp{font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700;color:var(--t);white-space:nowrap;margin-left:auto}
 
 /* form */
 .fl{display:block;font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;font-family:'Orbitron',sans-serif}
@@ -241,8 +252,12 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
       <div id="rFotoModel" style="font-size:10px;color:var(--mu);margin-top:12px;letter-spacing:.5px;text-transform:uppercase"></div>
       <div class="crow">
         <button class="cbtn" onclick="cpField('rFotoTxt')">📋 Copia</button>
+        <button class="cbtn" id="btnL" onclick="identificaProdotto()">🔎 Identifica prodotto</button>
         <button class="cbtn" onclick="toAnnuncio()">➡️ Usa per annuncio</button>
       </div>
+      <div class="loader" id="lLens" role="status" aria-live="polite" style="display:none"><div class="spin"></div>Cerco il prodotto…</div>
+      <div class="err" id="eLens" role="alert" aria-live="assertive" style="display:none"></div>
+      <div class="lens" id="rLens" style="display:none"></div>
     </div>
   </div>
 
@@ -355,7 +370,9 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
 
 <script>
 let selFiles=[], selTone="amichevole e informale", lastAnalysis=null, currentItemId=null, lastThumbnail=null;
-let lastItemSig=null, lastAnnuncioText='', prevUrls=[], lastModel=null;
+let lastItemSig=null, lastAnnuncioText='', prevUrls=[], lastModel=null, lastProvider=null;
+// Quale foto ritrae l'etichetta, e cosa ci si e' letto sopra.
+let labelIndex=-1, lastEtichetta=null, lastLens=null;
 
 function sw(n){
   document.querySelectorAll('.tp').forEach(p=>p.classList.remove('on'));
@@ -387,13 +404,16 @@ document.getElementById('fileInput').addEventListener('change',function(e){
   if(!picked.length) return; // picker annullato: non buttiamo via quello che c'era
   selFiles=picked.slice(0,4);
   currentItemId=null; lastItemSig=null; lastAnalysis=null; lastThumbnail=null;
+  labelIndex=-1; lastEtichetta=null; lastLens=null;
   renderPrev(); syncUploadUI();
 });
 
 function syncUploadUI(){
   document.getElementById('ubox').classList.toggle('has',selFiles.length>0);
   document.getElementById('ulabel').textContent=selFiles.length
-    ? `${selFiles.length} foto — tocca per cambiare`
+    ? (labelIndex>=0
+        ? `${selFiles.length} foto — etichetta: la ${labelIndex+1}ª`
+        : `${selFiles.length} foto — 🏷️ segna quale mostra l'etichetta`)
     : 'Tocca per scegliere la foto';
   document.getElementById('btnA').disabled=selFiles.length===0;
 }
@@ -404,12 +424,30 @@ function renderPrev(){
   document.getElementById('ps').innerHTML=selFiles.map((f,i)=>{
     const url=URL.createObjectURL(f);
     prevUrls.push(url);
-    return `<div class="pw"><img src="${url}" class="pi" alt="Anteprima foto ${i+1}"/><button class="pd" onclick="delFile(${i})" aria-label="Rimuovi foto ${i+1}">×</button></div>`;
+    const tag=i===labelIndex;
+    return `<div class="pw${tag?' tag':''}">`
+      + `<img src="${url}" class="pi" alt="Anteprima foto ${i+1}"/>`
+      + `<button class="pd" onclick="delFile(${i})" aria-label="Rimuovi foto ${i+1}">×</button>`
+      + `<button class="pt${tag?' on':''}" onclick="segnaEtichetta(${i})" aria-pressed="${tag}" `
+      + `title="Questa foto mostra l'etichetta" aria-label="Segna la foto ${i+1} come etichetta">🏷️</button>`
+      + `</div>`;
   }).join('');
+}
+
+// La foto marcata viene mandata in una richiesta a parte, a piena risoluzione:
+// e' l'unico modo perche' il modello legga davvero marca e composizione invece
+// di dedurle. Ritoccare la stessa foto due volte costa meno che mandarle tutte
+// grandi e sfondare il limite di body.
+function segnaEtichetta(i){
+  labelIndex = labelIndex===i ? -1 : i;
+  renderPrev(); syncUploadUI();
+  toast(labelIndex>=0?'🏷️ Foto etichetta impostata':'Nessuna foto etichetta');
 }
 
 function delFile(i){
   selFiles.splice(i,1);
+  if(labelIndex===i) labelIndex=-1;
+  else if(labelIndex>i) labelIndex--;
   renderPrev(); syncUploadUI();
 }
 
@@ -452,20 +490,28 @@ function getSessionToken(force){
 
 const UNAUTHORIZED=Symbol('unauthorized');
 
-async function callAI(payload){
-  let d=await sendAI(payload, await getSessionToken(false));
+// Un solo giro di token per tutti gli endpoint della funzione.
+async function chiamaEndpoint(url, payload){
+  let d=await inviaA(url, payload, await getSessionToken(false));
   // 401 = token scaduto, oppure siamo finiti su un'istanza che non lo conosce.
   // Se ne prende uno nuovo e si riprova una volta sola, in silenzio.
-  if(d===UNAUTHORIZED) d=await sendAI(payload, await getSessionToken(true));
+  if(d===UNAUTHORIZED) d=await inviaA(url, payload, await getSessionToken(true));
   if(d===UNAUTHORIZED) throw new Error('Sessione non valida. Ricarica la pagina e riprova.');
+  return d;
+}
+
+async function callAI(payload){
+  const d=await chiamaEndpoint(AI_URL, payload);
+  if(typeof d.text!=='string') throw new Error('Risposta del server non leggibile. Riprova.');
   lastModel=d.model||null;
+  lastProvider=d.provider||null;
   return d.text;
 }
 
-async function sendAI(payload, token){
+async function inviaA(url, payload, token){
   let r;
   try{
-    r=await fetch(AI_URL,{
+    r=await fetch(url,{
       method:'POST',
       headers:{'Content-Type':'application/json','X-Session-Token':token},
       body:JSON.stringify(payload),
@@ -482,6 +528,14 @@ async function sendAI(payload, token){
   const raw=await r.text();
   let d=null;
   try{ d=raw?JSON.parse(raw):null; }catch(parseErr){ d=null; }
+  // 501 va riconosciuto PRIMA del controllo generico sull'errore nel corpo:
+  // anche il 501 porta un messaggio, e senza questo ordine il chiamante non
+  // riusciva a distinguere "non configurato" da un guasto qualunque.
+  if(r.status===501){
+    const e=new Error((d&&d.error)||'Funzione non configurata sul server.');
+    e.nonConfigurato=true;
+    throw e;
+  }
   if(d&&d.error) throw new Error(d.error);
   if(!r.ok){
     if(r.status===504||r.status===502) throw new Error('L\'AI ci ha messo troppo. Riprova tra un momento.');
@@ -489,7 +543,7 @@ async function sendAI(payload, token){
     if(r.status===413) throw new Error('Foto troppo pesanti. Prova con meno immagini.');
     throw new Error(`Errore del server (HTTP ${r.status}). Riprova.`);
   }
-  if(!d||typeof d.text!=='string') throw new Error('Risposta del server non leggibile. Riprova.');
+  if(!d) throw new Error('Risposta del server non leggibile. Riprova.');
   return d;
 }
 
@@ -518,7 +572,8 @@ function idle(key, btnIds){
   running[key]=false;
   btnIds.forEach(id=>{ const b=document.getElementById(id); if(b) b.disabled=false; });
 }
-const BTN_FOTO=['btnA'], BTN_ANN=['btnG','btnR'], BTN_PRE=['btnP'];
+const BTN_FOTO=['btnA'], BTN_ANN=['btnG','btnR'], BTN_PRE=['btnP'], BTN_LENS=['btnL'];
+const LENS_URL='/.netlify/functions/lens';
 
 // createImageBitmap decodifica fuori dal main thread: la UI non si blocca
 // mentre si aprono 4 foto da fotocamera. Dove manca, si torna a <img>.
@@ -586,9 +641,15 @@ async function analyzePhoto(){
     const files=selFiles.slice(0,4);
     // Decodifica in parallelo: le foto non si aspettano piu' a vicenda.
     const bitmaps=await Promise.all(files.map(decodeImage));
-    let images;
+    let images, fotoEtichetta=null;
     try{
       images=encodeAll(bitmaps);
+      // L'etichetta va a parte e grande: e' una richiesta separata, quindi non
+      // deve stare nel budget di peso delle altre. A 1280px il testo di un
+      // cartellino di composizione e' gia' illeggibile.
+      if(labelIndex>=0 && bitmaps[labelIndex]){
+        fotoEtichetta={ base64: encodeImage(bitmaps[labelIndex], 2000, 0.94), mime:'image/jpeg' };
+      }
       // La miniatura riusa la decodifica gia' fatta, senza rileggere il file.
       try{
         lastThumbnail='data:image/jpeg;base64,'+encodeImage(bitmaps[0], 160, 0.5);
@@ -601,7 +662,10 @@ async function analyzePhoto(){
     const plurale = images.length>1
       ? `Le ${images.length} foto ritraggono LO STESSO capo da angolazioni diverse: usale tutte insieme per una sola analisi.\n\n`
       : '';
-    const risposta=await callAIJson({
+    // Le due letture partono insieme: ognuna ha il suo budget di 10s sulla
+    // function, e in fila non ci starebbero.
+    const [risposta, etichetta] = await Promise.all([
+      callAIJson({
       type:'image',
       images,
       prompt:`${plurale}Analizza questo capo di abbigliamento con l'occhio di un esperto di seconda mano e vintage. Guarda con attenzione l'etichetta (se visibile): il tipo di font del logo, il formato dell'etichetta di lavaggio/composizione, lo stile di cucitura, il tipo di tessuto, eventuali codici o scritte — questi sono indizi per capire se il capo è vintage e di che epoca.
@@ -618,7 +682,10 @@ REGOLE DI PRECISIONE — leggile prima di rispondere:
 
 Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo prima o dopo:
 {"tipo":"es: giacca in pelle","brand":"leggi l'etichetta, se non visibile scrivi Non identificato","colore":"","materiale":"es: 100% cotone, se visibile sull'etichetta","condizione":"una tra: Nuovo con etichetta, Nuovo senza etichetta, Ottimo, Buono, Soddisfacente","taglie":"taglie probabili","stagione":"","stile":"es: streetwear, casual, elegante, sportivo, vintage","fasciaPrezzo":"es: 20-50€","fasciaPrezzoMin":20,"fasciaPrezzoMax":50,"note":"difetti visibili, usura, dettagli particolari","vintageStima":"es: Anni 90, Y2K, Anni 80, oppure Non vintage se non ci sono indizi","vintageIndizi":"elenco breve degli indizi visivi concreti che ti fanno pensare sia vintage (o assenza di indizi), es: etichetta con font squadrato tipico anni 90, cucitura a doppio filo, tessuto pesante non più in uso","vintageConfidenza":"una tra: bassa, media, alta - quanto sei sicuro della stima vintage"}`
-    });
+      }),
+      fotoEtichetta ? leggiEtichetta(fotoEtichetta) : Promise.resolve(null)
+    ]);
+    lastEtichetta = etichetta;
     if(!risposta.ok){
       // Il modello non ha risposto in JSON: meglio il testo grezzo che niente.
       lastAnalysis = null;
@@ -628,13 +695,17 @@ Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo 
       return;
     }
     const obj = risposta.data;
+    if(etichetta) applicaEtichetta(obj, etichetta);
     lastAnalysis = obj;
     const isVintage = obj.vintageStima && !obj.vintageStima.toLowerCase().includes('non vintage');
     const vintageLine = isVintage
       ? `\n🕰️ POSSIBILE VINTAGE: ${obj.vintageStima} (confidenza: ${obj.vintageConfidenza||'non specificata'})\n🔍 INDIZI: ${obj.vintageIndizi||''}`
       : '';
+    const et = etichetta && etichettaUtile(etichetta)
+      ? `\n\n🏷️ LETTO SULL'ETICHETTA (leggibilità ${etichetta.leggibilita||'non indicata'}):\n${(etichetta.testoLetto||'').trim()}`
+      : (fotoEtichetta ? '\n\n🏷️ ETICHETTA: non sono riuscito a leggerla. Riprova con una foto più ravvicinata e a fuoco.' : '');
     document.getElementById('rFotoTxt').textContent =
-      `🏷️ TIPO DI CAPO: ${obj.tipo||''}\n👔 BRAND / MARCA: ${obj.brand||''}\n🎨 COLORE/I: ${obj.colore||''}\n🧵 MATERIALE: ${obj.materiale||''}\n⭐ CONDIZIONE STIMATA: ${obj.condizione||''}\n📐 TAGLIE PROBABILI: ${obj.taglie||''}\n🗓️ STAGIONE: ${obj.stagione||''}\n✨ STILE: ${obj.stile||''}\n💰 FASCIA DI PREZZO ORIGINALE STIMATA: ${obj.fasciaPrezzo||''}\n💡 NOTE: ${obj.note||''}${vintageLine}`;
+      `🏷️ TIPO DI CAPO: ${obj.tipo||''}\n👔 BRAND / MARCA: ${obj.brand||''}\n🎨 COLORE/I: ${obj.colore||''}\n🧵 MATERIALE: ${obj.materiale||''}\n⭐ CONDIZIONE STIMATA: ${obj.condizione||''}\n📐 TAGLIE PROBABILI: ${obj.taglie||''}\n🗓️ STAGIONE: ${obj.stagione||''}\n✨ STILE: ${obj.stile||''}\n💰 FASCIA DI PREZZO ORIGINALE STIMATA: ${obj.fasciaPrezzo||''}\n💡 NOTE: ${obj.note||''}${vintageLine}${et}`;
     showModelUsed();
     show('rFoto');
   }catch(e){
@@ -646,11 +717,146 @@ Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo 
   }
 }
 
+// Richiesta corta e mirata, con la foto grande: al modello si chiede solo di
+// trascrivere, non di interpretare. Marca, composizione e taglia devono uscire
+// da qui, non dall'aspetto del capo - che e' esattamente dove il modello
+// tirava a indovinare.
+async function leggiEtichetta(img){
+  try{
+    const r = await callAIJson({
+      type:'image',
+      json:true,
+      images:[img],
+      prompt:`Questa foto mostra l'etichetta di un capo di abbigliamento.
+Trascrivi ESATTAMENTE quello che riesci a leggere. Non interpretare, non completare, non dedurre.
+
+- Se un dato non è leggibile, lascia il campo vuoto. Un campo vuoto è corretto; un campo inventato è un errore grave.
+- La marca si scrive solo se è scritta a lettere. Non ricavarla dalla forma di un logo.
+- Riporta le percentuali di composizione esattamente come sono stampate.
+
+Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo prima o dopo:
+{"marca":"","composizione":"es: 80% cotone 20% poliestere","taglia":"","provenienza":"es: Made in Italy","codici":"codici o numeri stampati sull'etichetta","testoLetto":"tutto il testo che riesci a leggere, riga per riga","leggibilita":"una tra: alta, media, bassa"}`
+    });
+    return r.ok ? r.data : null;
+  }catch(e){
+    // Se la lettura dell'etichetta non riesce, l'analisi principale deve
+    // comunque arrivare a destinazione.
+    return null;
+  }
+}
+
+// "Non identificato", "illeggibile" e simili sono risposte oneste del modello,
+// ma non sono dati: non devono sovrascrivere niente.
+function campoLetto(valore){
+  return typeof valore==='string' && valore.trim()
+    && !/non identificat|non leggibil|illeggibil|non visibil|^n\/?a$|^-+$/i.test(valore.trim());
+}
+
+function etichettaUtile(et){
+  return !!(et && (campoLetto(et.testoLetto) || campoLetto(et.marca) || campoLetto(et.composizione)));
+}
+
+// Quello che c'è scritto sull'etichetta batte quello che il modello ha dedotto
+// guardando il capo.
+function applicaEtichetta(obj, et){
+  if(campoLetto(et.marca)) obj.brand = et.marca.trim();
+  if(campoLetto(et.composizione)) obj.materiale = et.composizione.trim();
+  if(campoLetto(et.taglia)) obj.taglie = et.taglia.trim();
+}
+
 // Sapere quale modello ha guardato la foto spiega molto della qualita'
 // dell'analisi, e permette di fissarlo in GROQ_MODEL_VISION.
 function showModelUsed(){
   const el=document.getElementById('rFotoModel');
-  if(el) el.textContent = lastModel ? `Analisi eseguita con ${lastModel}` : '';
+  if(!el) return;
+  el.textContent = lastModel
+    ? `Analisi eseguita con ${lastModel}${lastProvider?' ('+lastProvider+')':''}`
+    : '';
+}
+
+/* ===== RICERCA PER IMMAGINE (Google Lens via SerpApi) ===== */
+
+// L'upload di SerpApi si ferma a 500KB di file: si scende di qualita' finche'
+// ci sta. Qui la risoluzione conta meno che nell'analisi - a Lens serve la
+// forma del capo, non il testo di un'etichetta.
+function sottoPeso(bitmap, maxBytes){
+  const passi=[[1024,0.8],[800,0.7],[640,0.6],[512,0.5]];
+  let b64='';
+  for(let i=0;i<passi.length;i++){
+    b64=encodeImage(bitmap,passi[i][0],passi[i][1]);
+    // base64 pesa circa 4/3 dei byte veri, e il limite del server e' sui byte.
+    if(b64.length*3/4<=maxBytes) return b64;
+  }
+  return b64;
+}
+
+async function identificaProdotto(){
+  if(!selFiles.length){ toast('SERVE UNA FOTO'); return; }
+  if(!busy('lens',BTN_LENS)) return;
+  show('lLens'); hide('eLens'); hide('rLens');
+  try{
+    // Non la foto dell'etichetta: a Lens serve il capo intero.
+    const idx=selFiles.findIndex((f,i)=>i!==labelIndex);
+    const bmp=await decodeImage(selFiles[idx>=0?idx:0]);
+    let base64;
+    try{ base64=sottoPeso(bmp, 460*1024); }
+    finally{ releaseImage(bmp); }
+
+    lastLens=await chiamaEndpoint(LENS_URL,{ image: base64 });
+    renderLens(lastLens);
+    show('rLens');
+  }catch(e){
+    if(e && e.nonConfigurato){
+      // Senza SERPAPI_KEY il bottone non ha senso: sparisce invece di
+      // riproporre lo stesso errore a ogni tocco.
+      const b=document.getElementById('btnL');
+      if(b) b.style.display='none';
+      toast('Ricerca per immagine non configurata');
+    }else{
+      document.getElementById('eLens').textContent='⚠️ '+e.message;
+      show('eLens');
+    }
+  }finally{
+    hide('lLens');
+    idle('lens',BTN_LENS);
+  }
+}
+
+function renderLens(d){
+  const el=document.getElementById('rLens');
+  const risultati=(d&&Array.isArray(d.risultati))?d.risultati:[];
+  if(!risultati.length){
+    el.innerHTML='<div class="hSub">Nessun prodotto riconosciuto da questa foto. Prova con uno scatto del capo intero, su sfondo pulito.</div>';
+    return;
+  }
+  const p=d.prezzi;
+  const testa=(d.ipotesi?`<div class="rl">🔎 ${esc(d.ipotesi)}</div>`:'<div class="rl">🔎 Prodotti simili</div>')
+    + (p?`<div class="tip">Prezzi di listino trovati: <strong>${p.mediana}€</strong> di mediana `
+        + `(da ${p.min}€ a ${p.max}€, su ${p.n} ${p.n===1?'risultato':'risultati'}). `
+        + `Su Vinted un usato vale una frazione di questo.</div>`:'');
+  const righe=risultati.map(r=>`
+    <div class="lr">
+      ${r.thumbnail?`<img src="${esc(r.thumbnail)}" alt="" loading="lazy" onerror="this.remove()"/>`:''}
+      <div style="flex:1;min-width:0">
+        <div class="lrt">${r.link?`<a href="${esc(r.link)}" target="_blank" rel="noopener noreferrer" style="color:inherit">${esc(r.titolo)}</a>`:esc(r.titolo)}</div>
+        <div class="lrs">${esc(r.fonte)}</div>
+      </div>
+      ${r.prezzo?`<div class="lrp">${r.prezzo.valore}${esc(r.prezzo.valuta)}</div>`:''}
+    </div>`).join('');
+  const piede=`<div class="crow" style="margin-top:12px">
+      <button class="cbtn" onclick="usaLensPerPrezzo()">💶 Usa per la stima prezzo</button>
+    </div>`;
+  el.innerHTML=testa+righe+piede;
+}
+
+// I prezzi trovati sono l'unico dato di mercato vero che abbiamo: passarli
+// alla stima vale piu' di qualunque aggiustamento al prompt.
+function usaLensPerPrezzo(){
+  if(!lastLens) return;
+  const nome=lastLens.ipotesi||(lastLens.risultati[0]&&lastLens.risultati[0].titolo)||'';
+  if(nome && !v('pNome')) document.getElementById('pNome').value=nome.slice(0,80);
+  sw('prezzo');
+  toast('💶 Dati di mercato agganciati alla stima');
 }
 
 const CONDIZIONI=['Nuovo con etichetta','Nuovo senza etichetta','Ottimo','Buono','Soddisfacente'];
@@ -776,6 +982,17 @@ async function stimaPrezzo(){
   show('lPre'); hide('rPre'); hide('ePre');
   document.getElementById('pBar').style.width='0%';
   try{
+    // Se la ricerca per immagine ha trovato dei listini, sono dati veri: molto
+    // meglio di quello che il modello ricorda dei prezzi di Vinted.
+    let mercato='';
+    if(lastLens && lastLens.prezzi){
+      const p=lastLens.prezzi;
+      mercato = `\n\nPREZZI DI LISTINO REALI trovati con la ricerca per immagine su questo stesso capo:`
+        + `\n- mediana ${p.mediana}€, minimo ${p.min}€, massimo ${p.max}€ (su ${p.n} risultati)`
+        + (lastLens.ipotesi?`\n- prodotto riconosciuto: ${lastLens.ipotesi}`:'')
+        + `\nUsa questi numeri come ancora: sono prezzi del NUOVO o di rivenditori, quindi l'usato su Vinted vale una frazione. Parti da qui invece che dalla tua memoria dei prezzi.`;
+    }
+
     const risposta=await callAIJson({
       type:'text',
       json:true,
@@ -787,7 +1004,7 @@ MARCA: ${v('pMarca')||'Non specificata'}
 CONDIZIONE: ${v('pCond')}
 PREZZO ORIGINALE: ${v('pPrezzo')?v('pPrezzo')+'€':'Non noto'}
 ANNO ACQUISTO: ${v('pAnno')||'Non noto'}
-CATEGORIA: ${v('pCat')||'Abbigliamento'}
+CATEGORIA: ${v('pCat')||'Abbigliamento'}${mercato}
 
 Considera attentamente:
 1. POPOLARITÀ DEL BRAND su Vinted Italia (brand luxury, streetwear, fast fashion hanno valori molto diversi)
