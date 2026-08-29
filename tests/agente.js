@@ -207,6 +207,37 @@ const RISULTATO = (titolo, prezzo, fonte) => ({
   check('la voce c\'e\', col nome del capo', /Felpa hoodie/.test(storico), storico.slice(0, 200));
   check('col prezzo che ha concluso l\'agente', /42€/.test(storico), storico.slice(0, 300));
 
+  console.log('\n-- lo storico non perde quello che sa gia --');
+  reset();
+  // Prima la stima, che salva un prezzo. Poi l'agente sullo stesso capo, con
+  // un rapporto che il prezzo non ce l'ha: la voce di storico deve tenersi
+  // quello della stima invece di restare senza.
+  await page.evaluate(() => { try{ localStorage.removeItem('vintedAiHistory'); }catch(e){} });
+  await page.click('#nav-prezzo');
+  await page.fill('#pNome', 'Giacca jeans'); await page.fill('#pMarca', 'Levis');
+  await page.click('#btnP');
+  await page.waitForSelector('#rPre:not([style*="display: none"])', { timeout: 30000 });
+  const prezzoStimato = await page.textContent('#pNum');
+
+  const rapportoSenzaPrezzo = Object.assign({}, rapporto, {
+    prezzoConsigliato: 'non stimabile', rangeMin: null, rangeMax: null, consigli: []
+  });
+  const rapportoPieno = rapporto;
+  rapporto = rapportoSenzaPrezzo;
+  await page.click('#nav-ricerca');
+  await page.evaluate(() => { ['sNome','sMarca','sTaglia','sNote'].forEach(id => { document.getElementById(id).value=''; }); });
+  await compila('Giacca jeans', 'Levis');
+  await page.click('#btnS');
+  await page.waitForSelector('#rRic:not([style*="display: none"])', { timeout: 30000 });
+  rapporto = rapportoPieno;
+
+  await page.click('#nav-storico');
+  const voci = await page.evaluate(() => Array.from(document.querySelectorAll('.hItem')).map(h => h.textContent.replace(/\s+/g, ' ')));
+  const voce = voci.find(t => /Giacca jeans/.test(t)) || '';
+  check('la ricerca non crea una voce doppia', voci.filter(t => /Giacca jeans/.test(t)).length === 1, voci.length);
+  check('il prezzo della stima resta nello storico', voce.includes(prezzoStimato), voce.slice(0, 220));
+  check('il consiglio della stima non viene cancellato', /💡/.test(voce), voce.slice(0, 220));
+
   console.log('\n-- il diario si vede mentre gira, non solo alla fine --');
   reset();
   let sblocca;

@@ -1516,7 +1516,7 @@ function renderRicerca(){
     taglia: lastRicerca.capo.taglia, condizione: lastRicerca.capo.condizione,
     prezzoSuggerito: prezzo === null ? undefined : prezzo,
     rangeMin: rMin === null ? undefined : rMin, rangeMax: rMax === null ? undefined : rMax,
-    consiglio: consigli[0] || ''
+    consiglio: consigli[0] || undefined
   });
 
   agTesto=[
@@ -1620,13 +1620,26 @@ function saveHistoryArr(arr){
   }
 }
 
+// Un campo che non c'e' non e' un campo da cancellare. Le tre schede scrivono
+// sulla stessa voce - l'annuncio il testo, la stima il prezzo, la ricerca il
+// rapporto - e ognuna passa undefined per quello che non sa: senza questo
+// filtro l'ultima che salvava cancellava il lavoro delle altre.
+function soloNoti(patch){
+  const out = {};
+  for(const chiave of Object.keys(patch)){
+    if(patch[chiave] !== undefined) out[chiave] = patch[chiave];
+  }
+  return out;
+}
+
 function upsertHistoryItem(id, patch){
   const arr = loadHistory();
+  const dati = soloNoti(patch);
   const idx = arr.findIndex(x=>x.id===id);
   if(idx>=0){
-    arr[idx] = Object.assign({}, arr[idx], patch, {id, updatedAt: Date.now()});
+    arr[idx] = Object.assign({}, arr[idx], dati, {id, updatedAt: Date.now()});
   }else{
-    arr.unshift(Object.assign({id, createdAt: Date.now(), updatedAt: Date.now()}, patch));
+    arr.unshift(Object.assign({id, createdAt: Date.now(), updatedAt: Date.now()}, dati));
   }
   saveHistoryArr(arr);
 }
