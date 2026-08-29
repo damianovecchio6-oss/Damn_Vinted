@@ -27,17 +27,18 @@ const MAX_IMAGES = 4;
 // pagina di timeout di Netlify. Alzabile se l'account ha il limite esteso.
 const TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || 9000);
 
-// Groq ritira i modelli senza preavviso e l'app si spacca con
-// "the model does not exist". Questi sono solo i preferiti: se non esistono
-// piu', la function chiede a Groq quali ci sono e ripiega da sola (vedi
-// resolveModel). Le env var, se impostate, vengono provate per prime.
-const MODEL_TEXT = process.env.GROQ_MODEL_TEXT || 'llama-3.3-70b-versatile';
-const MODEL_VISION = process.env.GROQ_MODEL_VISION || 'meta-llama/llama-4-scout-17b-16e-instruct';
+// Punto di partenza, non una certezza: Groq ritira i modelli senza preavviso.
+// Se non esistono piu', la function chiede il catalogo e ripiega da sola.
+// Questi due sono quelli verificati sul campo su questo account: partire da
+// un modello morto costava un 404 piu' una richiesta del catalogo a ogni
+// container nuovo. Le env var, se impostate, hanno la precedenza.
+const MODEL_TEXT = process.env.GROQ_MODEL_TEXT || 'openai/gpt-oss-120b';
+const MODEL_VISION = process.env.GROQ_MODEL_VISION || 'qwen/qwen3.8-27b';
 
 // Ordine di gradimento, applicato a quello che Groq dichiara disponibile.
 const MODEL_PREFERENCES = {
-  image: [/llama-4-scout/i, /llama-4-maverick/i, /llama-4/i, /vision/i],
-  text: [/llama-3\.3-70b/i, /llama-3\.[12]-70b/i, /llama-3\.1-8b/i, /^openai\/gpt-oss/i, /llama-3/i]
+  image: [/llama-4-scout/i, /llama-4-maverick/i, /llama-4/i, /vision/i, /qwen/i],
+  text: [/llama-3\.3-70b/i, /llama-3\.[12]-70b/i, /^openai\/gpt-oss/i, /llama-3/i]
 };
 
 // Un modello che non esiste piu' non torna esistente entro la vita del
