@@ -147,7 +147,7 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
   console.log('\n-- server senza SERPAPI_KEY --');
   lensStatus = 501;
   await page.evaluate(() => { lastLens = null; });
-  await page.click('#nav-foto');
+  await page.evaluate(() => sw('foto'));
   await page.click('#btnL');
   await page.waitForTimeout(500);
   check('il bottone sparisce invece di ripetere l\'errore', await page.evaluate(() => document.getElementById('btnL').style.display) === 'none');

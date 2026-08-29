@@ -41,7 +41,7 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
   check('nessun errore JS al caricamento', errors.length === 0, errors);
 
   console.log('\n-- accessibilita --');
-  await page.click('#nav-annuncio');
+  await page.evaluate(() => sw('annuncio'));
   await page.click('label[for="aNome"]');
   check('il tap sulla label porta il focus nel campo', await page.evaluate(() => document.activeElement.id) === 'aNome');
   const senzaFor = await page.evaluate(() =>
@@ -56,7 +56,7 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
     document.querySelector('#toneChips .chip:nth-child(1)').getAttribute('aria-pressed') === 'false'));
 
   console.log('\n-- token di sessione --');
-  await page.click('#nav-prezzo');
+  await page.evaluate(() => sw('prezzo'));
   await page.fill('#pNome', 'Giacca');
   await page.click('#btnP');
   await page.waitForSelector('#rPre:not([style*="display: none"])');
@@ -116,7 +116,7 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
     localStorage.clear();
     upsertHistoryItem('id_x', { nome: '<img src=x onerror=alert(1)>', marca: 'Test', titolo: 'T', foto: 'javascript:alert(1)' });
   });
-  await page.click('#nav-storico');
+  await page.evaluate(() => sw('storico'));
   check('il nome ostile resta testo, non diventa HTML', await page.evaluate(() => document.querySelectorAll('#historyList img[src^="javascript"]').length) === 0);
   check('una foto non valida non finisce in src', await page.evaluate(() => document.querySelectorAll('#historyList img').length) === 0);
   check('il nome si vede per intero come scritto', (await page.textContent('#historyList .hName')).includes('<img src=x'));

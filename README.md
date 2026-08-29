@@ -27,7 +27,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-339 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+336 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -96,7 +96,7 @@ per questo le function non si fidano dei valori di default. Se il modello non
 esiste piu' chiedono il catalogo e ripiegano da sole, e il modello che ha
 davvero risposto compare sotto il risultato dell'analisi.
 
-## Il sole: la home
+## Il sole
 
 La pagina si apre su un sole, e i suoi raggi sono le funzioni: un tocco su un
 raggio apre l'analisi foto, l'annuncio, la stima, la ricerca o lo storico. Il
@@ -109,15 +109,16 @@ la forma del raggio come area sensibile piu' una presa tonda intorno all'icona,
 perche' un triangolo sottile col pollice non si prende. Funzionano con Tab e
 Invio come con il dito.
 
-Toccato un raggio, il sole si cala come un burattino - un piccolo strappo in
-su, il filo che si tende, poi giu' rimpicciolendo - e la funzione entra quando
-il sole e' sparito, cosi' e' un movimento solo. Dal logo il sole risale da
-sotto. Con `prefers-reduced-motion` non cade e non risale: la funzione si apre
-e basta.
+Scelto un raggio il sole non sparisce: **si rimpicciolisce e va a parcheggiarsi
+a meta' sul bordo di sotto**, e li' resta mentre usi la funzione. Toccarlo lo fa
+risalire e tornare a schermo intero, pronto per la scelta successiva. E' anche
+tutta la navigazione che c'e': la barra in basso non esiste piu', perche'
+diceva le stesse cinque cose dei raggi.
 
-Finche' si sta sul sole la barra in basso sparisce - sarebbe la stessa cosa
-detta due volte - e torna appena si entra in una funzione. Dal logo in alto si
-rientra nel sole.
+Il movimento e' una transizione sola sul `transform`, con una curva che parte
+all'indietro: quel valore negativo nella `cubic-bezier` e' lo strappo verso
+l'alto prima di calarsi, e funziona identico al contrario quando risale. Con
+`prefers-reduced-motion` il sole cambia posto senza scivolare.
 
 ## L'agente di ricerca online
 
