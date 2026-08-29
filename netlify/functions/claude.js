@@ -239,19 +239,37 @@ function json(statusCode, cors, obj) {
   };
 }
 
-function callGroq(requestBody) {
+// Le istanze delle function vengono riusate a caldo: tenendo viva la connessione
+// ci risparmiamo handshake TCP+TLS verso Groq a ogni richiesta.
+const agent = new https.Agent({ keepAlive: true, keepAliveMsecs: 1500, maxSockets: 10 });
+
+async function callGroq(requestBody) {
+  const deadline = Date.now() + TIMEOUT_MS;
+  try {
+    return await sendToGroq(requestBody, deadline);
+  } catch (e) {
+    // Un socket riusato puo' essere stato chiuso dal server mentre la function
+    // era congelata. In quel caso ritentiamo una volta, col tempo che resta.
+    const staleSocket = e && (e.code === 'ECONNRESET' || e.code === 'EPIPE');
+    if (!staleSocket || Date.now() >= deadline) throw e;
+    return sendToGroq(requestBody, deadline);
+  }
+}
+
+function sendToGroq(requestBody, deadline) {
   const payload = JSON.stringify(requestBody);
   return new Promise((resolve, reject) => {
     const req = https.request({
       hostname: 'api.groq.com',
       path: '/openai/v1/chat/completions',
       method: 'POST',
+      agent,
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${GROQ_KEY}`,
         'Content-Length': Buffer.byteLength(payload)
       },
-      timeout: TIMEOUT_MS
+      timeout: Math.max(1000, deadline - Date.now())
     }, (res) => {
       let data = '';
       res.setEncoding('utf8');

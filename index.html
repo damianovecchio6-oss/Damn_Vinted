@@ -4,11 +4,13 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <title>Vinted AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
 :root{
-  --t:#e8c84a;--td:#c9a82e;--tl:rgba(232,200,74,.12);
-  --bg:#111111;--bg2:#1a1a1a;--card:#1e1e1e;--card2:#252525;
+  --t:#e8c84a;--tl:rgba(232,200,74,.12);
+  --bg:#111111;--bg2:#1a1a1a;--card:#1e1e1e;
   --tx:#ffffff;--mu:#888888;--bd:#333333;--re:#ff4444;
   --sb:env(safe-area-inset-bottom,0px);
 }
@@ -324,7 +326,7 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
       <div class="ph"><span class="pn" id="pNum">—</span><span class="pr" id="pRng"></span></div>
       <div class="pbar"><div class="pf" id="pBar" style="width:0%"></div></div>
       <p id="pMot" style="font-size:14px;line-height:1.6;margin-bottom:14px;color:#ffffff"></p>
-      <div style="font-size:11px;font-weight:800;color:var(--mu);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Fattori considerati</div>
+      <div style="font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Fattori considerati</div>
       <ul style="list-style:none" id="pFact"></ul>
       <div class="tip" id="pTip"></div>
     </div>
@@ -428,28 +430,41 @@ async function callAI(payload){
   return d.text;
 }
 
-function compressImage(file, maxSize, quality){
-  maxSize = maxSize||800; quality = quality||0.75;
+// createImageBitmap decodifica fuori dal main thread: la UI non si blocca
+// mentre si aprono 4 foto da fotocamera. Dove manca, si torna a <img>.
+function decodeImage(file){
+  if(typeof createImageBitmap==='function'){
+    return createImageBitmap(file).catch(function(){ return decodeViaImg(file); });
+  }
+  return decodeViaImg(file);
+}
+
+function decodeViaImg(file){
   return new Promise(function(res,rej){
     var img=new Image();
     var url=URL.createObjectURL(file);
-    img.onload=function(){
-      var w=img.width, h=img.height;
-      if(w>maxSize||h>maxSize){
-        if(w>h){ h=Math.round(h*maxSize/w); w=maxSize; }
-        else{ w=Math.round(w*maxSize/h); h=maxSize; }
-      }
-      var canvas=document.createElement('canvas');
-      canvas.width=w; canvas.height=h;
-      canvas.getContext('2d').drawImage(img,0,0,w,h);
-      var dataUrl=canvas.toDataURL('image/jpeg', quality);
-      URL.revokeObjectURL(url);
-      res(dataUrl.split(',')[1]);
-    };
+    img.onload=function(){ URL.revokeObjectURL(url); res(img); };
     img.onerror=function(){ URL.revokeObjectURL(url); rej(new Error('Caricamento immagine fallito')); };
     img.src=url;
   });
 }
+
+var encodeCanvas=null;
+function encodeImage(source, maxSize, quality){
+  maxSize=maxSize||800; quality=quality||0.75;
+  var w=source.width, h=source.height;
+  if(w>maxSize||h>maxSize){
+    if(w>h){ h=Math.round(h*maxSize/w); w=maxSize; }
+    else{ w=Math.round(w*maxSize/h); h=maxSize; }
+  }
+  // Un solo canvas riusato invece di uno nuovo per ogni codifica.
+  if(!encodeCanvas) encodeCanvas=document.createElement('canvas');
+  encodeCanvas.width=w; encodeCanvas.height=h;
+  encodeCanvas.getContext('2d').drawImage(source,0,0,w,h);
+  return encodeCanvas.toDataURL('image/jpeg', quality).split(',')[1];
+}
+
+function releaseImage(source){ if(source&&source.close) source.close(); }
 
 async function analyzePhoto(){
   if(!selFiles.length) return;
@@ -459,14 +474,19 @@ async function analyzePhoto(){
     const files=selFiles.slice(0,4);
     // Con piu' foto scendiamo di risoluzione per restare sotto il limite di body.
     const maxSide=files.length>1?1024:1280;
-    const images=[];
-    for(const f of files){
-      images.push({ base64: await compressImage(f, maxSide, 0.85), mime:'image/jpeg' });
-    }
+    // Decodifica in parallelo: le foto non si aspettano piu' a vicenda.
+    const bitmaps=await Promise.all(files.map(decodeImage));
+    let images;
     try{
-      lastThumbnail = 'data:image/jpeg;base64,' + await compressImage(files[0], 160, 0.5);
-    }catch(thumbErr){
-      lastThumbnail = null;
+      images=bitmaps.map(b=>({ base64: encodeImage(b, maxSide, 0.85), mime:'image/jpeg' }));
+      // La miniatura riusa la decodifica gia' fatta, senza rileggere il file.
+      try{
+        lastThumbnail='data:image/jpeg;base64,'+encodeImage(bitmaps[0], 160, 0.5);
+      }catch(thumbErr){
+        lastThumbnail=null;
+      }
+    }finally{
+      bitmaps.forEach(releaseImage);
     }
     const plurale = images.length>1
       ? `Le ${images.length} foto ritraggono LO STESSO capo da angolazioni diverse: usale tutte insieme per una sola analisi.\n\n`
