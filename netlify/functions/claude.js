@@ -221,7 +221,10 @@ exports.handler = async (event) => {
       model: resolvedModel[kind] || (kind === 'image' ? MODEL_VISION : MODEL_TEXT),
       messages,
       temperature: type === 'image' ? 0.2 : (body.creative ? 0.85 : 0.6),
-      max_tokens: 1024
+      // Il JSON dell'analisi foto ha molti campi con testo libero: a 1024
+      // token rischiava di troncarsi a meta' e diventare impossibile da
+      // interpretare, il che si vede come "analisi imprecisa".
+      max_tokens: type === 'image' ? 2048 : 1024
     };
 
     // JSON mode: solo per il testo. Sul multimodale non e' garantito,
@@ -288,7 +291,9 @@ exports.handler = async (event) => {
       : null;
     if (!text) return json(502, cors, { error: 'Il modello ha restituito una risposta vuota' });
 
-    return json(200, cors, { text });
+    // Rimandiamo anche quale modello ha risposto: serve a capire da cosa
+    // dipende la qualita' dell'analisi e quale conviene fissare a mano.
+    return json(200, cors, { text, model: request.model });
 
   } catch (e) {
     console.error('claude fn error:', e);

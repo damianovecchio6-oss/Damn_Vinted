@@ -238,6 +238,7 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
     <div class="res" id="rFoto" style="display:none">
       <div class="rl">✨ Risultato Analisi</div>
       <div class="rt" id="rFotoTxt"></div>
+      <div id="rFotoModel" style="font-size:10px;color:var(--mu);margin-top:12px;letter-spacing:.5px;text-transform:uppercase"></div>
       <div class="crow">
         <button class="cbtn" onclick="cp('rFotoTxt')">📋 Copia</button>
         <button class="cbtn" onclick="toAnnuncio()">➡️ Usa per annuncio</button>
@@ -354,7 +355,7 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
 
 <script>
 let selFiles=[], selTone="amichevole e informale", lastAnalysis=null, currentItemId=null, lastThumbnail=null;
-let lastItemSig=null, lastAnnuncioText='', prevUrls=[];
+let lastItemSig=null, lastAnnuncioText='', prevUrls=[], lastModel=null;
 
 function sw(n){
   document.querySelectorAll('.tp').forEach(p=>p.classList.remove('on'));
@@ -427,6 +428,7 @@ async function callAI(payload){
     throw new Error(`Errore del server (HTTP ${r.status}). Riprova.`);
   }
   if(!d||typeof d.text!=='string') throw new Error('Risposta del server non leggibile. Riprova.');
+  lastModel=d.model||null;
   return d.text;
 }
 
@@ -472,13 +474,15 @@ async function analyzePhoto(){
   document.getElementById('btnA').disabled=true;
   try{
     const files=selFiles.slice(0,4);
-    // Con piu' foto scendiamo di risoluzione per restare sotto il limite di body.
-    const maxSide=files.length>1?1024:1280;
+    // La precisione dipende quasi tutta da quanto resta leggibile l'etichetta:
+    // a 1024px il testo di un cartellino diventa poltiglia. Alziamo finche'
+    // il totale resta comodamente sotto il limite di body.
+    const maxSide=files.length>2?1280:1600;
     // Decodifica in parallelo: le foto non si aspettano piu' a vicenda.
     const bitmaps=await Promise.all(files.map(decodeImage));
     let images;
     try{
-      images=bitmaps.map(b=>({ base64: encodeImage(b, maxSide, 0.85), mime:'image/jpeg' }));
+      images=bitmaps.map(b=>({ base64: encodeImage(b, maxSide, 0.92), mime:'image/jpeg' }));
       // La miniatura riusa la decodifica gia' fatta, senza rileggere il file.
       try{
         lastThumbnail='data:image/jpeg;base64,'+encodeImage(bitmaps[0], 160, 0.5);
@@ -496,6 +500,16 @@ async function analyzePhoto(){
       images,
       prompt:`${plurale}Analizza questo capo di abbigliamento con l'occhio di un esperto di seconda mano e vintage. Guarda con attenzione l'etichetta (se visibile): il tipo di font del logo, il formato dell'etichetta di lavaggio/composizione, lo stile di cucitura, il tipo di tessuto, eventuali codici o scritte — questi sono indizi per capire se il capo è vintage e di che epoca.
 
+REGOLE DI PRECISIONE — leggile prima di rispondere:
+- Descrivi SOLO quello che vedi davvero nella foto. Non dedurre, non completare, non immaginare.
+- Se un dato non è leggibile o non è visibile, scrivi "Non identificato" o lascia il campo vuoto. Un campo vuoto è corretto; un campo inventato è un errore grave.
+- Il brand si scrive SOLO se lo leggi su un'etichetta o su un logo. Non indovinarlo dallo stile del capo.
+- Il materiale si scrive SOLO se lo leggi sull'etichetta di composizione. Non dedurlo dall'aspetto del tessuto.
+- La taglia si scrive SOLO se la leggi. Non stimarla dalle proporzioni.
+- Per il colore usa quello che vedi, tenendo conto che la luce della foto può alterarlo: se sei incerto usa un nome ampio (es. "blu") invece di uno specifico sbagliato (es. "blu petrolio").
+- Per la condizione basati su segni concreti e visibili: pieghe, pilling, sbiadimento, macchie, usura di orli e polsini. Se non vedi difetti scrivi "Ottimo" solo se il capo appare davvero integro.
+- Per il vintage: se non ci sono indizi CONCRETI e visibili scrivi "Non vintage" e metti confidenza "bassa". Non trasformare uno stile che ricorda un'epoca in una datazione.
+
 Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo prima o dopo:
 {"tipo":"es: giacca in pelle","brand":"leggi l'etichetta, se non visibile scrivi Non identificato","colore":"","materiale":"es: 100% cotone, se visibile sull'etichetta","condizione":"una tra: Nuovo con etichetta, Nuovo senza etichetta, Ottimo, Buono, Soddisfacente","taglie":"taglie probabili","stagione":"","stile":"es: streetwear, casual, elegante, sportivo, vintage","fasciaPrezzo":"es: 20-50€","fasciaPrezzoMin":20,"fasciaPrezzoMax":50,"note":"difetti visibili, usura, dettagli particolari","vintageStima":"es: Anni 90, Y2K, Anni 80, oppure Non vintage se non ci sono indizi","vintageIndizi":"elenco breve degli indizi visivi concreti che ti fanno pensare sia vintage (o assenza di indizi), es: etichetta con font squadrato tipico anni 90, cucitura a doppio filo, tessuto pesante non più in uso","vintageConfidenza":"una tra: bassa, media, alta - quanto sei sicuro della stima vintage"}`
     });
@@ -505,6 +519,7 @@ Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo 
     }catch(parseErr){
       lastAnalysis = null;
       document.getElementById('rFotoTxt').textContent = txt;
+      showModelUsed();
       show('rFoto');
       hide('lFoto');
       document.getElementById('btnA').disabled=false;
@@ -517,6 +532,7 @@ Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo 
       : '';
     document.getElementById('rFotoTxt').textContent =
       `🏷️ TIPO DI CAPO: ${obj.tipo||''}\n👔 BRAND / MARCA: ${obj.brand||''}\n🎨 COLORE/I: ${obj.colore||''}\n🧵 MATERIALE: ${obj.materiale||''}\n⭐ CONDIZIONE STIMATA: ${obj.condizione||''}\n📐 TAGLIE PROBABILI: ${obj.taglie||''}\n🗓️ STAGIONE: ${obj.stagione||''}\n✨ STILE: ${obj.stile||''}\n💰 FASCIA DI PREZZO ORIGINALE STIMATA: ${obj.fasciaPrezzo||''}\n💡 NOTE: ${obj.note||''}${vintageLine}`;
+    showModelUsed();
     show('rFoto');
   }catch(e){
     document.getElementById('eFoto').textContent='⚠️ '+e.message;
@@ -524,6 +540,13 @@ Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo 
   }
   hide('lFoto');
   document.getElementById('btnA').disabled=false;
+}
+
+// Sapere quale modello ha guardato la foto spiega molto della qualita'
+// dell'analisi, e permette di fissarlo in GROQ_MODEL_VISION.
+function showModelUsed(){
+  const el=document.getElementById('rFotoModel');
+  if(el) el.textContent = lastModel ? `Analisi eseguita con ${lastModel}` : '';
 }
 
 function toAnnuncio(){
