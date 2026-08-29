@@ -149,17 +149,18 @@ body{
   transition:transform .52s cubic-bezier(.5,-0.3,.66,.42);
 }
 /* Parcheggiato: il sole si appoggia sul bordo di sotto invece di affondarci.
-   Col centro esattamente sul bordo se ne vedeva troppo poco per capire che e'
-   ancora li' e che si puo' toccare: alzato di 34px si vede il disco intero e i
-   raggi di sopra, e resta comunque mezzo fuori come nel disegno. */
+   Sul telefono, sotto quel bordo, c'e' anche la barra del browser: chi guarda
+   non vede "mezzo sole", vede la punta di un raggio e pensa che sia sparito.
+   Quindi sta piu' su di quanto direbbe il disegno - se ne vede quasi tutto -
+   e resta comunque tagliato in basso, che e' il segno che c'e' dell'altro. */
 #soleApp.parcheggiato{
-  transform:translate(-50%, calc(-50% + 50vh - 34px)) scale(.46);
+  transform:translate(-50%, calc(-50% + 50vh - 52px)) scale(.5);
 }
 @supports (height: 100dvh){
-  /* Anche il bordo di sotto e' quello vero, e sopra la tacca degli iPhone il
-     sole si alza di quel tanto che serve a restare toccabile. */
+  /* dvh e' l'altezza che c'e' davvero adesso, barra compresa; --sb tiene il
+     sole sopra la tacca e sopra la riga di sistema. */
   #soleApp.parcheggiato{
-    transform:translate(-50%, calc(-50% + 50dvh - 34px - var(--sb))) scale(.46);
+    transform:translate(-50%, calc(-50% + 50dvh - 52px - var(--sb))) scale(.5);
   }
 }
 .soleWrap{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center}
@@ -213,7 +214,7 @@ body.home #soleApp{pointer-events:auto;touch-action:none}
    il nome sta gia' dentro al disco. */
 body.home .hdr,body.home .damn{display:none}
 /* Dentro una funzione il contenuto lascia spazio al sole parcheggiato. */
-body:not(.home) .shell{padding-bottom:calc(104px + var(--sb))}
+body:not(.home) .shell{padding-bottom:calc(150px + var(--sb))}
 
 @media(prefers-reduced-motion:reduce){
   #soleApp{transition:none}
