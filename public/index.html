@@ -112,6 +112,21 @@ body{
 .lrs{font-size:11px;color:var(--mu);margin-top:2px}
 .lrp{font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700;color:var(--t);white-space:nowrap;margin-left:auto}
 
+/* agente di ricerca */
+.ag{list-style:none}
+.agp{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--mu);line-height:1.5;padding:8px 0;border-bottom:1px solid var(--bd)}
+.agp:last-child{border:none}
+.agi{font-family:'Orbitron',sans-serif;font-size:12px;font-weight:700;width:14px;flex-shrink:0;text-align:center;color:var(--mu)}
+.agp.fatto{color:#fff}
+.agp.fatto .agi,.agp.corso .agi{color:var(--t)}
+.agp.ko{color:#ff8888}
+.agp.ko .agi{color:var(--re)}
+.agn{font-size:11px;color:var(--mu);margin-top:2px}
+.agm{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.agv{flex:1 1 96px;background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:11px 13px}
+.agvn{font-family:'Orbitron',sans-serif;font-size:19px;font-weight:900;color:var(--t);line-height:1.1}
+.agvl{font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:1px;margin-top:3px}
+
 /* form */
 .fl{display:block;font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;font-family:'Orbitron',sans-serif}
 .fc{
@@ -253,6 +268,7 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
       <div class="crow">
         <button class="cbtn" onclick="cpField('rFotoTxt')">📋 Copia</button>
         <button class="cbtn" id="btnL" onclick="identificaProdotto()">🔎 Identifica prodotto</button>
+        <button class="cbtn" onclick="toRicerca()">🤖 Ricerca online</button>
         <button class="cbtn" onclick="toAnnuncio()">➡️ Usa per annuncio</button>
       </div>
       <div class="loader" id="lLens" role="status" aria-live="polite" style="display:none"><div class="spin"></div>Cerco il prodotto…</div>
@@ -348,6 +364,47 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
     </div>
   </div>
 
+  <!-- RICERCA ONLINE -->
+  <div id="tab-ricerca" class="tp">
+    <div class="card">
+      <div class="ct">🤖 Agente di Ricerca</div>
+      <p style="font-size:13px;color:var(--mu);line-height:1.6;margin-bottom:16px">
+        Cerca online cosa chiedono davvero per un capo come il tuo: decide le ricerche da fare, le esegue, legge gli annunci e scrive un rapporto di mercato con i prezzi che ha trovato.
+      </p>
+      <div class="row">
+        <div class="fg"><label class="fl" for="sNome">Nome capo</label><input class="fc" id="sNome" placeholder="es: Felpa hoodie"/></div>
+        <div class="fg"><label class="fl" for="sMarca">Marca</label><input class="fc" id="sMarca" placeholder="es: Carhartt, Nike…"/></div>
+      </div>
+      <div class="row">
+        <div class="fg"><label class="fl" for="sTaglia">Taglia</label><input class="fc" id="sTaglia" placeholder="M, 42, L/XL…"/></div>
+        <div class="fg"><label class="fl" for="sCond">Condizione</label>
+          <select class="fc" id="sCond">
+            <option>Nuovo con etichetta</option>
+            <option>Nuovo senza etichetta</option>
+            <option selected>Ottimo</option>
+            <option>Buono</option>
+            <option>Soddisfacente</option>
+          </select>
+        </div>
+      </div>
+      <div class="fg"><label class="fl" for="sNote">Dettagli utili alla ricerca</label><input class="fc" id="sNote" placeholder="Modello, colore, anno, collezione…"/></div>
+      <button class="btn" id="btnS" onclick="avviaAgente()">🤖 Avvia la ricerca</button>
+    </div>
+    <div class="card" id="agSteps" style="display:none">
+      <div class="rl">🧠 Cosa sta facendo l'agente</div>
+      <ol class="ag" id="agList" aria-live="polite"></ol>
+    </div>
+    <div class="err" id="eRic" role="alert" aria-live="assertive" style="display:none"></div>
+    <div class="res" id="rRic" style="display:none">
+      <div class="rl">📊 Rapporto di mercato</div>
+      <div id="rRicBody"></div>
+      <div class="crow">
+        <button class="cbtn" onclick="usaRicercaPerPrezzo()">💶 Usa per la stima prezzo</button>
+        <button class="cbtn" onclick="copiaRicerca()">📋 Copia rapporto</button>
+      </div>
+    </div>
+  </div>
+
   <!-- STORICO -->
   <div id="tab-storico" class="tp">
     <div class="card">
@@ -364,6 +421,7 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
   <button class="nb on" id="nav-foto" onclick="sw('foto')"><span class="ic">📸</span>Analizza</button>
   <button class="nb" id="nav-annuncio" onclick="sw('annuncio')"><span class="ic">✍️</span>Annuncio</button>
   <button class="nb" id="nav-prezzo" onclick="sw('prezzo')"><span class="ic">💶</span>Prezzo</button>
+  <button class="nb" id="nav-ricerca" onclick="sw('ricerca')"><span class="ic">🤖</span>Ricerca</button>
   <button class="nb" id="nav-storico" onclick="sw('storico')"><span class="ic">🗂️</span>Storico</button>
 </nav>
 <div id="toast" role="status" aria-live="polite"></div>
@@ -380,6 +438,7 @@ function sw(n){
   document.getElementById('tab-'+n).classList.add('on');
   document.getElementById('nav-'+n).classList.add('on');
   if(n==='storico') renderHistory();
+  if(n==='ricerca') prefillRicerca();
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
@@ -845,6 +904,7 @@ function renderLens(d){
     </div>`).join('');
   const piede=`<div class="crow" style="margin-top:12px">
       <button class="cbtn" onclick="usaLensPerPrezzo()">💶 Usa per la stima prezzo</button>
+      <button class="cbtn" onclick="toRicerca(lastLens&&lastLens.ipotesi)">🤖 Approfondisci online</button>
     </div>`;
   el.innerHTML=testa+righe+piede;
 }
@@ -993,6 +1053,16 @@ async function stimaPrezzo(){
         + `\nUsa questi numeri come ancora: sono prezzi del NUOVO o di rivenditori, quindi l'usato su Vinted vale una frazione. Parti da qui invece che dalla tua memoria dei prezzi.`;
     }
 
+    // Il rapporto dell'agente pesa piu' dei listini di Lens: sono annunci
+    // dell'usato, cioe' esattamente il mercato su cui si vende qui.
+    if(lastRicerca && lastRicerca.prezzi){
+      const q=lastRicerca.prezzi, rap=lastRicerca.rapporto||{};
+      mercato += `\n\nRICERCA ONLINE appena fatta su ${lastRicerca.prove.length} risultati reali del mercato italiano:`
+        + `\n- prezzi letti negli annunci: mediana ${q.mediana}€, da ${q.min}€ a ${q.max}€ (su ${q.n} annunci)`
+        + (rap.prezzoConsigliato?`\n- conclusione dell'agente: ${rap.prezzoConsigliato}€, fiducia ${rap.fiducia||'non dichiarata'}`:'')
+        + `\nQuesti sono annunci veri e recenti: pesali piu' della tua memoria dei prezzi.`;
+    }
+
     const risposta=await callAIJson({
       type:'text',
       json:true,
@@ -1103,6 +1173,354 @@ function shareAnnuncio(){
     return;
   }
   copyText(txt);
+}
+
+/* ===== AGENTE DI RICERCA ONLINE =====
+   Il ciclo dell'agente gira qui nel browser, non dentro una function: Netlify
+   chiude una function a 10s e un giro intero (piano, ricerche, raffinamento,
+   rapporto) non ci starebbe mai. Ogni passo e' una chiamata corta per conto
+   suo, e intanto la pagina racconta cosa sta facendo invece di far girare uno
+   spinner muto per venti secondi. */
+const RICERCA_URL='/.netlify/functions/ricerca';
+const BTN_RIC=['btnS'];
+// Due giri al massimo: il primo esegue il piano, il secondo raffina solo se i
+// prezzi raccolti sono troppo pochi per dire qualcosa. Ogni ricerca costa
+// quota SerpApi, quindi l'agente si ferma appena ne sa abbastanza.
+const AG_MAX_GIRI=2, AG_MAX_QUERY=3, AG_PREZZI_OK=4;
+// Quante prove finiscono nel prompt finale: il limite vero e' MAX_PROMPT
+// (8000 caratteri) lato function.
+const AG_PROVE_PROMPT=10;
+let lastRicerca=null, agPassi=[], agTesto='';
+
+function datiCapo(){
+  return { nome:v('sNome'), marca:v('sMarca'), taglia:v('sTaglia'),
+           condizione:v('sCond'), note:v('sNote') };
+}
+
+function descriviCapo(c){
+  return `- Capo: ${c.nome||'non specificato'}\n- Marca: ${c.marca||'non specificata'}\n`
+       + `- Taglia: ${c.taglia||'non specificata'}\n- Condizione: ${c.condizione||'non specificata'}\n`
+       + `- Dettagli: ${c.note||'nessuno'}`;
+}
+
+/* --- il diario dei passi: e' quello che rende l'agente controllabile --- */
+function passo(testo){
+  agPassi.push({ testo, stato:'corso', nota:'' });
+  renderPassi();
+  return agPassi.length-1;
+}
+
+function chiudiPasso(i, stato, nota){
+  if(!agPassi[i]) return;
+  agPassi[i].stato=stato;
+  agPassi[i].nota=nota||'';
+  renderPassi();
+}
+
+const AG_SEGNI={ corso:'▸', fatto:'✓', ko:'×' };
+
+function renderPassi(){
+  document.getElementById('agList').innerHTML=agPassi.map(p=>`
+    <li class="agp ${p.stato}">
+      <span class="agi" aria-hidden="true">${AG_SEGNI[p.stato]||'▸'}</span>
+      <span style="flex:1;min-width:0">${esc(p.testo)}${p.nota?`<div class="agn">${esc(p.nota)}</div>`:''}</span>
+    </li>`).join('');
+}
+
+async function avviaAgente(){
+  const capo=datiCapo();
+  if(!capo.nome && !capo.marca){ toast('SERVE ALMENO NOME O MARCA'); return; }
+  if(!busy('ricerca',BTN_RIC)) return;
+  agPassi=[]; agTesto=''; renderPassi();
+  show('agSteps'); hide('eRic'); hide('rRic');
+  try{
+    const prove=[], correlate=[];
+    let queries=await pianifica(capo);
+
+    for(let giro=1; giro<=AG_MAX_GIRI && queries.length; giro++){
+      await eseguiQueries(queries, prove, correlate);
+      if(conPrezzo(prove).length>=AG_PREZZI_OK) break;
+      queries = giro<AG_MAX_GIRI ? await raffina(capo, prove, correlate) : [];
+    }
+
+    if(!prove.length){
+      throw new Error('Le ricerche non hanno trovato niente di utile. Prova col nome del modello o con la marca esatta.');
+    }
+
+    const rapporto=await sintetizza(capo, prove);
+    lastRicerca={ capo, prove, prezzi:prezziDelle(prove), rapporto };
+    renderRicerca();
+    show('rRic');
+  }catch(e){
+    if(e && e.nonConfigurato){
+      // Senza SERPAPI_KEY l'agente non ha strumenti: il bottone sparisce
+      // invece di riproporre lo stesso errore a ogni tocco.
+      const b=document.getElementById('btnS');
+      if(b) b.style.display='none';
+      document.getElementById('eRic').textContent='⚠️ La ricerca online non è configurata sul server: serve la chiave SERPAPI_KEY.';
+    }else{
+      document.getElementById('eRic').textContent='⚠️ '+e.message;
+    }
+    show('eRic');
+  }finally{
+    idle('ricerca',BTN_RIC);
+  }
+}
+
+/* --- 1. il piano --- */
+async function pianifica(capo){
+  const i=passo('Pianifico le ricerche');
+  let queries=[];
+  try{
+    const r=await callAIJson({
+      type:'text',
+      json:true,
+      prompt:`Sei un agente che deve scoprire online quanto vale un capo di abbigliamento usato sul mercato italiano (Vinted, Subito, eBay, Depop).
+
+CAPO DA STUDIARE:
+${descriviCapo(capo)}
+
+Scrivi al massimo ${AG_MAX_QUERY} ricerche da dare a Google, in italiano, fatte per far uscire ANNUNCI VERI con un prezzo, non articoli di blog.
+- almeno una deve puntare agli annunci dell'usato (per esempio con "vinted" o "subito" nel testo)
+- una può puntare al prezzo del nuovo, che serve come punto di partenza
+- solo parole chiave, come le scriverebbe una persona: niente domande, niente frasi
+- se marca o modello non sono noti, usa categoria, materiale e colore
+
+Rispondi SOLO con questo JSON valido, senza backtick né markdown:
+{"queries":[{"q":"testo della ricerca","tipo":"web","perche":"cosa ti aspetti di trovare"}]}
+Il campo tipo vale "web" per i risultati normali, "shopping" per le schede prodotto con il prezzo di listino.`
+    });
+    queries=normalizzaQueries(r.ok && r.data ? r.data.queries : null);
+  }catch(e){
+    // Il piano e' un lusso: se il modello non risponde, l'agente cerca lo
+    // stesso con le query ovvie invece di fermarsi qui.
+  }
+  if(!queries.length) queries=pianoDiRiserva(capo);
+  chiudiPasso(i,'fatto', queries.map(q=>q.q).join(' · '));
+  return queries;
+}
+
+// Le query arrivano da un modello: possono essere oggetti strani, duplicati,
+// o un romanzo. Qui diventano al massimo tre stringhe corte e distinte.
+function normalizzaQueries(grezze){
+  const out=[], viste=new Set();
+  for(const g of (Array.isArray(grezze)?grezze:[])){
+    const q=String((g&&g.q)||g||'').replace(/\s+/g,' ').trim().slice(0,160);
+    if(!q || viste.has(q.toLowerCase())) continue;
+    viste.add(q.toLowerCase());
+    out.push({ q, tipo:(g&&g.tipo)==='shopping'?'shopping':'web' });
+    if(out.length>=AG_MAX_QUERY) break;
+  }
+  return out;
+}
+
+function pianoDiRiserva(capo){
+  const base=[capo.marca, capo.nome].filter(Boolean).join(' ').trim() || capo.note;
+  return [
+    { q:`${base} usato prezzo vinted`, tipo:'web' },
+    { q:`${base} prezzo`, tipo:'shopping' }
+  ];
+}
+
+/* --- 2. le ricerche --- */
+async function eseguiQueries(queries, prove, correlate){
+  const indici=queries.map(q=>passo(`Cerco: ${q.q}`));
+  const esiti=await Promise.all(queries.map(q=>
+    chiamaEndpoint(RICERCA_URL,{ query:q.q, tipo:q.tipo })
+      .then(d=>({ ok:true, d }))
+      .catch(e=>({ ok:false, e }))
+  ));
+
+  let primoErrore=null;
+  esiti.forEach((esito,k)=>{
+    if(!esito.ok){
+      primoErrore=primoErrore||esito.e;
+      chiudiPasso(indici[k],'ko', esito.e.message);
+      return;
+    }
+    const trovati=Array.isArray(esito.d.risultati)?esito.d.risultati:[];
+    for(const r of trovati){
+      if(r && r.titolo && !prove.some(p=>p.titolo===r.titolo)) prove.push(r);
+    }
+    for(const c of (Array.isArray(esito.d.correlate)?esito.d.correlate:[])){
+      if(c && !correlate.includes(c)) correlate.push(c);
+    }
+    chiudiPasso(indici[k],'fatto',
+      `${trovati.length} risultati, ${trovati.filter(r=>r&&r.prezzo).length} con prezzo`);
+  });
+
+  // Se sono fallite tutte, il motivo vero (chiave mancante, quota finita)
+  // deve arrivare all'utente al posto di un generico "non ho trovato niente".
+  if(primoErrore && esiti.every(e=>!e.ok)) throw primoErrore;
+}
+
+/* --- 3. il raffinamento, solo se serve --- */
+async function raffina(capo, prove, correlate){
+  const i=passo('I prezzi trovati sono pochi: raffino la ricerca');
+  let queries=[];
+  try{
+    const r=await callAIJson({
+      type:'text',
+      json:true,
+      prompt:`Stai cercando online il valore di questo capo usato:
+${descriviCapo(capo)}
+
+Le ricerche fatte finora hanno trovato ${prove.length} risultati, di cui solo ${conPrezzo(prove).length} con un prezzo leggibile. Ecco i titoli:
+${prove.slice(0,8).map((p,n)=>`${n+1}. ${String(p.titolo).slice(0,90)}${p.prezzo?` — ${p.prezzo.valore}${p.prezzo.valuta}`:''}`).join('\n')}
+
+Ricerche correlate suggerite da Google: ${correlate.length?correlate.join(', '):'nessuna'}
+
+Scrivi UNA sola ricerca nuova che abbia più probabilità di far uscire annunci con il prezzo. Cambia strategia rispetto a prima: nome del modello, sinonimo del capo, o una delle ricerche correlate.
+
+Rispondi SOLO con questo JSON valido, senza backtick né markdown:
+{"queries":[{"q":"testo della ricerca","tipo":"web"}]}`
+    });
+    queries=normalizzaQueries(r.ok && r.data ? r.data.queries : null).slice(0,1);
+  }catch(e){
+    // Idem: si ripiega su quello che ha suggerito Google.
+  }
+  if(!queries.length && correlate.length) queries=[{ q:correlate[0], tipo:'web' }];
+  chiudiPasso(i, queries.length?'fatto':'ko',
+    queries.length?queries[0].q:'nessuna ricerca migliore da provare');
+  return queries;
+}
+
+/* --- 4. il rapporto --- */
+async function sintetizza(capo, prove){
+  const i=passo('Leggo i risultati e scrivo il rapporto');
+  const p=prezziDelle(prove);
+  // Prima quelli con un prezzo: se il prompt deve essere tagliato, meglio
+  // perdere un risultato senza numeri.
+  const scelte=prove.slice().sort((a,b)=>(b.prezzo?1:0)-(a.prezzo?1:0)).slice(0,AG_PROVE_PROMPT);
+  const elenco=scelte.map((r,n)=>
+    `${n+1}. ${String(r.titolo).slice(0,90)} — ${r.fonte||'fonte ignota'}`
+    + (r.prezzo?` — ${r.prezzo.valore}${r.prezzo.valuta}`:' — prezzo non leggibile')
+    + (r.snippet?`\n   ${String(r.snippet).slice(0,120)}`:'')).join('\n');
+
+  const r=await callAIJson({
+    type:'text',
+    json:true,
+    prompt:`Sei un esperto del mercato italiano dell'usato e stai scrivendo un rapporto per chi deve vendere questo capo su Vinted.
+
+CAPO:
+${descriviCapo(capo)}
+
+RISULTATI TROVATI ONLINE ADESSO (numerati):
+${elenco}
+
+${p?`PREZZI LETTI NEI RISULTATI: mediana ${p.mediana}€, da ${p.min}€ a ${p.max}€, su ${p.n} risultati con prezzo.`:'NESSUN PREZZO LEGGIBILE nei risultati.'}
+
+REGOLE:
+- usa SOLO i risultati qui sopra, non la tua memoria dei prezzi
+- cita i risultati per numero, es. "(3)"
+- se un risultato è di un negozio è il prezzo del NUOVO: su Vinted l'usato vale una frazione, dillo
+- se i risultati non parlano dello stesso capo, o sono pochi, dichiara fiducia bassa invece di inventare un numero preciso
+- il prezzo consigliato è per una vendita reale su Vinted Italia nella condizione indicata
+
+Rispondi SOLO con questo JSON valido, senza backtick né markdown:
+{"riassunto":"3-4 frasi su cosa dice il mercato per questo capo","prezzoConsigliato":25,"rangeMin":18,"rangeMax":35,"fiducia":"alta, media o bassa","domanda":"alta, media o bassa","osservazioni":["osservazione con il numero del risultato che la sostiene"],"consigli":["consiglio pratico per vendere questo capo"]}`
+  });
+
+  if(!r.ok){
+    chiudiPasso(i,'ko','il modello non ha risposto in JSON');
+    throw new Error('Rapporto non interpretabile, riprova.');
+  }
+  chiudiPasso(i,'fatto');
+  return r.data;
+}
+
+/* --- prezzi e resa a schermo --- */
+function conPrezzo(prove){
+  return prove.filter(p=>p && p.prezzo && typeof p.prezzo.valore==='number');
+}
+
+// Stessa scelta della function: la mediana, non la media. Un solo negozio
+// fuori mercato sposterebbe tutto il rapporto.
+function prezziDelle(prove){
+  const valori=conPrezzo(prove).map(p=>p.prezzo.valore).sort((a,b)=>a-b);
+  if(!valori.length) return null;
+  const meta=Math.floor(valori.length/2);
+  const mediana=valori.length%2?valori[meta]:(valori[meta-1]+valori[meta])/2;
+  return { n:valori.length, min:valori[0], max:valori[valori.length-1], mediana:Math.round(mediana*100)/100 };
+}
+
+function renderRicerca(){
+  const d=lastRicerca.rapporto||{}, p=lastRicerca.prezzi;
+  const prezzo=num(d.prezzoConsigliato,null,0,100000);
+  const rMin=num(d.rangeMin,null,0,100000), rMax=num(d.rangeMax,null,0,100000);
+
+  const valori=[
+    prezzo!==null?{ n:prezzo+'€', l:'Prezzo consigliato' }:null,
+    (rMin!==null&&rMax!==null)?{ n:`${rMin}–${rMax}€`, l:'Range' }:null,
+    p?{ n:p.mediana+'€', l:`Mediana su ${p.n} annunci` }:null,
+    d.fiducia?{ n:String(d.fiducia).slice(0,12), l:'Fiducia' }:null
+  ].filter(Boolean);
+
+  // Tutto quello che segue arriva dal modello o da SerpApi: testo non fidato,
+  // esc() su ogni campo prima di finire in innerHTML.
+  const osservazioni=Array.isArray(d.osservazioni)?d.osservazioni:[];
+  const consigli=Array.isArray(d.consigli)?d.consigli:[];
+  const prove=lastRicerca.prove.slice(0,8);
+
+  document.getElementById('rRicBody').innerHTML=
+      `<div class="agm">${valori.map(x=>`<div class="agv"><div class="agvn">${esc(x.n)}</div><div class="agvl">${esc(x.l)}</div></div>`).join('')}</div>`
+    + (d.riassunto?`<p style="font-size:14px;line-height:1.7;color:#fff;margin-bottom:12px">${esc(d.riassunto)}</p>`:'')
+    + (d.domanda?`<div class="hSub" style="margin-bottom:10px">Domanda sul mercato: ${esc(d.domanda)}</div>`:'')
+    + (osservazioni.length?`<ul style="list-style:none;margin-bottom:6px">${osservazioni.map(o=>`<li class="fli"><span class="fdot"></span>${esc(o)}</li>`).join('')}</ul>`:'')
+    + consigli.map(c=>`<div class="tip">💡 ${esc(c)}</div>`).join('')
+    + `<div class="rl" style="margin:18px 0 0">🔗 Su cosa si basa</div>`
+    + prove.map(r=>`
+      <div class="lr">
+        <div style="flex:1;min-width:0">
+          <div class="lrt">${r.link?`<a href="${esc(r.link)}" target="_blank" rel="noopener noreferrer" style="color:inherit">${esc(r.titolo)}</a>`:esc(r.titolo)}</div>
+          <div class="lrs">${esc(r.fonte)}</div>
+        </div>
+        ${r.prezzo?`<div class="lrp">${r.prezzo.valore}${esc(r.prezzo.valuta)}</div>`:''}
+      </div>`).join('');
+
+  agTesto=[
+    d.riassunto||'',
+    prezzo!==null?`Prezzo consigliato: ${prezzo}€${(rMin!==null&&rMax!==null)?` (range ${rMin}–${rMax}€)`:''}`:'',
+    d.fiducia?`Fiducia: ${d.fiducia}`:'',
+    osservazioni.length?'\n'+osservazioni.map(o=>'- '+o).join('\n'):'',
+    consigli.length?'\n'+consigli.map(c=>'💡 '+c).join('\n'):''
+  ].filter(Boolean).join('\n').trim();
+}
+
+function copiaRicerca(){ copyText(agTesto); }
+
+// Il rapporto e' l'unico dato di mercato davvero fresco che abbiamo: la stima
+// prezzo lo legge da lastRicerca (vedi stimaPrezzo).
+function usaRicercaPerPrezzo(){
+  if(!lastRicerca) return;
+  const c=lastRicerca.capo;
+  if(c.nome && !v('pNome')) document.getElementById('pNome').value=c.nome;
+  if(c.marca && !v('pMarca')) document.getElementById('pMarca').value=c.marca;
+  applyCondizione('pCond', c.condizione);
+  sw('prezzo');
+  toast('💶 Ricerca agganciata alla stima');
+}
+
+// Arrivando dall'analisi foto la scheda e' gia' compilata: l'agente serve a
+// cercare, non a farsi riscrivere gli stessi dati a mano.
+function prefillRicerca(){
+  const obj=lastAnalysis;
+  if(!obj) return;
+  const set=(id,val)=>{
+    const el=document.getElementById(id);
+    if(el && !el.value && val) el.value=String(val).slice(0,80);
+  };
+  set('sNome', obj.tipo);
+  if(obj.brand && !obj.brand.toLowerCase().includes('non identificat')) set('sMarca', obj.brand);
+  set('sTaglia', obj.taglie);
+  set('sNote', [obj.colore, obj.materiale].filter(Boolean).join(' '));
+  applyCondizione('sCond', obj.condizione);
+}
+
+function toRicerca(nome){
+  if(nome && !v('sNome')) document.getElementById('sNome').value=String(nome).slice(0,80);
+  sw('ricerca');
+  toast('🤖 Controlla i dati e avvia la ricerca');
 }
 
 /* ===== STORICO (localStorage, solo su questo device) ===== */

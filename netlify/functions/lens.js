@@ -1,4 +1,3 @@
-const https = require('https');
 const S = require('./lib/shared');
 
 // Ricerca per immagine via SerpApi (Google Lens).
@@ -93,7 +92,7 @@ async function caricaImmagine(binario, deadline) {
   const boundary = '----damnvinted' + Date.now().toString(36);
   const payload = corpoMultipart(binario, boundary);
 
-  const res = await inviaHttp({
+  const res = await S.inviaHttp({
     hostname: SERPAPI_HOST,
     path: '/image',
     method: 'POST',
@@ -125,7 +124,7 @@ async function cercaLens(imageId, deadline) {
     `api_key=${encodeURIComponent(SERPAPI_KEY)}`
   ].join('&');
 
-  const res = await inviaHttp({
+  const res = await S.inviaHttp({
     hostname: SERPAPI_HOST,
     path: `/search?${query}`,
     method: 'GET',
@@ -177,7 +176,9 @@ function normalizza(data) {
              || (data.knowledge_graph && data.knowledge_graph[0] && data.knowledge_graph[0].title)
              || '',
     risultati,
-    prezzi: statistichePrezzi(risultati)
+    // Non la media dei listini: la mediana, che non si fa trascinare dal
+    // negozio fuori mercato di turno.
+    prezzi: S.statistichePrezzi(risultati.map(r => r.prezzo && r.prezzo.valore))
   };
 }
 
@@ -189,21 +190,6 @@ function prezzoDi(m) {
   return { valore: Math.round(valore * 100) / 100, valuta: String(p.currency || '€').slice(0, 3) };
 }
 
-// Il prezzo che serve a chi vende su Vinted non e' la media dei listini: e' la
-// mediana, che non si fa trascinare dal negozio fuori mercato di turno.
-function statistichePrezzi(risultati) {
-  const valori = risultati.map(r => r.prezzo && r.prezzo.valore).filter(v => typeof v === 'number').sort((a, b) => a - b);
-  if (!valori.length) return null;
-  const meta = Math.floor(valori.length / 2);
-  const mediana = valori.length % 2 ? valori[meta] : (valori[meta - 1] + valori[meta]) / 2;
-  return {
-    n: valori.length,
-    min: valori[0],
-    max: valori[valori.length - 1],
-    mediana: Math.round(mediana * 100) / 100
-  };
-}
-
 function statusPerIlClient(status) {
   if (status === 429) return 429;
   return 502;
@@ -213,47 +199,4 @@ function erroreLeggibile(status) {
   if (status === 429) return 'Ricerche per immagine esaurite per questo mese.';
   if (status === 401 || status === 403) return 'Il servizio di ricerca ha rifiutato le credenziali del sito.';
   return 'Ricerca per immagine non disponibile al momento. Riprova tra poco.';
-}
-
-const agent = new https.Agent({ keepAlive: true, keepAliveMsecs: 1500, maxSockets: 10 });
-
-function inviaHttp(opzioni, payload, deadline) {
-  return new Promise((resolve, reject) => {
-    let guard = null;
-    const settle = (fn) => (arg) => { clearTimeout(guard); fn(arg); };
-    const ok = settle(resolve);
-    const ko = settle(reject);
-
-    const headers = Object.assign({}, opzioni.headers);
-    if (payload) headers['Content-Length'] = Buffer.byteLength(payload);
-
-    const req = https.request({
-      hostname: opzioni.hostname,
-      path: opzioni.path,
-      method: opzioni.method,
-      agent,
-      headers,
-      timeout: Math.max(1000, deadline - Date.now())
-    }, (res) => {
-      let data = '';
-      res.setEncoding('utf8');
-      res.on('data', chunk => { data += chunk; });
-      res.on('end', () => ok({ status: res.statusCode, body: data }));
-    });
-
-    guard = setTimeout(() => {
-      const err = new Error('Deadline ricerca superata');
-      err.code = 'AI_TIMEOUT';
-      req.destroy(err);
-    }, Math.max(1000, deadline - Date.now()));
-
-    req.on('timeout', () => {
-      const err = new Error('Timeout ricerca');
-      err.code = 'AI_TIMEOUT';
-      req.destroy(err);
-    });
-    req.on('error', ko);
-    if (payload) req.write(payload);
-    req.end();
-  });
 }

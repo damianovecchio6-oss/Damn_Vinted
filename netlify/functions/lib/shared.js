@@ -2,6 +2,7 @@
 // solo i file in cima a functions/ (e le sottocartelle con lo stesso nome del
 // file), quindi questo modulo non diventa un endpoint per sbaglio.
 const crypto = require('crypto');
+const https = require('https');
 
 const GROQ_KEY = process.env.GROQ_API_KEY || process.env.GROQ_KEY;
 
@@ -107,8 +108,8 @@ function rateLimited(ip) {
 }
 
 // Nessuna env var nuova da impostare: se SESSION_SECRET non c'e', deriviamo un
-// segreto stabile dalla chiave che esiste gia'. Le due function lo derivano
-// allo stesso modo, quindi un token emesso da una vale anche per l'altra.
+// segreto stabile dalla chiave che esiste gia'. Tutte le function lo derivano
+// allo stesso modo, quindi un token emesso da una vale anche per le altre.
 function sessionSecret() {
   if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
   return crypto.createHash('sha256').update(`${GROQ_KEY || ''}|vinted-session-v1`).digest('hex');
@@ -226,9 +227,78 @@ function checkRequest(event, opts) {
   return { cors, ip, headers };
 }
 
+/* ============================== HTTP ============================== */
+
+// Le istanze delle function vengono riusate a caldo: tenendo viva la connessione
+// ci risparmiamo handshake TCP+TLS a ogni richiesta.
+const agent = new https.Agent({ keepAlive: true, keepAliveMsecs: 1500, maxSockets: 10 });
+
+// Una richiesta HTTPS con un tetto di tempo vero. Le tre function chiamano tutte
+// servizi esterni dentro i 10s che Netlify concede, e sbagliare il timeout qui
+// significa farsi chiudere la function a meta' invece di rispondere un errore.
+function inviaHttp(opzioni, payload, deadline) {
+  return new Promise((resolve, reject) => {
+    let guard = null;
+    const settle = (fn) => (arg) => { clearTimeout(guard); fn(arg); };
+    const ok = settle(resolve);
+    const ko = settle(reject);
+
+    const headers = Object.assign({}, opzioni.headers);
+    if (payload) headers['Content-Length'] = Buffer.byteLength(payload);
+
+    const req = https.request({
+      hostname: opzioni.hostname,
+      path: opzioni.path,
+      method: opzioni.method,
+      agent,
+      headers,
+      timeout: Math.max(1000, deadline - Date.now())
+    }, (res) => {
+      let data = '';
+      res.setEncoding('utf8');
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => ok({ status: res.statusCode, body: data }));
+    });
+
+    // Il timeout di http.request misura l'inattivita' del socket, non la durata
+    // totale: da solo non impedisce a una risposta lenta ma continua di
+    // scavalcare la deadline. Questo e' il tetto assoluto.
+    guard = setTimeout(() => {
+      const err = new Error('Deadline superata');
+      err.code = 'AI_TIMEOUT';
+      req.destroy(err);
+    }, Math.max(1000, deadline - Date.now()));
+
+    req.on('timeout', () => {
+      const err = new Error('Timeout della richiesta');
+      err.code = 'AI_TIMEOUT';
+      req.destroy(err);
+    });
+    req.on('error', ko);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+// Il prezzo di riferimento e' la mediana, non la media: un solo venditore fuori
+// mercato non deve spostarla. Serve alla ricerca per immagine e all'agente, che
+// partono da liste diverse ma con lo stesso problema.
+function statistichePrezzi(valoriGrezzi) {
+  const valori = (valoriGrezzi || []).filter(v => typeof v === 'number' && isFinite(v) && v > 0).sort((a, b) => a - b);
+  if (!valori.length) return null;
+  const meta = Math.floor(valori.length / 2);
+  const mediana = valori.length % 2 ? valori[meta] : (valori[meta - 1] + valori[meta]) / 2;
+  return {
+    n: valori.length,
+    min: valori[0],
+    max: valori[valori.length - 1],
+    mediana: Math.round(mediana * 100) / 100
+  };
+}
+
 module.exports = {
   GROQ_KEY, SESSION_TTL_MS,
   normalizeOrigin, isSameSite, isAllowed, corsFor, clientIp, rateLimited,
-  issueToken, verifyToken, lowerKeys, json,
+  issueToken, verifyToken, lowerKeys, json, inviaHttp, statistichePrezzi,
   cacheGet, cacheSet, cachePeek, checkRequest
 };

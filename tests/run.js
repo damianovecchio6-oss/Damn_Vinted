@@ -10,9 +10,11 @@ const SUITE = [
   ['modelli Groq', 'models.js', 'fallback, cache a scadenza, errori upstream'],
   ['modelli Gemini', 'gemini.js', 'scelta provider, formato richiesta, ripieghi'],
   ['ricerca immagine', 'lens.js', 'multipart SerpApi, prezzi, errori'],
+  ['ricerca online', 'ricerca.js', 'query, prezzi negli snippet, cache, errori'],
   ['interfaccia', 'ui.js', 'accessibilita, doppio invio, storico'],
   ['analisi foto', 'photo.js', 'codifica adattiva, miniatura, passaggio annuncio'],
-  ['etichetta e Lens', 'nuove.js', 'lettura dedicata, merge, identificazione prodotto']
+  ['etichetta e Lens', 'nuove.js', 'lettura dedicata, merge, identificazione prodotto'],
+  ['agente di ricerca', 'agente.js', 'piano, ricerche, raffinamento, rapporto']
 ];
 
 let totale = 0, falliti = 0, suiteKo = [];
