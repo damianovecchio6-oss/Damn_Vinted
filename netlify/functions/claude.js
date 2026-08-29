@@ -351,9 +351,26 @@ const TEXT_ONLY_HINT = /gpt-oss|allam|compound/i;
 // modelli di chat, per ultimi quelli che con ogni probabilita' non vedono.
 // Il catalogo di Groq non dichiara le modalita', quindi l'unica prova certa
 // e' mandare la richiesta vera.
+// Dentro la stessa famiglia il numero piu' alto e' il modello piu' recente
+// (qwen3.8 batte qwen3.6) o il piu' grande (gpt-oss-120b batte gpt-oss-20b).
+// In ordine alfabetico finivano prima i piu' vecchi, e la ricerca si fermava
+// li'. Le famiglie restano nell'ordine di prima.
+function familyKey(id) { return id.replace(/\d+(\.\d+)?/g, '#'); }
+function versionScore(id) {
+  const nums = id.match(/\d+(?:\.\d+)?/g);
+  return nums ? Number(nums[0]) : 0;
+}
+function newestFirst(ids) {
+  return ids.slice().sort((a, b) => {
+    const fa = familyKey(a), fb = familyKey(b);
+    if (fa !== fb) return fa < fb ? -1 : 1;
+    return versionScore(b) - versionScore(a);
+  });
+}
+
 async function candidateModels(kind, exclude) {
   const models = await listModels();
-  const pool = models.filter(id => !exclude.includes(id) && !NOT_CHAT.test(id));
+  const pool = newestFirst(models.filter(id => !exclude.includes(id) && !NOT_CHAT.test(id)));
   const ordered = [];
   const push = id => { if (!ordered.includes(id)) ordered.push(id); };
 
