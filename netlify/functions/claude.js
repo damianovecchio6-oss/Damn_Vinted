@@ -45,6 +45,14 @@ const MODEL_PREFERENCES = {
 const resolvedModel = {};
 let availableModels = null;
 
+// Quanti modelli provare al massimo, e entro quanto tempo. Un modello
+// sbagliato viene rifiutato in poche centinaia di ms, ma non possiamo
+// sforare il limite di Netlify mentre cerchiamo.
+// Un modello che rifiuta risponde in poche centinaia di ms, quindi possiamo
+// permetterci di provarne diversi; e' il budget di tempo a fermarci davvero.
+const MAX_MODEL_ATTEMPTS = 8;
+const PROBE_BUDGET_MS = 5000;
+
 function buildAllowlist() {
   const list = (process.env.ALLOWED_ORIGINS || '')
     .split(',')
@@ -157,6 +165,8 @@ exports.handler = async (event) => {
     return json(413, cors, { error: 'Immagini troppo pesanti' });
   }
 
+  const startedAt = Date.now();
+
   try {
     let body;
     try {
@@ -200,6 +210,13 @@ exports.handler = async (event) => {
     }
 
     const kind = type === 'image' ? 'image' : 'text';
+
+    // Se abbiamo gia' scoperto che nessun modello va bene, non rifacciamo
+    // tutto il giro di tentativi a ogni foto: rispondiamo subito.
+    if (resolvedModel[kind] === false) {
+      return json(502, cors, { error: noUsableModelMessage(kind, []) });
+    }
+
     const request = {
       model: resolvedModel[kind] || (kind === 'image' ? MODEL_VISION : MODEL_TEXT),
       messages,
@@ -214,21 +231,32 @@ exports.handler = async (event) => {
 
     let result = await callGroq(request);
 
-    // Modello ritirato da Groq: chiediamo quali esistono e riproviamo con
-    // il migliore disponibile, invece di restituire un errore all'utente.
-    if (isModelMissing(result)) {
-      const fallback = await resolveModel(kind, request.model);
-      if (fallback) {
-        console.log(`Modello ${request.model} non disponibile, passo a ${fallback}`);
-        resolvedModel[kind] = fallback;
-        request.model = fallback;
+    // Il catalogo di Groq non dice quali modelli accettano immagini, e i nomi
+    // non bastano a indovinarlo. Se il modello e' stato ritirato o rifiuta le
+    // foto, proviamo i candidati successivi finche' uno risponde davvero.
+    if (needsAnotherModel(result, kind)) {
+      const tried = [request.model];
+      const candidates = await candidateModels(kind, tried);
+      // Distinguiamo "provati tutti" da "finito il tempo": solo nel primo
+      // caso possiamo concludere che non esiste un modello adatto.
+      let exhausted = true;
+      for (const candidate of candidates) {
+        if (Date.now() - startedAt > PROBE_BUDGET_MS) { exhausted = false; break; }
+        request.model = candidate;
+        tried.push(candidate);
         result = await callGroq(request);
-      } else {
-        return json(502, cors, {
-          error: `Nessun modello ${kind === 'image' ? 'con visione' : 'di testo'} disponibile su Groq. `
-               + `Imposta ${kind === 'image' ? 'GROQ_MODEL_VISION' : 'GROQ_MODEL_TEXT'} con uno di: `
-               + (availableModels || []).slice(0, 12).join(', ')
-        });
+        if (!needsAnotherModel(result, kind)) {
+          console.log(`Modello ${tried[0]} non utilizzabile, passo a ${candidate}`);
+          resolvedModel[kind] = candidate;
+          break;
+        }
+      }
+      if (needsAnotherModel(result, kind)) {
+        // Abbiamo esaurito i candidati: ricordiamocelo, cosi' la prossima
+        // richiesta non ripete tutti i tentativi. Se invece ci siamo fermati
+        // per il tempo, non concludiamo niente e riproveremo.
+        if (exhausted) resolvedModel[kind] = false;
+        return json(502, cors, { error: noUsableModelMessage(kind, tried) });
       }
     }
 
@@ -278,6 +306,18 @@ function lowerKeys(obj) {
   return out;
 }
 
+// Messaggio utile invece di un 404 criptico: cosa abbiamo provato, quale
+// variabile impostare e l'elenco COMPLETO dei modelli dell'account.
+function noUsableModelMessage(kind, tried) {
+  const all = availableModels || [];
+  return (kind === 'image'
+            ? 'Nessun modello di questo account Groq accetta immagini. '
+            : 'Nessun modello di testo utilizzabile su Groq. ')
+       + (tried.length ? `Provati: ${tried.join(', ')}. ` : '')
+       + `Imposta ${kind === 'image' ? 'GROQ_MODEL_VISION' : 'GROQ_MODEL_TEXT'} `
+       + `con uno di questi ${all.length} modelli: ${all.join(', ')}`;
+}
+
 // Groq risponde 404 con "does not exist or you do not have access to it"
 // quando il modello e' stato ritirato dal catalogo.
 function isModelMissing(result) {
@@ -285,19 +325,41 @@ function isModelMissing(result) {
   return /does not exist|model_not_found|decommissioned/i.test(result.body || '');
 }
 
-// Chiede a Groq il catalogo e sceglie il primo modello che soddisfa le
-// preferenze per questo tipo di richiesta, escludendo quello appena fallito.
-async function resolveModel(kind, failedModel) {
+// Vale la pena provare un altro modello? Sia se questo non esiste piu', sia
+// se esiste ma rifiuta le immagini: Groq lo segnala con un 400 che parla di
+// image/vision/multimodal.
+function needsAnotherModel(result, kind) {
+  if (isModelMissing(result)) return true;
+  if (kind !== 'image' || !result || result.status !== 400) return false;
+  return /image|vision|multimodal|modality/i.test(result.body || '');
+}
+
+// Modelli che non sono chat completion: sintesi vocale, trascrizione,
+// classificatori di sicurezza, embedding. Provarli e' solo tempo perso.
+const NOT_CHAT = /orpheus|whisper|tts|prompt-guard|guard|embed|rerank|distil/i;
+
+// Famiglie che sappiamo essere di solo testo: le proviamo comunque, ma per
+// ultime, per non bruciare i tentativi prima di arrivare a un multimodale.
+const TEXT_ONLY_HINT = /gpt-oss|allam|compound/i;
+
+// Ordine in cui provare: prima i nomi che promettono visione, poi gli altri
+// modelli di chat, per ultimi quelli che con ogni probabilita' non vedono.
+// Il catalogo di Groq non dichiara le modalita', quindi l'unica prova certa
+// e' mandare la richiesta vera.
+async function candidateModels(kind, exclude) {
   const models = await listModels();
-  if (!models.length) return null;
-  const candidates = models.filter(id => id !== failedModel);
+  const pool = models.filter(id => !exclude.includes(id) && !NOT_CHAT.test(id));
+  const ordered = [];
+  const push = id => { if (!ordered.includes(id)) ordered.push(id); };
+
   for (const pattern of MODEL_PREFERENCES[kind] || []) {
-    const hit = candidates.find(id => pattern.test(id));
-    if (hit) return hit;
+    for (const id of pool) if (pattern.test(id)) push(id);
   }
-  // Per il testo qualunque modello e' meglio di un errore; per le immagini
-  // no: un modello senza visione rifiuterebbe comunque la richiesta.
-  return kind === 'text' ? (candidates[0] || null) : null;
+  if (kind === 'image') {
+    for (const id of pool) if (!TEXT_ONLY_HINT.test(id)) push(id);
+  }
+  for (const id of pool) push(id);
+  return ordered.slice(0, MAX_MODEL_ATTEMPTS);
 }
 
 function listModels() {
