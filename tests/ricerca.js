@@ -113,28 +113,34 @@ const nuovaQuery = (testo) => `${testo} ${++contatore}`;
   check('link non http scartato', d.risultati.some(x => /nuova/.test(x.titolo) && x.link === ''), d.risultati.find(x => /nuova/.test(x.titolo)));
   check('fonte dedotta dal displayed_link', d.risultati.some(x => x.fonte === 'subito.it › abbigliamento'));
   check('fonte dedotta dall\'host quando manca, senza www', d.risultati.some(x => x.titolo === 'Riempitivo 0' && x.fonte === 'negozio0.it'), d.risultati.find(x => x.titolo === 'Riempitivo 0'));
-  check('lo snippet viene tenuto, accorciato', d.risultati[0].snippet.startsWith('Felpa in ottime condizioni'));
+  // Nessuno di questi controlli deve poter lanciare: se il valore manca devono
+  // fallire e basta, altrimenti l'eccezione ferma la suite e si perde proprio
+  // la riga che spiegava il guasto.
+  const primo = d.risultati[0] || {};
+  check('lo snippet viene tenuto, accorciato', String(primo.snippet || '').startsWith('Felpa in ottime condizioni'), primo.snippet);
   check('ricerche correlate riportate, al massimo 4', d.correlate.length === 4 && d.correlate[0] === 'felpa carhartt vinted', d.correlate);
 
   console.log('\n-- prezzi letti nello snippet --');
-  check('45,00 € letto come 45', d.risultati.find(x => x.titolo === 'Felpa Carhartt usata').prezzo.valore === 45);
-  check('"Prezzo 30 €" letto come 30', d.risultati.find(x => /Hoodie/.test(x.titolo)).prezzo.valore === 30);
-  check('1.234,50 € letto come 1234.5 (punto = migliaia)', d.risultati.find(x => /nuova/.test(x.titolo)).prezzo.valore === 1234.5, d.risultati.find(x => /nuova/.test(x.titolo)).prezzo);
-  check('un anno non diventa un prezzo', d.risultati.find(x => /Storia del marchio/.test(x.titolo)).prezzo === null);
-  check('nessun prezzo -> null, non NaN', d.risultati.find(x => x.titolo === 'Riempitivo 0').prezzo === null);
+  const trovato = re => d.risultati.find(x => re.test(x.titolo)) || {};
+  check('45,00 € letto come 45', (trovato(/^Felpa Carhartt usata$/).prezzo || {}).valore === 45, trovato(/^Felpa Carhartt usata$/).prezzo);
+  check('"Prezzo 30 €" letto come 30', (trovato(/Hoodie/).prezzo || {}).valore === 30, trovato(/Hoodie/).prezzo);
+  check('1.234,50 € letto come 1234.5 (punto = migliaia)', (trovato(/nuova/).prezzo || {}).valore === 1234.5, trovato(/nuova/).prezzo);
+  check('un anno non diventa un prezzo', trovato(/Storia del marchio/).prezzo === null, trovato(/Storia del marchio/).prezzo);
+  check('nessun prezzo -> null, non NaN', trovato(/^Riempitivo 0$/).prezzo === null, trovato(/^Riempitivo 0$/).prezzo);
   // prezzi tra i primi 8: 45, 30, 1234.5, 60 -> mediana (45+60)/2 = 52.5
-  check('mediana sui prezzi trovati', d.prezzi.n === 4 && d.prezzi.mediana === 52.5, d.prezzi);
-  check('min e max corretti', d.prezzi.min === 30 && d.prezzi.max === 1234.5, d.prezzi);
+  const stat = d.prezzi || {};
+  check('mediana sui prezzi trovati', stat.n === 4 && stat.mediana === 52.5, d.prezzi);
+  check('min e max corretti', stat.min === 30 && stat.max === 1234.5, d.prezzi);
 
   reset();
   risposta = { status: 200, body: JSON.stringify({ shopping_results: [{ title: 'Felpa nuova', link: 'https://x.it/1', source: 'Zalando', extracted_price: 89.9, price: '89,90 €' }] }) };
   const dShop = JSON.parse((await post('3.1.2.0', { query: nuovaQuery('felpa'), tipo: 'shopping' })).body);
-  check('extracted_price delle schede shopping usato com\'e\'', dShop.risultati[0].prezzo.valore === 89.9, dShop.risultati[0]);
+  check('extracted_price delle schede shopping usato com\'e\'', ((dShop.risultati[0] || {}).prezzo || {}).valore === 89.9, dShop.risultati[0]);
 
   reset();
   risposta = { status: 200, body: JSON.stringify({ organic_results: [{ title: 'In dollari', link: 'https://us.shop/1', snippet: 'only $ 40 today' }] }) };
   const dDollari = JSON.parse((await post('3.1.2.1', { query: nuovaQuery('hoodie') })).body);
-  check('valuta diversa riconosciuta', dDollari.risultati[0].prezzo.valuta === '$', dDollari.risultati[0].prezzo);
+  check('valuta diversa riconosciuta', ((dDollari.risultati[0] || {}).prezzo || {}).valuta === '$', (dDollari.risultati[0] || {}).prezzo);
   check('i dollari restano fuori dalla mediana in euro', dDollari.prezzi === null, dDollari.prezzi);
 
   reset();
@@ -159,7 +165,7 @@ const nuovaQuery = (testo) => `${testo} ${++contatore}`;
   check('"22euro" attaccato letto come 22', (per('Attaccato al numero').prezzo || {}).valore === 22, per('Attaccato al numero'));
   check('"19 EUR" continua a funzionare', (per('Solo eur').prezzo || {}).valore === 19, per('Solo eur'));
   check('"neurologo" non diventa un prezzo', per('Parola che contiene eur').prezzo === null, per('Parola che contiene eur'));
-  check('mediana anche sui prezzi scritti a parole', dEuro.prezzi.n === 4 && dEuro.prezzi.mediana === 25, dEuro.prezzi);
+  check('mediana anche sui prezzi scritti a parole', (dEuro.prezzi || {}).n === 4 && (dEuro.prezzi || {}).mediana === 25, dEuro.prezzi);
 
   console.log('\n-- cache: la quota SerpApi e\' 250 al mese --');
   reset();

@@ -13,7 +13,7 @@ netlify/functions/lens.js     ricerca per immagine (Google Lens via SerpApi)
 netlify/functions/ricerca.js  ricerca testuale online, lo strumento dell'agente
 netlify/functions/lib/        codice condiviso dalle function
 tests/                        suite di test, nessun framework
-.claude/                      skill e agente per il collaudo
+.claude/                      skill e agenti: collaudo e riparazione
 .github/workflows/            i test a ogni push
 scripts/verifica-deploy.js    controlla un sito gia' deployato: function e chiavi
 ```
@@ -51,13 +51,22 @@ suite. E' l'unico pezzo che non dipende da qualcuno che si ricordi di lanciarlo,
 ed e' il motivo per cui una pull request qui ha un segno verde o rosso senza che
 nessuno lo chieda.
 
-**A voce, dentro Claude Code.** `.claude/skills/collaudo/` e' una skill: spiega
-quali suite ci sono, cosa protegge ognuna, come si legge un fallimento, quali
-fallimenti non sono bug del sito, e che forma deve avere il rapporto. Si invoca
-con `/collaudo`. `.claude/agents/collaudatore.md` e' la stessa cosa in mano a un
-agente che lavora per conto suo e riferisce: esegue, isola i fallimenti, li
-riporta parola per parola, e non tocca niente - un test che fallisce non si
-aggiusta facendolo tacere.
+**A voce, dentro Claude Code.** Due skill e due agenti, che fanno mezzo lavoro
+ciascuno.
+
+`/collaudo` dice **se va**: quali suite ci sono, cosa protegge ognuna, come si
+legge un fallimento, quali fallimenti non sono bug del sito, che forma deve
+avere il rapporto. L'agente `collaudatore` fa lo stesso giro da solo e riferisce
+senza poter toccare niente.
+
+`/riparazione` lo **rimette a posto**: la mappa sintomo -> dove guardare (le
+function, l'interfaccia, il deploy), il giro riproduci-capisci-aggiusta-
+riverifica, e soprattutto l'elenco di cosa non si tocca mai. L'agente
+`riparatore` puo' modificare il codice, e per questo ha piu' regole degli altri:
+non aggiusta un test per farlo tacere, non abbassa i controlli delle function,
+non allarga la CSP, non pubblica niente, e si ferma a chiedere quando la
+correzione cambierebbe il comportamento del prodotto o quando il guasto e' fuori
+dal codice - una chiave scaduta, la quota finita, un modello ritirato.
 
 **A mano, sul sito vero.** `npm run verifica -- <url>` (vedi
 [Deploy su Netlify](#deploy-su-netlify)): e' l'unico che puo' dire se le chiavi
