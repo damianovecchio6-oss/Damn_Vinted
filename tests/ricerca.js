@@ -143,6 +143,24 @@ const nuovaQuery = (testo) => `${testo} ${++contatore}`;
   check('risposta senza risultati -> lista vuota, non errore', Array.isArray(dVuoto.risultati) && dVuoto.risultati.length === 0);
   check('nessun prezzo -> prezzi null', dVuoto.prezzi === null);
 
+  console.log('\n-- l\'euro scritto a parole, come lo scrivono gli annunci --');
+  reset();
+  risposta = { status: 200, body: JSON.stringify({ organic_results: [
+    { title: 'Prezzo a parole', link: 'https://vinted.it/e', source: 'Vinted', snippet: 'Come nuova, 35 euro spedizione inclusa' },
+    { title: 'Euro davanti', link: 'https://subito.it/f', source: 'Subito', snippet: 'Euro 28 trattabili, ritiro a mano' },
+    { title: 'Attaccato al numero', link: 'https://depop.it/g', source: 'Depop', snippet: 'prezzo 22euro spedito' },
+    { title: 'Solo eur', link: 'https://ebay.it/i', source: 'eBay', snippet: 'base asta 19 EUR' },
+    { title: 'Parola che contiene eur', link: 'https://blog.it/h', source: 'Blog', snippet: 'Il neurologo consiglia 8 ore di sonno' }
+  ] }) };
+  const dEuro = JSON.parse((await post('3.1.1.9', { query: nuovaQuery('felpa a parole') })).body);
+  const per = t => dEuro.risultati.find(x => x.titolo === t) || {};
+  check('"35 euro" letto come 35', (per('Prezzo a parole').prezzo || {}).valore === 35, per('Prezzo a parole'));
+  check('"Euro 28" letto come 28', (per('Euro davanti').prezzo || {}).valore === 28, per('Euro davanti'));
+  check('"22euro" attaccato letto come 22', (per('Attaccato al numero').prezzo || {}).valore === 22, per('Attaccato al numero'));
+  check('"19 EUR" continua a funzionare', (per('Solo eur').prezzo || {}).valore === 19, per('Solo eur'));
+  check('"neurologo" non diventa un prezzo', per('Parola che contiene eur').prezzo === null, per('Parola che contiene eur'));
+  check('mediana anche sui prezzi scritti a parole', dEuro.prezzi.n === 4 && dEuro.prezzi.mediana === 25, dEuro.prezzi);
+
   console.log('\n-- cache: la quota SerpApi e\' 250 al mese --');
   reset();
   const ripetuta = nuovaQuery('giacca levis');
