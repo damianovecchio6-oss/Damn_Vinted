@@ -54,7 +54,9 @@ Due fallimenti che **non** sono bug del sito:
   colpa. (Nel dubbio, quello del rate limit congela l'orologio apposta.)
 
 Tutto il resto e' un bug: **non si sistema il test per farlo passare**. Se il
-controllo dice il vero e il codice no, si aggiusta il codice.
+controllo dice il vero e il codice no, si aggiusta il codice - e per farlo c'e'
+`.claude/skills/riparazione/`, con la mappa sintomo -> dove guardare e le regole
+di cosa non si tocca. Il collaudo dice se va; la riparazione lo rimette a posto.
 
 ## 3. Il sito pubblicato
 
