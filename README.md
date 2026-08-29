@@ -25,7 +25,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-262 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+279 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -112,15 +112,22 @@ racconta passo per passo mentre lo fa.
    quota.
 4. **Scrive il rapporto** — prezzo consigliato, range, mediana degli annunci,
    fiducia dichiarata, osservazioni che citano i risultati per numero. Sotto
-   restano i link su cui si basa, cosi' le sue conclusioni si possono
-   controllare una per una.
+   resta la stessa lista numerata che ha letto il modello: il "(3)" del
+   rapporto e la terza riga sono lo stesso annuncio, con il suo link. Le sue
+   conclusioni si controllano una per una.
 
 Il ciclo gira nel browser, non dentro una function: Netlify le chiude a 10s e
 un giro intero non ci starebbe. Ogni passo e' una chiamata corta per conto suo.
 
-Il rapporto poi alimenta la stima prezzo: il bottone "Usa per la stima prezzo"
-passa alla scheda Prezzo i prezzi trovati e la conclusione dell'agente, che
-entrano nel prompt come dati di mercato veri al posto della memoria del modello.
+Il rapporto poi alimenta la stima prezzo: prezzi trovati e conclusione
+dell'agente entrano nel prompt come dati di mercato veri al posto della memoria
+del modello. Ma solo se la scheda Prezzo parla dello stesso capo: si stimano
+piu' capi di seguito, e una stima sbagliata costruita su numeri "veri" e'
+peggio di una stima senza numeri. Il bottone "Usa per la stima prezzo" porta
+di la' anche nome e marca; foto nuove azzerano tutto.
+
+Ogni rapporto finisce nello storico insieme all'annuncio e alla stima dello
+stesso capo.
 
 ## Come si usa l'analisi foto
 

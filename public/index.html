@@ -122,6 +122,8 @@ body{
 .agp.ko{color:#ff8888}
 .agp.ko .agi{color:var(--re)}
 .agn{font-size:11px;color:var(--mu);margin-top:2px}
+.agspin{width:12px;height:12px;border-width:2px;display:inline-block;vertical-align:-1px}
+.lrn{font-family:'Orbitron',sans-serif;font-size:11px;font-weight:700;color:var(--mu);width:16px;flex-shrink:0;padding-top:2px}
 .agm{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
 .agv{flex:1 1 96px;background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:11px 13px}
 .agvn{font-family:'Orbitron',sans-serif;font-size:19px;font-weight:900;color:var(--t);line-height:1.1}
@@ -464,6 +466,9 @@ document.getElementById('fileInput').addEventListener('change',function(e){
   selFiles=picked.slice(0,4);
   currentItemId=null; lastItemSig=null; lastAnalysis=null; lastThumbnail=null;
   labelIndex=-1; lastEtichetta=null; lastLens=null;
+  // Foto nuove = capo nuovo: la ricerca di quello di prima non deve restare
+  // in giro, ne' nella scheda ne' dentro al prompt della stima.
+  resetRicerca();
   renderPrev(); syncUploadUI();
 });
 
@@ -1055,7 +1060,7 @@ async function stimaPrezzo(){
 
     // Il rapporto dell'agente pesa piu' dei listini di Lens: sono annunci
     // dell'usato, cioe' esattamente il mercato su cui si vende qui.
-    if(lastRicerca && lastRicerca.prezzi){
+    if(lastRicerca && lastRicerca.prezzi && stessoCapo(lastRicerca.capo, { nome:v('pNome'), marca:v('pMarca') })){
       const q=lastRicerca.prezzi, rap=lastRicerca.rapporto||{};
       mercato += `\n\nRICERCA ONLINE appena fatta su ${lastRicerca.prove.length} risultati reali del mercato italiano:`
         + `\n- prezzi letti negli annunci: mediana ${q.mediana}€, da ${q.min}€ a ${q.max}€ (su ${q.n} annunci)`
@@ -1217,21 +1222,34 @@ function chiudiPasso(i, stato, nota){
   renderPassi();
 }
 
-const AG_SEGNI={ corso:'▸', fatto:'✓', ko:'×' };
+const AG_SEGNI={ fatto:'✓', ko:'×' };
 
 function renderPassi(){
   document.getElementById('agList').innerHTML=agPassi.map(p=>`
     <li class="agp ${p.stato}">
-      <span class="agi" aria-hidden="true">${AG_SEGNI[p.stato]||'▸'}</span>
+      <span class="agi" aria-hidden="true">${p.stato==='corso'?'<span class="spin agspin"></span>':AG_SEGNI[p.stato]}</span>
       <span style="flex:1;min-width:0">${esc(p.testo)}${p.nota?`<div class="agn">${esc(p.nota)}</div>`:''}</span>
     </li>`).join('');
+}
+
+// Svuota tutto quello che riguarda l'agente: campi, diario, rapporto.
+function resetRicerca(){
+  lastRicerca=null; agPassi=[]; agTesto='';
+  ['sNome','sMarca','sTaglia','sNote'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.value='';
+  });
+  renderPassi();
+  hide('agSteps'); hide('rRic'); hide('eRic');
 }
 
 async function avviaAgente(){
   const capo=datiCapo();
   if(!capo.nome && !capo.marca){ toast('SERVE ALMENO NOME O MARCA'); return; }
   if(!busy('ricerca',BTN_RIC)) return;
-  agPassi=[]; agTesto=''; renderPassi();
+  // Il rapporto vecchio sparisce prima di cominciare: finche' il nuovo non
+  // c'e', non deve poter finire nella stima di un altro capo.
+  lastRicerca=null; agPassi=[]; agTesto=''; renderPassi();
   show('agSteps'); hide('eRic'); hide('rRic');
   try{
     const prove=[], correlate=[];
@@ -1247,8 +1265,12 @@ async function avviaAgente(){
       throw new Error('Le ricerche non hanno trovato niente di utile. Prova col nome del modello o con la marca esatta.');
     }
 
-    const rapporto=await sintetizza(capo, prove);
-    lastRicerca={ capo, prove, prezzi:prezziDelle(prove), rapporto };
+    // Le prove che vanno nel prompt sono esattamente quelle che finiscono a
+    // schermo, nello stesso ordine: il modello cita per numero, e quel numero
+    // deve portare a un link che si puo' aprire.
+    const citate=ordinaProve(prove);
+    const rapporto=await sintetizza(capo, citate);
+    lastRicerca={ capo, prove:citate, prezzi:prezziDelle(citate), rapporto };
     renderRicerca();
     show('rRic');
   }catch(e){
@@ -1386,13 +1408,18 @@ Rispondi SOLO con questo JSON valido, senza backtick né markdown:
 }
 
 /* --- 4. il rapporto --- */
+// Prima quelle con un prezzo: se la lista va tagliata, meglio perdere un
+// risultato senza numeri.
+function ordinaProve(prove){
+  return prove.slice()
+    .sort((a,b)=>(b.prezzo?1:0)-(a.prezzo?1:0))
+    .slice(0,AG_PROVE_PROMPT);
+}
+
 async function sintetizza(capo, prove){
   const i=passo('Leggo i risultati e scrivo il rapporto');
   const p=prezziDelle(prove);
-  // Prima quelli con un prezzo: se il prompt deve essere tagliato, meglio
-  // perdere un risultato senza numeri.
-  const scelte=prove.slice().sort((a,b)=>(b.prezzo?1:0)-(a.prezzo?1:0)).slice(0,AG_PROVE_PROMPT);
-  const elenco=scelte.map((r,n)=>
+  const elenco=prove.map((r,n)=>
     `${n+1}. ${String(r.titolo).slice(0,90)} — ${r.fonte||'fonte ignota'}`
     + (r.prezzo?` — ${r.prezzo.valore}${r.prezzo.valuta}`:' — prezzo non leggibile')
     + (r.snippet?`\n   ${String(r.snippet).slice(0,120)}`:'')).join('\n');
@@ -1460,7 +1487,7 @@ function renderRicerca(){
   // esc() su ogni campo prima di finire in innerHTML.
   const osservazioni=Array.isArray(d.osservazioni)?d.osservazioni:[];
   const consigli=Array.isArray(d.consigli)?d.consigli:[];
-  const prove=lastRicerca.prove.slice(0,8);
+  const prove=lastRicerca.prove;
 
   document.getElementById('rRicBody').innerHTML=
       `<div class="agm">${valori.map(x=>`<div class="agv"><div class="agvn">${esc(x.n)}</div><div class="agvl">${esc(x.l)}</div></div>`).join('')}</div>`
@@ -1469,14 +1496,25 @@ function renderRicerca(){
     + (osservazioni.length?`<ul style="list-style:none;margin-bottom:6px">${osservazioni.map(o=>`<li class="fli"><span class="fdot"></span>${esc(o)}</li>`).join('')}</ul>`:'')
     + consigli.map(c=>`<div class="tip">💡 ${esc(c)}</div>`).join('')
     + `<div class="rl" style="margin:18px 0 0">🔗 Su cosa si basa</div>`
-    + prove.map(r=>`
+    + prove.map((r,n)=>`
       <div class="lr">
+        <div class="lrn" aria-hidden="true">${n+1}</div>
         <div style="flex:1;min-width:0">
           <div class="lrt">${r.link?`<a href="${esc(r.link)}" target="_blank" rel="noopener noreferrer" style="color:inherit">${esc(r.titolo)}</a>`:esc(r.titolo)}</div>
           <div class="lrs">${esc(r.fonte)}</div>
         </div>
         ${r.prezzo?`<div class="lrp">${r.prezzo.valore}${esc(r.prezzo.valuta)}</div>`:''}
       </div>`).join('');
+
+  // Stessa voce di storico di annuncio e stima quando il capo e' lo stesso:
+  // itemIdFor riusa l'id finche' nome e marca non cambiano.
+  upsertHistoryItem(itemIdFor(lastRicerca.capo.nome, lastRicerca.capo.marca), {
+    nome: lastRicerca.capo.nome, marca: lastRicerca.capo.marca,
+    taglia: lastRicerca.capo.taglia, condizione: lastRicerca.capo.condizione,
+    prezzoSuggerito: prezzo === null ? undefined : prezzo,
+    rangeMin: rMin === null ? undefined : rMin, rangeMax: rMax === null ? undefined : rMax,
+    consiglio: consigli[0] || ''
+  });
 
   agTesto=[
     d.riassunto||'',
@@ -1488,6 +1526,17 @@ function renderRicerca(){
 }
 
 function copiaRicerca(){ copyText(agTesto); }
+
+// I prezzi trovati valgono per il capo su cui l'agente ha cercato. Se nella
+// scheda prezzo c'e' un altro capo - si stimano piu' capi di seguito - quei
+// numeri non devono entrare nel prompt: una stima sbagliata con dati "veri"
+// e' peggio di una stima senza dati.
+function stessoCapo(a, b){
+  const parole=c=>String(`${c.nome||''} ${c.marca||''}`).toLowerCase()
+    .replace(/[^a-zà-ù0-9]+/g,' ').split(' ').filter(w=>w.length>2);
+  const pa=parole(a), pb=parole(b);
+  return pa.length>0 && pb.length>0 && pa.some(w=>pb.includes(w));
+}
 
 // Il rapporto e' l'unico dato di mercato davvero fresco che abbiamo: la stima
 // prezzo lo legge da lastRicerca (vedi stimaPrezzo).

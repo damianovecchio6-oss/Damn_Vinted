@@ -167,6 +167,101 @@ const RISULTATO = (titolo, prezzo, fonte) => ({
   check('la stima riceve i prezzi trovati dall\'agente', /RICERCA ONLINE/.test(promptPrezzo), promptPrezzo.slice(-400));
   check('la stima riceve la conclusione dell\'agente', /conclusione dell'agente: 42€/.test(promptPrezzo));
 
+  console.log('\n-- i numeri citati portano al link giusto --');
+  reset();
+  // Prima query senza prezzi, seconda con: a schermo devono comparire prima
+  // quelle con un prezzo, e il prompt deve avere lo stesso ordine.
+  risultatiPer = (b) => /shopping|prezzo/.test(b.query)
+    ? [RISULTATO('Con prezzo A', 40), RISULTATO('Con prezzo B', 55), RISULTATO('Con prezzo C', 62)]
+    : [RISULTATO('Senza prezzo A', null), RISULTATO('Senza prezzo B', null)];
+  await page.click('#nav-ricerca');
+  await page.click('#btnS');
+  await page.waitForSelector('#rRic:not([style*="display: none"])', { timeout: 30000 });
+  const elenco = (aiPost.find(b => /RISULTATI TROVATI ONLINE ADESSO/.test(b.prompt)).prompt.match(/^\d+\. .+$/gm) || []);
+  const righe = await page.evaluate(() => Array.from(document.querySelectorAll('#rRicBody .lr')).map(r => ({
+    n: r.querySelector('.lrn').textContent.trim(), titolo: r.querySelector('.lrt').textContent.trim()
+  })));
+  check('le prove a schermo sono numerate', righe.every((r, i) => r.n === String(i + 1)), righe.map(r => r.n));
+  check('stesso numero di prove nel prompt e a schermo', elenco.length === righe.length, { prompt: elenco.length, schermo: righe.length });
+  check('il numero 1 del rapporto e la prima riga sono la stessa cosa', elenco[0].includes(righe[0].titolo), { prompt: elenco[0], schermo: righe[0].titolo });
+  check('il numero 3 del rapporto e la terza riga sono la stessa cosa', elenco[2].includes(righe[2].titolo), { prompt: elenco[2], schermo: righe[2].titolo });
+  check('le prove con un prezzo vengono prima', righe.slice(0, 3).every(r => /Con prezzo/.test(r.titolo)), righe.map(r => r.titolo));
+  check('la mediana mostrata e quella delle prove elencate', (await page.textContent('#rRicBody')).includes('55€'));
+
+  console.log('\n-- i dati di un capo non finiscono nella stima di un altro --');
+  reset();
+  await page.click('#nav-prezzo');
+  await page.fill('#pNome', 'Scarpe running'); await page.fill('#pMarca', 'Asics');
+  await page.click('#btnP');
+  await page.waitForSelector('#rPre:not([style*="display: none"])', { timeout: 30000 });
+  check('capo diverso: la ricerca resta fuori dal prompt', !/RICERCA ONLINE/.test(aiPost[aiPost.length - 1].prompt));
+  reset();
+  await page.fill('#pNome', 'Felpa hoodie'); await page.fill('#pMarca', 'Carhartt');
+  await page.click('#btnP');
+  await page.waitForSelector('#rPre:not([style*="display: none"])', { timeout: 30000 });
+  check('stesso capo: la ricerca rientra da sola', /RICERCA ONLINE/.test(aiPost[aiPost.length - 1].prompt));
+
+  console.log('\n-- la ricerca finisce nello storico --');
+  await page.click('#nav-storico');
+  const storico = await page.textContent('#historyList');
+  check('la voce c\'e\', col nome del capo', /Felpa hoodie/.test(storico), storico.slice(0, 200));
+  check('col prezzo che ha concluso l\'agente', /42€/.test(storico), storico.slice(0, 300));
+
+  console.log('\n-- il diario si vede mentre gira, non solo alla fine --');
+  reset();
+  let sblocca;
+  const bloccata = new Promise(r => { sblocca = r; });
+  await page.route('**/.netlify/functions/ricerca', async route => {
+    await bloccata;
+    const b = JSON.parse(route.request().postData());
+    ricPost.push(b);
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ query: b.query, risultati: risultatiPer(b), correlate: [], prezzi: null }) });
+  });
+  await page.click('#nav-ricerca');
+  await page.click('#btnS');
+  // La ricerca e' ferma sulla promessa: il diario deve gia' mostrare il passo
+  // "Cerco:" in corso, con la pianificazione chiusa sopra.
+  await page.waitForFunction(
+    () => Array.from(document.querySelectorAll('#agList .agp.corso')).some(li => /Cerco:/.test(li.textContent)),
+    null, { timeout: 30000 });
+  check('mentre cerca, il passo in corso e\' gia\' a schermo', true);
+  check('la pianificazione risulta gia\' chiusa', await page.evaluate(() => document.querySelector('#agList .agp').classList.contains('fatto')));
+  check('il passo in corso ha il suo spinner', await page.evaluate(() => !!document.querySelector('#agList .agp.corso .agspin')));
+  sblocca();
+  await attendiFine();
+  await page.unroute('**/.netlify/functions/ricerca');
+  await page.route('**/.netlify/functions/ricerca', async route => {
+    const b = JSON.parse(route.request().postData());
+    ricPost.push(b);
+    if (ricercaStatus !== 200) return route.fulfill({ status: ricercaStatus, contentType: 'application/json', body: JSON.stringify({ error: ricercaErrore }) });
+    return route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ query: b.query, tipo: b.tipo, risultati: risultatiPer(b), correlate: ['carhartt wip prezzo'], prezzi: null })
+    });
+  });
+
+  console.log('\n-- foto nuove, capo nuovo --');
+  reset();
+  const jpeg = await page.evaluate(() => {
+    const c = document.createElement('canvas'); c.width = 400; c.height = 400;
+    const x = c.getContext('2d'); x.fillStyle = '#888'; x.fillRect(0, 0, 400, 400);
+    return c.toDataURL('image/jpeg', 0.8);
+  });
+  await page.click('#nav-foto');
+  await page.setInputFiles('#fileInput', [{ name: 'capo.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(jpeg.split(',')[1], 'base64') }]);
+  await page.click('#nav-ricerca');
+  check('i campi della ricerca vecchia sono stati svuotati', await page.inputValue('#sMarca') === '', await page.inputValue('#sMarca'));
+  check('il rapporto vecchio sparisce dalla pagina', await page.evaluate(() => document.getElementById('rRic').style.display === 'none'));
+  check('e anche il diario vecchio', await page.evaluate(() => document.getElementById('agList').children.length === 0));
+  reset();
+  await page.click('#nav-prezzo');
+  await page.fill('#pNome', 'Felpa hoodie'); await page.fill('#pMarca', 'Carhartt');
+  await page.click('#btnP');
+  await page.waitForSelector('#rPre:not([style*="display: none"])', { timeout: 30000 });
+  check('la ricerca del capo di prima non alimenta piu\' la stima', !/RICERCA ONLINE/.test(aiPost[aiPost.length - 1].prompt));
+  await page.click('#nav-ricerca');
+  await compila('Felpa hoodie', 'Carhartt');
+
   console.log('\n-- ricerca non configurata sul server --');
   reset();
   ricercaStatus = 501; ricercaErrore = 'Ricerca online non configurata sul server (SERPAPI_KEY)';
