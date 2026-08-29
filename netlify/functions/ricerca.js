@@ -186,8 +186,13 @@ function prezzoDi(r) {
 
 // Nei risultati organici il prezzo sta dentro lo snippet ("... 45,00 € ..."),
 // ed e' l'unico posto dove si legge quanto chiedono davvero gli annunci
-// dell'usato.
-const PREZZO_RE = /(?:€|EUR|\$|£)\s?([\d][\d.,]{0,9})|([\d][\d.,]{0,9})\s?(?:€|EUR\b|\$|£)/i;
+// dell'usato. E li' l'euro si scrive in tutti i modi: "45 €", "€ 45",
+// "45 euro", "Euro 45", "45euro". Il simbolo da solo copriva meno della meta'
+// degli annunci italiani.
+// Il \b davanti tiene fuori le parole che contengono "eur" ("neurologo"),
+// il lookahead dietro fa lo stesso dall'altro lato senza perdere "22euro",
+// dove fra la cifra e la parola un confine di parola non c'e'.
+const PREZZO_RE = /(?:€|\$|£|\beuro?\b)\s?([\d][\d.,]{0,9})|([\d][\d.,]{0,9})\s?(?:€|\$|£|euro?(?![a-z]))/i;
 
 function prezzoDaTesto(testo) {
   const m = PREZZO_RE.exec(String(testo));
