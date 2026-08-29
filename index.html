@@ -4,13 +4,13 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <title>Vinted AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap');
-
 :root{
-  --t:#e8c84a;--td:#c9a82e;--tl:rgba(232,200,74,.12);
-  --bg:#111111;--bg2:#1a1a1a;--card:#1e1e1e;--card2:#252525;
+  --t:#e8c84a;--tl:rgba(232,200,74,.12);
+  --bg:#111111;--bg2:#1a1a1a;--card:#1e1e1e;
   --tx:#ffffff;--mu:#888888;--bd:#333333;--re:#ff4444;
   --sb:env(safe-area-inset-bottom,0px);
 }
@@ -238,6 +238,7 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
     <div class="res" id="rFoto" style="display:none">
       <div class="rl">✨ Risultato Analisi</div>
       <div class="rt" id="rFotoTxt"></div>
+      <div id="rFotoModel" style="font-size:10px;color:var(--mu);margin-top:12px;letter-spacing:.5px;text-transform:uppercase"></div>
       <div class="crow">
         <button class="cbtn" onclick="cp('rFotoTxt')">📋 Copia</button>
         <button class="cbtn" onclick="toAnnuncio()">➡️ Usa per annuncio</button>
@@ -290,8 +291,8 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
         <button class="cbtn" onclick="cpField('rAnnTitolo')">📋 Copia Titolo</button>
         <button class="cbtn" onclick="cpField('rAnnDesc')">📋 Copia Descrizione</button>
         <button class="cbtn" onclick="cpField('rAnnHash')">📋 Copia Hashtag</button>
-        <button class="cbtn" onclick="sh('rAnnTxt')" style="display:none" id="rAnnTxt"></button>
-        <button class="cbtn" class="cbtn vinted" onclick="openVinted()">🛍️ APRI VINTED</button>
+        <button class="cbtn" onclick="shareAnnuncio()">📤 Condividi</button>
+        <button class="cbtn vinted" onclick="openVinted()">🛍️ APRI VINTED</button>
       </div>
     </div>
   </div>
@@ -326,7 +327,7 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
       <div class="ph"><span class="pn" id="pNum">—</span><span class="pr" id="pRng"></span></div>
       <div class="pbar"><div class="pf" id="pBar" style="width:0%"></div></div>
       <p id="pMot" style="font-size:14px;line-height:1.6;margin-bottom:14px;color:#ffffff"></p>
-      <div style="font-size:11px;font-weight:800;color:var(--mu);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Fattori considerati</div>
+      <div style="font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Fattori considerati</div>
       <ul style="list-style:none" id="pFact"></ul>
       <div class="tip" id="pTip"></div>
     </div>
@@ -354,6 +355,7 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
 
 <script>
 let selFiles=[], selTone="amichevole e informale", lastAnalysis=null, currentItemId=null, lastThumbnail=null;
+let lastItemSig=null, lastAnnuncioText='', prevUrls=[], lastModel=null;
 
 function sw(n){
   document.querySelectorAll('.tp').forEach(p=>p.classList.remove('on'));
@@ -372,80 +374,141 @@ document.querySelectorAll('#toneChips .chip').forEach(c=>{
 });
 
 document.getElementById('fileInput').addEventListener('change',function(e){
-  selFiles=Array.from(e.target.files||[]).slice(0,4);
-  currentItemId=null; lastAnalysis=null; lastThumbnail=null;
-  renderPrev();
-  document.getElementById('ubox').classList.toggle('has',selFiles.length>0);
-  document.getElementById('ulabel').textContent=selFiles.length?`${selFiles.length} foto — tocca per cambiare`:'Tocca per scegliere la foto';
-  document.getElementById('btnA').disabled=selFiles.length===0;
+  const picked=Array.from(e.target.files||[]);
+  // Azzerare il value permette di riselezionare lo stesso file una seconda volta.
+  e.target.value='';
+  if(!picked.length) return; // picker annullato: non buttiamo via quello che c'era
+  selFiles=picked.slice(0,4);
+  currentItemId=null; lastItemSig=null; lastAnalysis=null; lastThumbnail=null;
+  renderPrev(); syncUploadUI();
 });
 
+function syncUploadUI(){
+  document.getElementById('ubox').classList.toggle('has',selFiles.length>0);
+  document.getElementById('ulabel').textContent=selFiles.length
+    ? `${selFiles.length} foto — tocca per cambiare`
+    : 'Tocca per scegliere la foto';
+  document.getElementById('btnA').disabled=selFiles.length===0;
+}
+
 function renderPrev(){
-  const s=document.getElementById('ps'); s.innerHTML='';
-  selFiles.forEach((f,i)=>{
+  prevUrls.forEach(u=>URL.revokeObjectURL(u));
+  prevUrls=[];
+  document.getElementById('ps').innerHTML=selFiles.map((f,i)=>{
     const url=URL.createObjectURL(f);
-    s.innerHTML+=`<div class="pw"><img src="${url}" class="pi"/><button class="pd" onclick="delFile(${i})">×</button></div>`;
-  });
+    prevUrls.push(url);
+    return `<div class="pw"><img src="${url}" class="pi" alt="Anteprima foto ${i+1}"/><button class="pd" onclick="delFile(${i})" aria-label="Rimuovi foto ${i+1}">×</button></div>`;
+  }).join('');
 }
 
 function delFile(i){
-  selFiles.splice(i,1); renderPrev();
-  document.getElementById('ubox').classList.toggle('has',selFiles.length>0);
-  document.getElementById('btnA').disabled=selFiles.length===0;
+  selFiles.splice(i,1);
+  renderPrev(); syncUploadUI();
 }
 
 async function callAI(payload){
-  const r=await fetch('/.netlify/functions/claude',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(payload)
-  });
-  const d=await r.json();
-  if(d.error) throw new Error(d.error);
+  let r;
+  try{
+    r=await fetch('/.netlify/functions/claude',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)
+    });
+  }catch(netErr){
+    throw new Error('Connessione fallita. Controlla la rete e riprova.');
+  }
+  // Netlify puo' rispondere con HTML (timeout, 502): non diamo per scontato il JSON.
+  const raw=await r.text();
+  let d=null;
+  try{ d=raw?JSON.parse(raw):null; }catch(parseErr){ d=null; }
+  if(d&&d.error) throw new Error(d.error);
+  if(!r.ok){
+    if(r.status===504||r.status===502) throw new Error('L\'AI ci ha messo troppo. Riprova tra un momento.');
+    if(r.status===429) throw new Error('Troppe richieste. Aspetta un attimo e riprova.');
+    throw new Error(`Errore del server (HTTP ${r.status}). Riprova.`);
+  }
+  if(!d||typeof d.text!=='string') throw new Error('Risposta del server non leggibile. Riprova.');
+  lastModel=d.model||null;
   return d.text;
 }
 
-function compressImage(file, maxSize, quality){
-  maxSize = maxSize||800; quality = quality||0.75;
+// createImageBitmap decodifica fuori dal main thread: la UI non si blocca
+// mentre si aprono 4 foto da fotocamera. Dove manca, si torna a <img>.
+function decodeImage(file){
+  if(typeof createImageBitmap==='function'){
+    return createImageBitmap(file).catch(function(){ return decodeViaImg(file); });
+  }
+  return decodeViaImg(file);
+}
+
+function decodeViaImg(file){
   return new Promise(function(res,rej){
     var img=new Image();
     var url=URL.createObjectURL(file);
-    img.onload=function(){
-      var w=img.width, h=img.height;
-      if(w>maxSize||h>maxSize){
-        if(w>h){ h=Math.round(h*maxSize/w); w=maxSize; }
-        else{ w=Math.round(w*maxSize/h); h=maxSize; }
-      }
-      var canvas=document.createElement('canvas');
-      canvas.width=w; canvas.height=h;
-      canvas.getContext('2d').drawImage(img,0,0,w,h);
-      var dataUrl=canvas.toDataURL('image/jpeg', quality);
-      URL.revokeObjectURL(url);
-      res(dataUrl.split(',')[1]);
-    };
-    img.onerror=function(){ rej(new Error('Caricamento immagine fallito')); };
+    img.onload=function(){ URL.revokeObjectURL(url); res(img); };
+    img.onerror=function(){ URL.revokeObjectURL(url); rej(new Error('Caricamento immagine fallito')); };
     img.src=url;
   });
 }
+
+var encodeCanvas=null;
+function encodeImage(source, maxSize, quality){
+  maxSize=maxSize||800; quality=quality||0.75;
+  var w=source.width, h=source.height;
+  if(w>maxSize||h>maxSize){
+    if(w>h){ h=Math.round(h*maxSize/w); w=maxSize; }
+    else{ w=Math.round(w*maxSize/h); h=maxSize; }
+  }
+  // Un solo canvas riusato invece di uno nuovo per ogni codifica.
+  if(!encodeCanvas) encodeCanvas=document.createElement('canvas');
+  encodeCanvas.width=w; encodeCanvas.height=h;
+  encodeCanvas.getContext('2d').drawImage(source,0,0,w,h);
+  return encodeCanvas.toDataURL('image/jpeg', quality).split(',')[1];
+}
+
+function releaseImage(source){ if(source&&source.close) source.close(); }
 
 async function analyzePhoto(){
   if(!selFiles.length) return;
   show('lFoto'); hide('rFoto'); hide('eFoto');
   document.getElementById('btnA').disabled=true;
   try{
-    const file=selFiles[0];
-    const imageBase64=await compressImage(file, 1280, 0.85);
-    const imageMime='image/jpeg';
+    const files=selFiles.slice(0,4);
+    // La precisione dipende quasi tutta da quanto resta leggibile l'etichetta:
+    // a 1024px il testo di un cartellino diventa poltiglia. Alziamo finche'
+    // il totale resta comodamente sotto il limite di body.
+    const maxSide=files.length>2?1280:1600;
+    // Decodifica in parallelo: le foto non si aspettano piu' a vicenda.
+    const bitmaps=await Promise.all(files.map(decodeImage));
+    let images;
     try{
-      lastThumbnail = 'data:image/jpeg;base64,' + await compressImage(file, 160, 0.5);
-    }catch(thumbErr){
-      lastThumbnail = null;
+      images=bitmaps.map(b=>({ base64: encodeImage(b, maxSide, 0.92), mime:'image/jpeg' }));
+      // La miniatura riusa la decodifica gia' fatta, senza rileggere il file.
+      try{
+        lastThumbnail='data:image/jpeg;base64,'+encodeImage(bitmaps[0], 160, 0.5);
+      }catch(thumbErr){
+        lastThumbnail=null;
+      }
+    }finally{
+      bitmaps.forEach(releaseImage);
     }
+    const plurale = images.length>1
+      ? `Le ${images.length} foto ritraggono LO STESSO capo da angolazioni diverse: usale tutte insieme per una sola analisi.\n\n`
+      : '';
     const txt=await callAI({
       type:'image',
-      imageBase64,
-      imageMime,
-      prompt:`Analizza questo capo di abbigliamento con l'occhio di un esperto di seconda mano e vintage. Guarda con attenzione l'etichetta (se visibile): il tipo di font del logo, il formato dell'etichetta di lavaggio/composizione, lo stile di cucitura, il tipo di tessuto, eventuali codici o scritte — questi sono indizi per capire se il capo è vintage e di che epoca.
+      images,
+      prompt:`${plurale}Analizza questo capo di abbigliamento con l'occhio di un esperto di seconda mano e vintage. Guarda con attenzione l'etichetta (se visibile): il tipo di font del logo, il formato dell'etichetta di lavaggio/composizione, lo stile di cucitura, il tipo di tessuto, eventuali codici o scritte — questi sono indizi per capire se il capo è vintage e di che epoca.
+
+REGOLE DI PRECISIONE — leggile prima di rispondere:
+- Descrivi SOLO quello che vedi davvero nella foto. Non dedurre, non completare, non immaginare.
+- Se un dato non è leggibile o non è visibile, scrivi "Non identificato" o lascia il campo vuoto. Un campo vuoto è corretto; un campo inventato è un errore grave.
+- Il brand si scrive SOLO se lo leggi su un'etichetta o su un logo. Non indovinarlo dallo stile del capo.
+- Il materiale si scrive SOLO se lo leggi sull'etichetta di composizione. Non dedurlo dall'aspetto del tessuto.
+- La taglia si scrive SOLO se la leggi. Non stimarla dalle proporzioni.
+- Per il colore usa quello che vedi, tenendo conto che la luce della foto può alterarlo: se sei incerto usa un nome ampio (es. "blu") invece di uno specifico sbagliato (es. "blu petrolio").
+- Per la condizione basati su segni concreti e visibili: pieghe, pilling, sbiadimento, macchie, usura di orli e polsini. Se non vedi difetti scrivi "Ottimo" solo se il capo appare davvero integro.
+- Per il vintage: se non ci sono indizi CONCRETI e visibili scrivi "Non vintage" e metti confidenza "bassa". Non trasformare uno stile che ricorda un'epoca in una datazione.
 
 Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo prima o dopo:
 {"tipo":"es: giacca in pelle","brand":"leggi l'etichetta, se non visibile scrivi Non identificato","colore":"","materiale":"es: 100% cotone, se visibile sull'etichetta","condizione":"una tra: Nuovo con etichetta, Nuovo senza etichetta, Ottimo, Buono, Soddisfacente","taglie":"taglie probabili","stagione":"","stile":"es: streetwear, casual, elegante, sportivo, vintage","fasciaPrezzo":"es: 20-50€","fasciaPrezzoMin":20,"fasciaPrezzoMax":50,"note":"difetti visibili, usura, dettagli particolari","vintageStima":"es: Anni 90, Y2K, Anni 80, oppure Non vintage se non ci sono indizi","vintageIndizi":"elenco breve degli indizi visivi concreti che ti fanno pensare sia vintage (o assenza di indizi), es: etichetta con font squadrato tipico anni 90, cucitura a doppio filo, tessuto pesante non più in uso","vintageConfidenza":"una tra: bassa, media, alta - quanto sei sicuro della stima vintage"}`
@@ -456,6 +519,7 @@ Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo 
     }catch(parseErr){
       lastAnalysis = null;
       document.getElementById('rFotoTxt').textContent = txt;
+      showModelUsed();
       show('rFoto');
       hide('lFoto');
       document.getElementById('btnA').disabled=false;
@@ -468,6 +532,7 @@ Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo 
       : '';
     document.getElementById('rFotoTxt').textContent =
       `🏷️ TIPO DI CAPO: ${obj.tipo||''}\n👔 BRAND / MARCA: ${obj.brand||''}\n🎨 COLORE/I: ${obj.colore||''}\n🧵 MATERIALE: ${obj.materiale||''}\n⭐ CONDIZIONE STIMATA: ${obj.condizione||''}\n📐 TAGLIE PROBABILI: ${obj.taglie||''}\n🗓️ STAGIONE: ${obj.stagione||''}\n✨ STILE: ${obj.stile||''}\n💰 FASCIA DI PREZZO ORIGINALE STIMATA: ${obj.fasciaPrezzo||''}\n💡 NOTE: ${obj.note||''}${vintageLine}`;
+    showModelUsed();
     show('rFoto');
   }catch(e){
     document.getElementById('eFoto').textContent='⚠️ '+e.message;
@@ -477,10 +542,17 @@ Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo 
   document.getElementById('btnA').disabled=false;
 }
 
+// Sapere quale modello ha guardato la foto spiega molto della qualita'
+// dell'analisi, e permette di fissarlo in GROQ_MODEL_VISION.
+function showModelUsed(){
+  const el=document.getElementById('rFotoModel');
+  if(el) el.textContent = lastModel ? `Analisi eseguita con ${lastModel}` : '';
+}
+
 function toAnnuncio(){
   if(!lastAnalysis){ toast('ANALIZZA PRIMA UN CAPO!'); return; }
   const obj = lastAnalysis;
-  currentItemId = 'item_'+Date.now();
+  currentItemId = null; lastItemSig = null;
 
   if(obj.tipo) document.getElementById('aNome').value = obj.tipo;
   if(obj.brand && !obj.brand.toLowerCase().includes('non identificat')) document.getElementById('aMarca').value = obj.brand;
@@ -537,6 +609,7 @@ async function genAnnuncio(){
     const raw=await callAI({
       type:'text',
       creative:true,
+      json:true,
       prompt:`Scrivi un annuncio Vinted in italiano, tono ${selTone}, per questo capo:
 - Capo: ${v('aNome')||'Non specificato'}
 - Marca: ${v('aMarca')||'Non specificata'}
@@ -562,7 +635,7 @@ Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo 
     try{
       d = JSON.parse(raw.replace(/```json|```/g,'').trim());
     }catch(parseErr){
-      document.getElementById('rAnnTxt').textContent = raw;
+      lastAnnuncioText = raw;
       document.getElementById('rAnnTitolo').textContent = '';
       document.getElementById('rAnnDesc').textContent = raw;
       document.getElementById('rAnnHash').textContent = '';
@@ -570,14 +643,13 @@ Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo 
       hide('lAnn');
       return;
     }
-    document.getElementById('rAnnTxt').textContent = `${d.titolo}\n\n${d.descrizione}\n\n${d.hashtag}`;
+    lastAnnuncioText = `${d.titolo||''}\n\n${d.descrizione||''}\n\n${d.hashtag||''}`.trim();
     document.getElementById('rAnnTitolo').textContent = d.titolo || '';
     document.getElementById('rAnnDesc').textContent = d.descrizione || '';
     document.getElementById('rAnnHash').textContent = d.hashtag || '';
     show('rAnn');
 
-    if(!currentItemId) currentItemId = 'item_'+Date.now();
-    upsertHistoryItem(currentItemId, {
+    upsertHistoryItem(itemIdFor(v('aNome'), v('aMarca')), {
       nome: v('aNome'), marca: v('aMarca'), taglia: v('aTaglia'), condizione: v('aCond'),
       titolo: d.titolo||'', descrizione: d.descrizione||'', hashtag: d.hashtag||'',
       foto: lastThumbnail || undefined
@@ -595,6 +667,7 @@ async function stimaPrezzo(){
   try{
     const raw=await callAI({
       type:'text',
+      json:true,
       prompt:`Sei un esperto di second-hand e resell sul mercato italiano, con conoscenza approfondita di Vinted Italia.
 Analizza questi dati e stima il prezzo di rivendita REALISTICO su Vinted Italia:
 
@@ -628,12 +701,12 @@ Rispondi SOLO con questo JSON valido senza backtick ne markdown:
     document.getElementById('pRng').textContent=`range: ${d.rangeMin}€ – ${d.rangeMax}€`;
     document.getElementById('pMot').textContent=d.motivazione;
     setTimeout(()=>document.getElementById('pBar').style.width=(d.percentuale||55)+'%',80);
-    document.getElementById('pFact').innerHTML=(d.fattori||[]).map(f=>`<li class="fli"><span class="fdot"></span>${f}</li>`).join('');
-    document.getElementById('pTip').innerHTML=`💡 <strong>Consiglio:</strong> ${d.consiglio}`;
+    // L'output del modello e' testo non fidato: va sempre escapato prima di finire in innerHTML.
+    document.getElementById('pFact').innerHTML=(d.fattori||[]).map(f=>`<li class="fli"><span class="fdot"></span>${esc(f)}</li>`).join('');
+    document.getElementById('pTip').innerHTML=`💡 <strong>Consiglio:</strong> ${esc(d.consiglio)}`;
     show('rPre');
 
-    if(!currentItemId) currentItemId = 'item_'+Date.now();
-    upsertHistoryItem(currentItemId, {
+    upsertHistoryItem(itemIdFor(v('pNome'), v('pMarca')), {
       nome: v('pNome'), marca: v('pMarca'), condizione: v('pCond'),
       prezzoSuggerito: d.prezzoSuggerito, rangeMin: d.rangeMin, rangeMax: d.rangeMax, consiglio: d.consiglio||'',
       foto: lastThumbnail || undefined
@@ -645,34 +718,59 @@ Rispondi SOLO con questo JSON valido senza backtick ne markdown:
   hide('lPre');
 }
 
-function cpField(id){
-  const txt=document.getElementById(id)?.textContent||'';
-  if(navigator.clipboard){navigator.clipboard.writeText(txt).then(()=>toast('✅ Copiato!'))}
-  else{const ta=document.createElement('textarea');ta.value=txt;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('✅ Copiato!')}
+function copyText(txt){
+  if(!txt){ toast('NIENTE DA COPIARE'); return Promise.resolve(false); }
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    return navigator.clipboard.writeText(txt)
+      .then(()=>{ toast('✅ Copiato!'); return true; })
+      .catch(()=>legacyCopy(txt));
+  }
+  return Promise.resolve(legacyCopy(txt));
 }
+function legacyCopy(txt){
+  const ta=document.createElement('textarea');
+  ta.value=txt; ta.style.cssText='position:fixed;opacity:0';
+  document.body.appendChild(ta); ta.select();
+  let ok=false;
+  try{ ok=document.execCommand('copy'); }catch(e){ ok=false; }
+  document.body.removeChild(ta);
+  toast(ok?'✅ Copiato!':'⚠️ Copia non riuscita');
+  return ok;
+}
+function cpField(id){ copyText(document.getElementById(id)?.textContent||''); }
 function openVinted(){
   const titolo=document.getElementById('rAnnTitolo')?.textContent||'';
-  if(navigator.clipboard) navigator.clipboard.writeText(titolo);
-  window.open('https://www.vinted.it/items/new','_blank');
-  toast('✅ Titolo copiato — incollalo su Vinted!');
+  const apri=()=>window.open('https://www.vinted.it/items/new','_blank');
+  if(!titolo){ apri(); return; }
+  // La window.open deve restare vicina al click, altrimenti Safari la blocca.
+  copyText(titolo);
+  apri();
 }
 const v=id=>document.getElementById(id)?.value?.trim()||'';
 const show=id=>document.getElementById(id).style.display='';
 const hide=id=>document.getElementById(id).style.display='none';
 function toast(msg,dur=2500){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),dur);}
-function cp(id){
-  const txt=document.getElementById(id)?.textContent||'';
-  if(navigator.clipboard){navigator.clipboard.writeText(txt).then(()=>toast('✅ Copiato!'))}
-  else{const ta=document.createElement('textarea');ta.value=txt;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('✅ Copiato!')}
-}
-function sh(id){
-  const txt=document.getElementById(id)?.textContent||'';
-  if(navigator.share) navigator.share({title:'Annuncio Vinted',text:txt});
-  else cp(id);
+function cp(id){ copyText(document.getElementById(id)?.textContent||''); }
+function shareAnnuncio(){
+  const txt=lastAnnuncioText;
+  if(!txt){ toast('GENERA PRIMA UN ANNUNCIO!'); return; }
+  if(navigator.share){
+    navigator.share({title:'Annuncio Vinted',text:txt}).catch(()=>{});
+    return;
+  }
+  copyText(txt);
 }
 
 /* ===== STORICO (localStorage, solo su questo device) ===== */
 const HISTORY_KEY = 'vintedAiHistory';
+
+function itemIdFor(nome, marca){
+  const sig = (nome+'|'+marca).trim().toLowerCase();
+  if(currentItemId && lastItemSig === sig) return currentItemId;
+  currentItemId = 'item_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
+  lastItemSig = sig;
+  return currentItemId;
+}
 
 function loadHistory(){
   try{
