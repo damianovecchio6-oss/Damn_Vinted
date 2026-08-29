@@ -27,7 +27,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-332 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+339 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -108,6 +108,12 @@ I raggi non sono un'illustrazione con sopra dei bottoni: sono bottoni veri, con
 la forma del raggio come area sensibile piu' una presa tonda intorno all'icona,
 perche' un triangolo sottile col pollice non si prende. Funzionano con Tab e
 Invio come con il dito.
+
+Toccato un raggio, il sole si cala come un burattino - un piccolo strappo in
+su, il filo che si tende, poi giu' rimpicciolendo - e la funzione entra quando
+il sole e' sparito, cosi' e' un movimento solo. Dal logo il sole risale da
+sotto. Con `prefers-reduced-motion` non cade e non risale: la funzione si apre
+e basta.
 
 Finche' si sta sul sole la barra in basso sparisce - sarebbe la stessa cosa
 detta due volte - e torna appena si entra in una funzione. Dal logo in alto si

@@ -176,6 +176,23 @@ body{
 .raggio.scelto .rEti{fill:var(--t)}
 .soleAiuto{font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--mu);margin-top:6px}
 
+/* Scelto il raggio, il sole si cala come un burattino: prima un piccolo
+   strappo verso l'alto - il filo che si tende - poi giu', rimpicciolendo e
+   ruotando appena, come un pupazzo tirato sotto il palco. La funzione entra
+   quando il sole e' sparito, non prima: cosi' e' un movimento solo. */
+@keyframes soleGiu{
+  0%{transform:none;opacity:1}
+  22%{transform:translateY(-14px) scale(1.04) rotate(-3deg)}
+  100%{transform:translateY(62vh) scale(.24) rotate(9deg);opacity:0}
+}
+@keyframes soleSu{
+  0%{transform:translateY(62vh) scale(.24) rotate(9deg);opacity:0}
+  70%{opacity:1}
+  100%{transform:none;opacity:1}
+}
+.soleWrap.giu{animation:soleGiu .42s cubic-bezier(.5,.03,.72,.35) forwards}
+.soleWrap.su{animation:soleSu .5s cubic-bezier(.22,.92,.3,1.04) both}
+
 /* Sulla home il sole si prende la pagina: intestazione e titolone spariscono,
    il nome sta gia' dentro al disco. */
 body.home .hdr,body.home .damn{display:none}
@@ -631,11 +648,23 @@ function sw(n){
   const voce=document.getElementById('nav-'+n);
   if(voce) voce.classList.add('on');
   document.body.classList.toggle('home', n==='sole');
+  if(n==='sole') risaliSole();
   muoviIndicatore(n);
 
   if(n==='storico') renderHistory();
   if(n==='ricerca') prefillRicerca();
   window.scrollTo({top:0,behavior:menoMovimento()?'auto':'smooth'});
+}
+
+// Rientrando, il sole risale da sotto: e' lo stesso movimento al contrario.
+function risaliSole(){
+  const sole=document.querySelector('.soleWrap');
+  if(!sole || menoMovimento()) return;
+  sole.classList.remove('giu','su');
+  // Senza questo il browser riusa l'animazione appena tolta e non la rigioca.
+  void sole.offsetWidth;
+  sole.classList.add('su');
+  sole.addEventListener('animationend', ()=>sole.classList.remove('su'), { once:true });
 }
 
 // L'indicatore lo misuriamo sul bottone vero invece di dividere per il numero
@@ -668,7 +697,30 @@ document.querySelectorAll('.raggio').forEach(raggio=>{
     if(!scheda || raggio.classList.contains('scelto')) return;
     raggio.classList.add('scelto');
     tocco(8);
-    setTimeout(()=>{ raggio.classList.remove('scelto'); sw(scheda); }, 170);
+
+    const sole=document.querySelector('.soleWrap');
+    // Chi ha chiesto meno movimento non aspetta nessuna animazione.
+    if(!sole || menoMovimento()){
+      raggio.classList.remove('scelto');
+      sw(scheda);
+      return;
+    }
+
+    let fatto=false;
+    const entra=()=>{
+      if(fatto) return;
+      fatto=true;
+      sole.classList.remove('giu');
+      raggio.classList.remove('scelto');
+      sw(scheda);
+    };
+    sole.classList.remove('su');
+    sole.classList.add('giu');
+    sole.addEventListener('animationend', entra, { once:true });
+    // Paracadute: se l'animazione non parte o l'evento non arriva (scheda in
+    // secondo piano, animazioni disattivate dal browser) la funzione si apre
+    // lo stesso.
+    setTimeout(entra, 700);
   };
   raggio.addEventListener('click', vai);
   raggio.addEventListener('keydown', e=>{
