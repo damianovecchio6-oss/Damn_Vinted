@@ -13,6 +13,8 @@ netlify/functions/lens.js     ricerca per immagine (Google Lens via SerpApi)
 netlify/functions/ricerca.js  ricerca testuale online, lo strumento dell'agente
 netlify/functions/lib/        codice condiviso dalle function
 tests/                        suite di test, nessun framework
+.claude/                      skill e agente per il collaudo
+.github/workflows/            i test a ogni push
 scripts/verifica-deploy.js    controlla un sito gia' deployato: function e chiavi
 ```
 
@@ -38,6 +40,28 @@ torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
 guidano Chromium: se non lo trova, imposta `CHROMIUM_PATH` o
 `PLAYWRIGHT_BROWSERS_PATH`.
+
+## Collaudo
+
+Tre modi di sapere se il sito funziona, dal piu' automatico al piu' manuale.
+
+**Da solo, a ogni push.** `.github/workflows/collaudo.yml` esegue `npm test` su
+ogni push e su ogni pull request: installa Node 20 e Chromium e lancia le otto
+suite. E' l'unico pezzo che non dipende da qualcuno che si ricordi di lanciarlo,
+ed e' il motivo per cui una pull request qui ha un segno verde o rosso senza che
+nessuno lo chieda.
+
+**A voce, dentro Claude Code.** `.claude/skills/collaudo/` e' una skill: spiega
+quali suite ci sono, cosa protegge ognuna, come si legge un fallimento, quali
+fallimenti non sono bug del sito, e che forma deve avere il rapporto. Si invoca
+con `/collaudo`. `.claude/agents/collaudatore.md` e' la stessa cosa in mano a un
+agente che lavora per conto suo e riferisce: esegue, isola i fallimenti, li
+riporta parola per parola, e non tocca niente - un test che fallisce non si
+aggiusta facendolo tacere.
+
+**A mano, sul sito vero.** `npm run verifica -- <url>` (vedi
+[Deploy su Netlify](#deploy-su-netlify)): e' l'unico che puo' dire se le chiavi
+funzionano davvero, perche' le usa.
 
 ## Variabili d'ambiente
 

@@ -1,0 +1,33 @@
+# I test girano a ogni push e su ogni pull request, senza che nessuno li chieda.
+# E' l'unico pezzo del collaudo che non dipende da qualcuno che si ricordi di
+# lanciarlo.
+name: Collaudo
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'          # la stessa delle function (netlify.toml)
+          cache: npm
+
+      - run: npm ci
+
+      # playwright-core non si porta dietro i browser: le suite che guidano
+      # Chromium hanno bisogno di questo, e lo trovano da sole in
+      # ~/.cache/ms-playwright (vedi tests/lib.js).
+      - name: Installa Chromium
+        run: npx --yes playwright@1.62.1 install --with-deps chromium
+
+      - name: npm test
+        run: npm test
