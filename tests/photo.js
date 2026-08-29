@@ -23,6 +23,9 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
   });
 
   await page.goto('http://127.0.0.1:8898/', { waitUntil: 'load' });
+  // La pagina ora si apre sul sole: le prove che seguono partono da dentro una
+  // funzione, come se ci fossi arrivato toccando il suo raggio.
+  await page.evaluate(() => sw('foto'));
 
   // Foto grandi e rumorose (il rumore impedisce al JPEG di comprimere a niente),
   // come quelle che escono davvero da un telefono.

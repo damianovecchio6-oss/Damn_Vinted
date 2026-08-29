@@ -34,10 +34,13 @@ body{
 
 .logo{
   width:52px;height:52px;border-radius:10px;
-  background:var(--t);
+  background:var(--t);border:none;padding:0;
   display:flex;align-items:center;justify-content:center;
-  font-size:26px;flex-shrink:0;
+  font-size:26px;flex-shrink:0;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;transition:transform .18s ease;
 }
+.logo:active{transform:scale(.94)}
+.logo:focus-visible{outline:2px solid var(--t);outline-offset:3px}
 
 .hdr h1{
   font-family:'Orbitron',sans-serif;
@@ -144,6 +147,43 @@ body{
 .agv{background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:11px 13px}
 .agvn{font-family:'Orbitron',sans-serif;font-size:19px;font-weight:900;color:var(--t);line-height:1.1}
 .agvl{font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:1px;margin-top:3px}
+
+/* ===== IL SOLE: e' la home, e i suoi raggi sono le funzioni =====
+   Non e' un'illustrazione con sopra dei bottoni: i raggi SONO i bottoni, con
+   la loro forma come area sensibile piu' una presa tonda intorno all'icona,
+   perche' un triangolo sottile col pollice non si prende. */
+.soleWrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:calc(100dvh - 60px);padding:8px 0}
+.soleNav{width:100%;max-width:440px;overflow:visible;color:var(--t)}
+.soleNav .decoro{fill:var(--t);opacity:.28;transform-origin:200px 200px;animation:giroLento 90s linear infinite}
+@keyframes giroLento{to{transform:rotate(360deg)}}
+
+.disco{fill:var(--t)}
+.dTitolo{font-family:'Bebas Neue',sans-serif;font-size:34px;fill:#111;text-anchor:middle;letter-spacing:2px}
+.dSotto{font-family:'Orbitron',sans-serif;font-size:11px;font-weight:700;fill:#111;text-anchor:middle;letter-spacing:2px;opacity:.75}
+
+.raggio{cursor:pointer;-webkit-tap-highlight-color:transparent}
+.raggio .lama{fill:var(--t);opacity:.55;transition:opacity .18s ease,transform .18s ease;transform-origin:200px 200px}
+.raggio .presa{fill:transparent}
+.rIco{font-size:26px;text-anchor:middle;dominant-baseline:middle}
+.rEti{font-family:'Orbitron',sans-serif;font-size:11px;font-weight:700;fill:var(--mu);text-anchor:middle;letter-spacing:1.5px;transition:fill .18s ease}
+.raggio:hover .lama,.raggio:focus-visible .lama{opacity:1;transform:scale(1.06)}
+.raggio:hover .rEti,.raggio:focus-visible .rEti{fill:var(--t)}
+.raggio:focus{outline:none}
+.raggio:focus-visible .presa{fill:var(--tl);stroke:var(--t);stroke-width:2}
+/* Il raggio scelto lampeggia mentre la scheda entra: il tocco ha una risposta
+   prima che cambi la pagina. */
+.raggio.scelto .lama{opacity:1;transform:scale(1.14)}
+.raggio.scelto .rEti{fill:var(--t)}
+.soleAiuto{font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--mu);margin-top:6px}
+
+/* Sulla home il sole si prende la pagina: intestazione e titolone spariscono,
+   il nome sta gia' dentro al disco. */
+body.home .hdr,body.home .damn{display:none}
+/* Sulla home la navigazione e' il sole: la barra in basso sarebbe la stessa
+   cosa detta due volte. Torna appena entri in una funzione, e dal logo si
+   rientra nel sole. */
+body.home .nav{display:none}
+body.home .shell{padding-bottom:28px}
 
 /* form */
 .fl{display:block;font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;font-family:'Orbitron',sans-serif}
@@ -319,14 +359,64 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
 </svg>
 
 <div class="shell">
-  <div style="font-family:'Bebas Neue',sans-serif;font-size:72px;font-weight:400;color:#ffffff;letter-spacing:8px;text-align:center;padding-top:32px;line-height:1;background:linear-gradient(180deg,#ffffff 0%,#e8c84a 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">DAMN</div>
+  <div class="damn" style="font-family:'Bebas Neue',sans-serif;font-size:72px;font-weight:400;color:#ffffff;letter-spacing:8px;text-align:center;padding-top:32px;line-height:1;background:linear-gradient(180deg,#ffffff 0%,#e8c84a 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">DAMN</div>
 <div class="hdr">
-    <div class="logo"><svg class="soleLogo" aria-hidden="true"><use href="#ico-sole"/></svg></div>
+    <button class="logo" onclick="sw('sole')" aria-label="Torna al sole" title="Torna al sole"><svg class="soleLogo" aria-hidden="true"><use href="#ico-sole"/></svg></button>
     <div><h1>VINTED AI</h1><p>// Street Fashion Assistant</p></div>
   </div>
 
+  <!-- IL SOLE: la home. I raggi sono le funzioni. -->
+  <div id="tab-sole" class="tp on">
+    <div class="soleWrap">
+      <svg class="soleNav" viewBox="0 0 400 400" role="group" aria-label="Scegli cosa fare">
+      <g class="decoro">
+        <path d="M233.6 134.1 L258.8 119.1 L252.3 147.7 Z"/>
+        <path d="M272.9 212.8 L289.4 229.0 L266.5 232.4 Z"/>
+        <path d="M212.8 272.9 L200.0 302.0 L187.2 272.9 Z"/>
+        <path d="M134.1 233.6 L108.7 229.7 L126.9 211.6 Z"/>
+        <path d="M146.8 148.6 L141.8 119.9 L167.6 133.5 Z"/>
+        <path d="M148.6 146.8 L145.3 124.8 L165.3 134.7 Z"/>
+      </g>
+      <g class="raggio" data-scheda="foto" tabindex="0" role="button" aria-label="Analizza le foto del capo">
+        <path class="lama" d="M183.4 127.9 L200.0 70.0 L216.6 127.9 Z"/>
+        <circle class="presa" cx="200.0" cy="50.0" r="36"/>
+        <text class="rIco" x="200.0" y="54.0">📸</text>
+        <text class="rEti" x="200.0" y="80.0">ANALIZZA</text>
+      </g>
+      <g class="raggio" data-scheda="annuncio" tabindex="0" role="button" aria-label="Scrivi l'annuncio">
+        <path class="lama" d="M263.4 161.9 L323.6 159.8 L273.7 193.6 Z"/>
+        <circle class="presa" cx="342.7" cy="153.6" r="36"/>
+        <text class="rIco" x="342.7" y="157.6">✍️</text>
+        <text class="rEti" x="342.7" y="183.6">ANNUNCIO</text>
+      </g>
+      <g class="raggio" data-scheda="prezzo" tabindex="0" role="button" aria-label="Stima il prezzo">
+        <path class="lama" d="M255.8 248.5 L276.4 305.2 L228.9 268.1 Z"/>
+        <circle class="presa" cx="288.2" cy="321.4" r="36"/>
+        <text class="rIco" x="288.2" y="325.4">💶</text>
+        <text class="rEti" x="288.2" y="351.4">PREZZO</text>
+      </g>
+      <g class="raggio" data-scheda="ricerca" tabindex="0" role="button" aria-label="L'agente cerca online quanto vale il capo">
+        <path class="lama" d="M171.1 268.1 L123.6 305.2 L144.2 248.5 Z"/>
+        <circle class="presa" cx="111.8" cy="321.4" r="36"/>
+        <text class="rIco" x="111.8" y="325.4">🤖</text>
+        <text class="rEti" x="111.8" y="351.4">RICERCA</text>
+      </g>
+      <g class="raggio" data-scheda="storico" tabindex="0" role="button" aria-label="Rivedi quello che hai salvato">
+        <path class="lama" d="M126.3 193.6 L76.4 159.8 L136.6 161.9 Z"/>
+        <circle class="presa" cx="57.3" cy="153.6" r="36"/>
+        <text class="rIco" x="57.3" y="157.6">🗂️</text>
+        <text class="rEti" x="57.3" y="183.6">STORICO</text>
+      </g>
+      <circle class="disco" cx="200" cy="200" r="72"/>
+      <text class="dTitolo" x="200" y="192">DAMN</text>
+      <text class="dSotto" x="200" y="216">VINTED AI</text>
+      </svg>
+      <p class="soleAiuto">Tocca un raggio</p>
+    </div>
+  </div>
+
   <!-- FOTO -->
-  <div id="tab-foto" class="tp on">
+  <div id="tab-foto" class="tp">
     <div class="card">
       <div class="ct">📸 Analizza la Foto</div>
       <label class="ubox" id="ubox">
@@ -504,7 +594,7 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
 </div>
 
 <nav class="nav">
-  <button class="nb on" id="nav-foto" onclick="sw('foto')"><span class="ic">📸</span>Analizza</button>
+  <button class="nb" id="nav-foto" onclick="sw('foto')"><span class="ic">📸</span>Analizza</button>
   <button class="nb" id="nav-annuncio" onclick="sw('annuncio')"><span class="ic">✍️</span>Annuncio</button>
   <button class="nb" id="nav-prezzo" onclick="sw('prezzo')"><span class="ic">💶</span>Prezzo</button>
   <button class="nb" id="nav-ricerca" onclick="sw('ricerca')"><span class="ic">🤖</span>Ricerca</button>
@@ -518,8 +608,8 @@ let lastItemSig=null, lastAnnuncioText='', prevUrls=[], lastModel=null, lastProv
 // Quale foto ritrae l'etichetta, e cosa ci si e' letto sopra.
 let labelIndex=-1, lastEtichetta=null, lastLens=null;
 
-const SCHEDE=['foto','annuncio','prezzo','ricerca','storico'];
-let schedaCorrente='foto';
+const SCHEDE=['sole','foto','annuncio','prezzo','ricerca','storico'];
+let schedaCorrente='sole';
 
 // Meno movimento se il sistema lo chiede: vale anche per lo scorrimento, che
 // il CSS non puo' fermare.
@@ -537,7 +627,10 @@ function sw(n){
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
   pannello.classList.add('on');
   pannello.classList.toggle('daDestra', daDestra);
-  document.getElementById('nav-'+n).classList.add('on');
+  // Il sole non ha una voce nella barra in basso: ci si torna dal logo.
+  const voce=document.getElementById('nav-'+n);
+  if(voce) voce.classList.add('on');
+  document.body.classList.toggle('home', n==='sole');
   muoviIndicatore(n);
 
   if(n==='storico') renderHistory();
@@ -549,7 +642,10 @@ function sw(n){
 // di schede: cosi' non va rifatto ogni volta che se ne aggiunge una.
 function muoviIndicatore(n){
   const nav=document.querySelector('.nav'), b=document.getElementById('nav-'+n);
-  if(!nav||!b) return;
+  if(!nav) return;
+  // Sulla home non c'e' niente da indicare: la riga si ritira invece di
+  // restare accesa su una scheda in cui non sei.
+  if(!b){ nav.style.setProperty('--nbw','0px'); return; }
   nav.style.setProperty('--nbx', b.offsetLeft+'px');
   nav.style.setProperty('--nbw', b.offsetWidth+'px');
 }
@@ -561,6 +657,24 @@ window.addEventListener('load', ()=>muoviIndicatore(schedaCorrente));
 function tocco(ms){
   try{ if(navigator.vibrate && !menoMovimento()) navigator.vibrate(ms||12); }catch(e){}
 }
+
+/* ===== I RAGGI DEL SOLE =====
+   Ogni raggio e' un bottone vero: si prende col dito, con Tab e con Invio. Il
+   lampeggio prima del cambio scheda non e' vezzo: e' la risposta al tocco, che
+   altrimenti arriverebbe solo quando la pagina e' gia' cambiata. */
+document.querySelectorAll('.raggio').forEach(raggio=>{
+  const vai=()=>{
+    const scheda=raggio.dataset.scheda;
+    if(!scheda || raggio.classList.contains('scelto')) return;
+    raggio.classList.add('scelto');
+    tocco(8);
+    setTimeout(()=>{ raggio.classList.remove('scelto'); sw(scheda); }, 170);
+  };
+  raggio.addEventListener('click', vai);
+  raggio.addEventListener('keydown', e=>{
+    if(e.key==='Enter'||e.key===' '){ e.preventDefault(); vai(); }
+  });
+});
 
 document.querySelectorAll('#toneChips .chip').forEach(c=>{
   const pick=()=>{
@@ -1849,6 +1963,11 @@ function renderHistory(){
     </div>
   `;}).join('');
 }
+
+// La pagina si apre sul sole: la classe la mette sw(), ma al primo giro sw()
+// non e' ancora passata di qui.
+document.body.classList.add('home');
+muoviIndicatore('sole');
 
 // Un solo listener sulla lista invece di un onclick costruito per ogni riga.
 document.getElementById('historyList').addEventListener('click', e => {

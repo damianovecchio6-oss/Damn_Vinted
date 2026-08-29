@@ -27,7 +27,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-320 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+332 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -95,6 +95,23 @@ I nomi dei modelli cambiano spesso, e i provider li ritirano senza preavviso:
 per questo le function non si fidano dei valori di default. Se il modello non
 esiste piu' chiedono il catalogo e ripiegano da sole, e il modello che ha
 davvero risposto compare sotto il risultato dell'analisi.
+
+## Il sole: la home
+
+La pagina si apre su un sole, e i suoi raggi sono le funzioni: un tocco su un
+raggio apre l'analisi foto, l'annuncio, la stima, la ricerca o lo storico. Il
+disegno arriva da uno storyboard a matita, ridisegnato al pulito tenendo i
+raggi irregolari - lunghezza e larghezza diverse una dall'altra - perche' e'
+quello che lo distingue da un'icona presa da un pacchetto.
+
+I raggi non sono un'illustrazione con sopra dei bottoni: sono bottoni veri, con
+la forma del raggio come area sensibile piu' una presa tonda intorno all'icona,
+perche' un triangolo sottile col pollice non si prende. Funzionano con Tab e
+Invio come con il dito.
+
+Finche' si sta sul sole la barra in basso sparisce - sarebbe la stessa cosa
+detta due volte - e torna appena si entra in una funzione. Dal logo in alto si
+rientra nel sole.
 
 ## L'agente di ricerca online
 
