@@ -3,7 +3,8 @@
   "private": true,
   "description": "Assistente per vendere su Vinted: analisi foto, annuncio, stima prezzo",
   "scripts": {
-    "test": "node tests/run.js"
+    "test": "node tests/run.js",
+    "verifica": "node scripts/verifica-deploy.js"
   },
   "devDependencies": {
     "playwright-core": "^1.62.1"

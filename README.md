@@ -12,6 +12,7 @@ netlify/functions/lens.js     ricerca per immagine (Google Lens via SerpApi)
 netlify/functions/ricerca.js  ricerca testuale online, lo strumento dell'agente
 netlify/functions/lib/        codice condiviso dalle function
 tests/                        suite di test, nessun framework
+scripts/verifica-deploy.js    controlla un sito gia' deployato: function e chiavi
 ```
 
 Il sito non ha build ne' dipendenze a runtime: `public/index.html` si apre e
@@ -128,6 +129,46 @@ di la' anche nome e marca; foto nuove azzerano tutto.
 
 Ogni rapporto finisce nello storico insieme all'annuncio e alla stima dello
 stesso capo.
+
+## Deploy su Netlify
+
+Il repo e' gia' pronto: `netlify.toml` dice tutto quello che serve (nessun
+comando di build, publish `public/`, function in `netlify/functions`, Node 20),
+quindi in Netlify non c'e' niente da configurare a mano tranne le chiavi.
+
+1. **app.netlify.com** > *Add new project* > *Import an existing project* >
+   GitHub > `damianovecchio6-oss/Damn_Vinted`.
+   Alla schermata delle impostazioni non toccare niente: le legge da
+   `netlify.toml`. Il branch di produzione e' `main`.
+2. **Site configuration > Environment variables**: aggiungi almeno
+   `GROQ_API_KEY`. `GEMINI_API_KEY` e `SERPAPI_KEY` sono opzionali e accendono
+   analisi foto migliore e ricerca online (vedi la tabella qui sopra).
+   Lo scope puo' restare "All scopes": le chiavi le leggono solo le function,
+   il sito e' statico e non le vede mai.
+3. **Deploy**. Al primo deploy Netlify pubblica `main`.
+4. **Verifica** che sia tutto arrivato davvero:
+
+   ```
+   node scripts/verifica-deploy.js https://iltuosito.netlify.app
+   ```
+
+   Controlla pagina, function, origini rifiutate e quali chiavi funzionano
+   davvero. Consuma una ricerca SerpApi e una richiesta AI: e' il solo modo di
+   sapere che le chiavi vanno, invece che sembrare a posto.
+
+### Provare un branch prima di unirlo a main
+
+**Site configuration > Build & deploy > Branch deploys > Let me add individual
+branches**, e aggiungi il branch. Netlify pubblica ogni push su un URL suo, con
+le stesse chiavi e le stesse function: le barre del nome diventano trattini.
+
+```
+claude/ai-agent-cloth-research-qn7juz
+-> https://claude-ai-agent-cloth-research-qn7juz--iltuosito.netlify.app
+```
+
+Comodo per l'agente di ricerca: si prova sul dominio del branch, e `main` resta
+com'e' finche' non decidi tu.
 
 ## Come si usa l'analisi foto
 
