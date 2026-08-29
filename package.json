@@ -1,0 +1,11 @@
+{
+  "name": "damn-vinted",
+  "private": true,
+  "description": "Assistente per vendere su Vinted: analisi foto, annuncio, stima prezzo",
+  "scripts": {
+    "test": "node tests/run.js"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.62.1"
+  }
+}

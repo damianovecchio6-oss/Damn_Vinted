@@ -4,13 +4,31 @@ Assistente per vendere su Vinted: analizza le foto di un capo, scrive
 l'annuncio e stima il prezzo. Sito statico + due Netlify Function.
 
 ```
-index.html                    tutta l'interfaccia (markup, stile, script)
+public/index.html             tutta l'interfaccia (markup, stile, script)
+public/_headers               header di sicurezza (CSP, ecc.)
 netlify/functions/claude.js   proxy verso i modelli AI (Groq / Gemini)
 netlify/functions/lens.js     ricerca per immagine (Google Lens via SerpApi)
 netlify/functions/lib/        codice condiviso dalle due function
+tests/                        suite di test, nessun framework
 ```
 
-Non c'e' build, non ci sono dipendenze npm: si apre `index.html` e funziona.
+Il sito non ha build ne' dipendenze a runtime: `public/index.html` si apre e
+funziona. Il publish dir e' `public/` e non la root del repo, cosi' il sorgente
+delle function e i test non finiscono serviti come file statici.
+
+## Test
+
+```
+npm install     # solo playwright-core, i browser non vengono scaricati
+npm test
+```
+
+165 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
+torna. Le suite delle function girano offline, con `https` sostituito da uno
+stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
+guidano Chromium: se non lo trova, imposta `CHROMIUM_PATH` o
+`PLAYWRIGHT_BROWSERS_PATH`.
 
 ## Variabili d'ambiente
 
