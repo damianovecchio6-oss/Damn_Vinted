@@ -697,7 +697,7 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
 let selFiles=[], selTone="amichevole e informale", lastAnalysis=null, currentItemId=null, lastThumbnail=null;
 let lastItemSig=null, lastAnnuncioText='', prevUrls=[], lastModel=null, lastProvider=null;
 // Quale foto ritrae l'etichetta, e cosa ci si e' letto sopra.
-let labelIndex=-1, lastEtichetta=null, lastLens=null;
+let labelIndex=-1, lastEtichetta=null, lastLens=null, lastGemini=null;
 
 const SCHEDE=['sole','foto','annuncio','prezzo','ricerca','storico','scanner'];
 let schedaCorrente='sole';
@@ -1120,6 +1120,10 @@ async function callAI(payload){
   if(typeof d.text!=='string') throw new Error('Risposta del server non leggibile. Riprova.');
   lastModel=d.model||null;
   lastProvider=d.provider||null;
+  // Perche' le foto NON sono passate da Gemini, quando Gemini era la scelta
+  // giusta: senza, "groq" da solo non distingue una chiave che manca da una
+  // quota finita, e sono due problemi con due rimedi diversi.
+  lastGemini=d.gemini||null;
   return d.text;
 }
 
@@ -1530,6 +1534,7 @@ function showModelUsed(){
   if(!el) return;
   el.textContent = lastModel
     ? `Analisi eseguita con ${lastModel}${lastProvider?' ('+lastProvider+')':''}`
+      + (lastGemini?` — Gemini non usato: ${lastGemini}`:'')
     : '';
 }
 
@@ -2425,7 +2430,8 @@ async function sxScansione(){
   // lo scanner ha letto vale anche di la', senza rifare la richiesta.
   lastAnalysis=analisi; lastEtichetta=letto.etichetta;
   sxChiudi(iFoto,'fatto', [analisi.tipo, analisi.brand].filter(campoLetto).join(' · ')
-    + (letto.etichetta && etichettaUtile(letto.etichetta) ? ' · etichetta letta' : ''));
+    + (letto.etichetta && etichettaUtile(letto.etichetta) ? ' · etichetta letta' : '')
+    + (lastGemini ? ` · Gemini non usato: ${lastGemini}` : ''));
 
   // Lens e' un lusso: dice il nome del modello, che e' la chiave della
   // ricerca, ma senza SERPAPI_KEY non c'e'. Il giro va avanti lo stesso.

@@ -137,16 +137,26 @@ exports.handler = async (event) => {
     // Gemini con le stime di prezzo.
     const usaGemini = GEMINI_KEY && (kind === 'image' || !GROQ_KEY);
 
-    let esito;
+    // Il ripiego su Groq funziona, ma finora era muto: chi guardava vedeva
+    // solo "groq" e non poteva distinguere "la chiave Gemini non c'e'" da
+    // "Gemini ha risposto male". Due cose con rimedi opposti - metterla, o
+    // aspettare che la quota si ricarichi - e nessun modo di sapere quale.
+    // Il motivo lo scriviamo, e sono parole nostre: i motivi che tentaGemini
+    // restituisce non contengono niente del provider.
+    let esito, notaGemini = '';
     if (usaGemini) {
       esito = await tentaGemini(richiesta, kind, deadline);
       // Quota giornaliera finita o modello sparito: se abbiamo anche Groq e
       // resta tempo, meglio una risposta di Groq che un errore.
-      if (!esito.ok && GROQ_KEY && deadline - Date.now() >= MIN_ATTEMPT_MS) {
-        console.error(`Gemini non utilizzabile (${esito.motivo}), ripiego su Groq`);
-        esito = await tentaGroq(richiesta, kind, deadline);
+      if (!esito.ok) {
+        notaGemini = esito.motivo || 'motivo ignoto';
+        if (GROQ_KEY && deadline - Date.now() >= MIN_ATTEMPT_MS) {
+          console.error(`Gemini non utilizzabile (${esito.motivo}), ripiego su Groq`);
+          esito = await tentaGroq(richiesta, kind, deadline);
+        }
       }
     } else {
+      if (kind === 'image' && !GEMINI_KEY) notaGemini = 'chiave non configurata';
       esito = await tentaGroq(richiesta, kind, deadline);
     }
 
@@ -158,8 +168,11 @@ exports.handler = async (event) => {
     }
 
     // Rimandiamo anche chi ha risposto: serve a capire da cosa dipende la
-    // qualita' dell'analisi e quale modello conviene fissare a mano.
-    return S.json(200, cors, { text: esito.text, model: esito.model, provider: esito.provider });
+    // qualita' dell'analisi e quale modello conviene fissare a mano. E se
+    // Gemini era la scelta giusta ma non e' stato usato, il perche'.
+    const risposta = { text: esito.text, model: esito.model, provider: esito.provider };
+    if (notaGemini && esito.provider !== 'gemini') risposta.gemini = notaGemini;
+    return S.json(200, cors, risposta);
 
   } catch (e) {
     console.error('claude fn error:', e);

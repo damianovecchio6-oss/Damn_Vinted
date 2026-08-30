@@ -97,16 +97,21 @@ const FOTO = { type: 'image', prompt: 'analizza', images: [{ base64: 'AAA', mime
   b = JSON.parse(r.body);
   check('quota giornaliera finita -> ripiega su Groq', r.statusCode === 200 && b.provider === 'groq', b);
   check('non insiste su altri modelli Gemini', geminiChiamate.length === 1, geminiChiamate.length);
+  // Il ripiego funzionava ma era muto: chi guardava vedeva "groq" e non
+  // poteva sapere se la chiave mancasse o se Gemini avesse detto di no.
+  check('e dice PERCHE non ha usato Gemini', /quota/i.test(b.gemini || ''), b.gemini);
 
   reset();
   geminiRisposte = [{ status: 200, body: JSON.stringify({ candidates: [{ finishReason: 'SAFETY', content: { parts: [] } }] }) }];
   r = await post('1.1.1.6', FOTO);
   check('risposta bloccata dal filtro -> ripiega su Groq', JSON.parse(r.body).provider === 'groq', r.body);
+  check('e anche qui il motivo e scritto', /vuota|SAFETY/i.test(JSON.parse(r.body).gemini || ''), JSON.parse(r.body).gemini);
 
   reset();
   geminiRisposte = [{ status: 404, body: '{}' }, OK_GEMINI];
   r = await post('1.1.1.7', FOTO);
   check('modello sparito -> prova il successivo, resta su Gemini', JSON.parse(r.body).provider === 'gemini' && geminiChiamate.length === 2, geminiChiamate.map(c => c.modello));
+  check('quando Gemini risponde, nessuna nota da spiegare', JSON.parse(r.body).gemini === undefined, JSON.parse(r.body).gemini);
   check('il ripiego e il pro, non il lite (che legge peggio le etichette)', geminiChiamate[1].modello === 'gemini-3.7-pro', geminiChiamate[1].modello);
 
   reset();
