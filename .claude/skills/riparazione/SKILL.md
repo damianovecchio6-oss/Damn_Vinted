@@ -35,6 +35,10 @@ lanciare. `(x || {}).campo` invece di `x.campo` costa niente e salva un'ora.
 | 429 improvvisi | rate limit per IP, 20/min, finestra scorrevole |
 | "nessun modello disponibile" | `claude.js`: catalogo, cache positiva 30 min e negativa 5 min |
 | l'analisi foto peggiora | `claude.js`: e' passata da Gemini a Groq? Il modello che ha risposto e' scritto sotto il risultato |
+| "Il modello ha rifiutato la richiesta" | e' un **400 di Groq**, non un rifiuto di contenuto. Nell'ordine: (1) modello ritirato - Groq lo dice con un **400**, non un 404, e `modelloSparito()` deve riconoscerlo o il ripiego non parte; (2) il peso, che sono **due cose diverse**: `pesante:'byte'` si cura rimpicciolendo, `pesante:'token'` si cura mandando MENO foto (ogni foto costa contesto per conto suo). Li separa `tipoDiRifiuto()`, e `analizzaScendendo()` sceglie la cura giusta. Attenzione: "Request too **large**" puo' parlare di token, non di byte. **Il motivo vero e' nel diario dello scanner**, mandato dal server in `dettaglio` e ripulito dai segreti: leggilo prima di ipotizzare. Il messaggio vero sta nei log della function: `Groq 400 su <modello>: <dettaglio>` |
+| "non interpretabile" / "non ha risposto in JSON" | il modello ha risposto, ma non solo col JSON: i modelli che ragionano ad alta voce (Qwen3, che su Groq e' l'unica visione rimasta) premettono `<think>`. Sta in `estraiJson()`, e il diario dello scanner riporta cosa e' arrivato davvero - leggilo prima di ipotizzare |
+| il JSON arriva tagliato, o c'e' solo un `<think>` che non si chiude | il ragionamento si mangia i token PRIMA della risposta. Si spegne, ma il parametro e' **specifico per famiglia**: qwen3 vuole `reasoning_effort:'none'`, gpt-oss lo rifiuta con un 400 e accetta solo `low|medium|high`, agli altri non si manda niente. Sintomo tipico: **con una foto va, con due no** |
+| l'analisi foto non va e il testo si | e' il modello con visione: quello di testo e quello di visione si ritirano separatamente, e la cache li tiene per chiave diversa (`groq:model:image` / `groq:model:text`) |
 | prezzi che non vengono letti | `ricerca.js`, `PREZZO_RE`: gli annunci scrivono l'euro in quattro modi |
 | ricerche doppie, quota che vola | cache per query+tipo, 10 minuti |
 | tutto lento o 504 | il budget e' 10s per function: **mai due chiamate AI in fila dentro la stessa** |
@@ -46,8 +50,15 @@ lanciare. `(x || {}).campo` invece di `x.campo` costa niente e salva un'ora.
 | un tocco non fa niente sul telefono ma col mouse si | il click sintetizzato non arriva sempre: l'attivazione sta sul `pointerup` |
 | la ghiera si blocca dopo un giro | trascinamento nativo del disegno, fermato su `dragstart` |
 | un raggio si apre da solo finendo un giro | la guardia `giroConScatti`, che si azzera a ogni tocco nuovo |
+| il sole parcheggiato non si gira | `pointer-events`/`touch-action` su `#soleApp.parcheggiato`: senza, il dito scorre la pagina invece di girare |
+| girando cambia il disco ma non il contenuto | `scatta()`: da parcheggiato deve chiamare `sw()`, non solo `mostraSelezione()` |
+| il disco mostra una funzione diversa da quella aperta | `sincronizzaGhiera()`, chiamata da `sw()` |
 | lo storico perde dei campi | `soloNoti()`: un patch non cancella quello che non contiene |
 | dati di un capo nella stima di un altro | `stessoCapo()` |
+| lo scanner dice un prezzo che non c'entra | la separazione usato/nuovo: `sxDoveSta()` (dominio prima del testo) e `sxPertinente()` |
+| una mediana tirata da un solo annuncio strano | `sxSenzaEstremi()`, la regola dei quartili |
+| lo scanner brucia quota | `SX_MAX_GIRI`/`SX_MAX_RICERCHE`, e `sxFatte` che impedisce di ripetere una query |
+| lo scanner non si ferma mai, o si ferma subito | `sxLacuna()`: e' lei a decidere se il quadro sta in piedi |
 | risorse esterne che non caricano una volta pubblicate | la CSP in `public/_headers` |
 
 **Il deploy**

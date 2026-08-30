@@ -1,8 +1,12 @@
 # Damn Vinted
 
+Sulla pagina si chiama **ALBA**: il nome sta dentro al disco del sole, che non
+se ne va mai dallo schermo. Il repo resta Damn Vinted.
+
 Assistente per vendere su Vinted: analizza le foto di un capo, cerca online
-quanto vale davvero, scrive l'annuncio e stima il prezzo. Sito statico + tre
-Netlify Function.
+quanto vale davvero, scrive l'annuncio e stima il prezzo. Lo **scanner** fa
+tutto il giro da solo, dalle foto al prezzo. Sito statico + tre Netlify
+Function.
 
 ```
 public/index.html             tutta l'interfaccia (markup, stile, script)
@@ -34,7 +38,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-360 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+441 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -46,7 +50,7 @@ guidano Chromium: se non lo trova, imposta `CHROMIUM_PATH` o
 Tre modi di sapere se il sito funziona, dal piu' automatico al piu' manuale.
 
 **Da solo, a ogni push.** `.github/workflows/collaudo.yml` esegue `npm test` su
-ogni push e su ogni pull request: installa Node 20 e Chromium e lancia le otto
+ogni push e su ogni pull request: installa Node 20 e Chromium e lancia le
 suite. E' l'unico pezzo che non dipende da qualcuno che si ricordi di lanciarlo,
 ed e' il motivo per cui una pull request qui ha un segno verde o rosso senza che
 nessuno lo chieda.
@@ -82,7 +86,7 @@ senza di loro il sito continua a funzionare come prima.
 |---|---|---|
 | `GROQ_API_KEY` | Scrittura annuncio, stima prezzo, e analisi foto se manca Gemini | Si' |
 | `GEMINI_API_KEY` | Analisi foto: legge il testo delle etichette molto meglio | No |
-| `SERPAPI_KEY` | Bottone "Identifica prodotto" e agente di ricerca online | No |
+| `SERPAPI_KEY` | Bottone "Identifica prodotto", agente di ricerca e scanner | No |
 
 ### GEMINI_API_KEY — analisi foto piu' accurata
 
@@ -110,17 +114,19 @@ mercato vero. La seconda e' la scheda **Ricerca**, cioe' l'agente (vedi sotto).
 2. Copia la chiave dalla dashboard (**Your Account > API Key**).
 3. Incollala in `SERPAPI_KEY` su Netlify.
 
-Piano gratuito: 250 ricerche al mese, condivise fra le due funzionalita': un
-giro dell'agente ne consuma da due a tre. Senza la chiave le function
-rispondono 501 e la pagina nasconde da sola il bottone e il pulsante di avvio
-dell'agente.
+Piano gratuito: 250 ricerche al mese, condivise fra tutte: un giro dell'agente
+ne consuma da due a tre, un giro dello scanner fino a sei. Senza la chiave le
+function rispondono 501: la pagina nasconde da sola il bottone "Identifica
+prodotto" e quello dell'agente, mentre lo scanner continua a funzionare a
+meta' - riconosce il capo dalle foto e dice a chiare lettere che senza la
+chiave non puo' controllare i prezzi.
 
 ### Le altre, tutte opzionali
 
 | Variabile | Default | A cosa serve |
 |---|---|---|
 | `GROQ_MODEL_TEXT` | `openai/gpt-oss-120b` | Fissa il modello di testo |
-| `GROQ_MODEL_VISION` | `meta-llama/llama-4-scout-17b-16e-instruct` | Fissa il modello con visione di Groq |
+| `GROQ_MODEL_VISION` | `qwen/qwen3.6-27b` | Fissa il modello con visione di Groq |
 | `GEMINI_MODEL` | scelto dal catalogo | Fissa il modello Gemini |
 | `RATE_LIMIT_PER_MIN` | `20` | Richieste al minuto per IP (`0` disattiva) |
 | `AI_TIMEOUT_MS` | `9000` | Budget di una richiesta AI |
@@ -134,10 +140,27 @@ per questo le function non si fidano dei valori di default. Se il modello non
 esiste piu' chiedono il catalogo e ripiegano da sole, e il modello che ha
 davvero risposto compare sotto il risultato dell'analisi.
 
+I modelli con visione rimasti su Groq sono modelli che **ragionano ad alta
+voce**, e il ragionamento si mangia i token prima di arrivare alla risposta:
+con una foto ci stava, con due il JSON non arrivava piu'. Si spegne con
+`reasoning_effort`, ma il valore giusto dipende dalla famiglia - `none` per i
+qwen3, mentre gpt-oss lo rifiuta con un 400 - e la function lo manda solo a
+chi lo accetta, con un ripiego se un giorno smette di accettarlo.
+
+Attenzione a **come** arriva il ritiro: Groq lo annuncia con un **400**, non
+con un 404 (`model_decommissioned`, `model_not_supported`). Chi tocca quel
+riconoscimento si ricordi che guardare il solo 404 spegne tutto il ripiego, e
+il sintomo che si vede e' un innocuo "Il modello ha rifiutato la richiesta".
+
+I default qui sopra restano comunque da tenere vivi: il ripiego funziona, ma
+partire da un modello morto costa un giro, e con le foto da caricare due volte
+dentro i 9s della function quel giro puo' costare la risposta.
+
 ## Il sole
 
 La pagina si apre su un sole, e i suoi raggi sono le funzioni: un tocco su un
-raggio apre l'analisi foto, l'annuncio, la stima, la ricerca o lo storico. Il
+raggio apre l'analisi foto, l'annuncio, la stima, la ricerca, lo storico o lo
+scanner. Il
 disegno arriva da uno storyboard a matita, ridisegnato al pulito tenendo i
 raggi irregolari - lunghezza e larghezza diverse una dall'altra - perche' e'
 quello che lo distingue da un'icona presa da un pacchetto.
@@ -153,11 +176,18 @@ corta a fare da "click". Il disco al centro fa da schermo - dice cosa stai per
 aprire - e da tasto: si preme li' per entrare. Anche la rotella del mouse e le
 frecce della tastiera fanno scattare la ghiera, e Invio preme al centro.
 
-Scelto un raggio il sole non sparisce: **si rimpicciolisce e va a parcheggiarsi
-a meta' sul bordo di sotto**, e li' resta mentre usi la funzione. Toccarlo lo fa
-risalire e tornare a schermo intero, pronto per la scelta successiva. E' anche
-tutta la navigazione che c'e': la barra in basso non esiste piu', perche'
-diceva le stesse cinque cose dei raggi.
+Scelto un raggio il sole non sparisce: **si rimpicciolisce e va a posarsi sotto
+al contenuto**, e li' resta mentre usi la funzione. Ci sta tutto dentro, non
+mezzo fuori dal bordo, e non e' un vezzo: li' sotto **resta una ghiera viva**.
+Girandolo la funzione **cambia mentre giri**
+- il contenuto sopra si sostituisce a ogni scatto, il raggio pieno si sposta, e
+il disco scrive dove sei: `SCANNER` sopra, `ALBA` sotto. Per passare da una
+funzione all'altra non si torna piu' indietro ogni volta.
+
+Toccarlo al centro invece lo fa risalire a schermo intero, per riprendere la
+scelta dal sole grande. Ed e' tutta la navigazione che c'e': niente barra in
+basso, e nemmeno un'intestazione in cima - diceva il nome, e il nome sta gia'
+nel disco.
 
 Il movimento e' una transizione sola sul `transform`, con una curva che parte
 all'indietro: quel valore negativo nella `cubic-bezier` e' lo strappo verso
@@ -198,6 +228,64 @@ di la' anche nome e marca; foto nuove azzerano tutto.
 
 Ogni rapporto finisce nello storico insieme all'annuncio e alla stima dello
 stesso capo.
+
+## Lo scanner
+
+Le altre schede sono strumenti: una guarda le foto, una cerca online, una
+stima. Lo **scanner** e' un agente che li usa da solo e in fila, perche' sono
+la stessa domanda spezzata in tre - *quanto ci ricavo?* - e farla in tre schede
+vuol dire ricopiare a mano gli stessi dati due volte. Si parte dalle foto e si
+arriva al prezzo senza scrivere niente, tranne quello che sai tu e la foto non
+dice.
+
+Tre fasi, che sono i tre verbi.
+
+**1. Scansiona.** Le foto, l'etichetta a piena risoluzione, e Google Lens. Ne
+esce un'identita' del capo in cui ogni campo si porta dietro **da dove arriva**:
+letto sull'etichetta, visto in foto, riconosciuto da Lens, detto da te.
+"Carhartt letto sul cartellino" e "Carhartt dedotto dalla forma" portano allo
+stesso prezzo con due affidabilita' diverse, e chi vende deve poterle
+distinguere prima di fidarsi del numero.
+
+**2. Cerca, a giri.** Ogni giro parte da **cosa manca ancora**, non da una lista
+fissa: pochi annunci dell'usato, risultati che parlano di un altro capo, prezzi
+troppo sparsi, mediana che si muove ancora. La lacuna finisce scritta a lettere
+nel diario e dentro il prompt della ricerca successiva, cosi' il giro nuovo
+cambia strategia invece di ripetere la stessa query con altre parole. Si ferma
+quando il quadro sta in piedi - non dopo un numero fisso di ricerche - ma il
+tetto resta: quattro giri, sei ricerche in tutto, perche' ognuna costa quota.
+
+**3. Capisce i prezzi**, ed e' qui la differenza vera con l'agente della scheda
+Ricerca, che di tutti i prezzi trovati fa una mediana sola. Un annuncio Vinted
+a 30€ e una scheda Zalando a 89€ non sono lo stesso numero: il primo dice a
+quanto **si vende**, il secondo quanto **costa nuovo**. Lo scanner:
+
+- separa gli annunci dell'usato dai listini dei negozi, guardando il dominio
+  prima del testo (su vinted.it si vende usato qualunque cosa dica il titolo);
+- butta fuori i risultati che non nominano ne' la marca ne' il tipo di capo:
+  restano in elenco, marcati, ma fuori dalla mediana;
+- scarta gli estremi con la regola dei quartili, cosi' un lotto stock da 600€
+  in mezzo a sei felpe da 40 non sposta niente - e dice quali ha scartato;
+- calcola il quartile centrale, cioe' **dove sta meta' del mercato**, e da li'
+  tira fuori due numeri invece di uno: il prezzo per vendere in pochi giorni e
+  quello per cui vale la pena aspettare.
+
+La fiducia la calcola il codice dai dati - quanti annunci, quanto sono vicini
+fra loro - e non la dichiara il modello: a un modello a cui si chiede quanto e'
+sicuro risponde quasi sempre "media". E se il numero che propone cade fuori dai
+prezzi davvero trovati, viene riportato dentro la banda **e la pagina lo
+scrive**: un numero corretto di nascosto e' peggio di uno sbagliato in chiaro.
+
+Sotto il rapporto resta la lista numerata di tutto quello che ha letto, ogni
+riga col suo link e col suo cartellino - annuncio usato, prezzo del nuovo,
+parla di un altro capo, prezzo fuori scala. Il "(3)" del rapporto e la terza
+riga sono la stessa cosa.
+
+Senza `SERPAPI_KEY` lo scanner non si spegne: riconosce comunque il capo dalle
+foto, non dice nessun prezzo - lo inventerebbe - e lo spiega.
+
+Il risultato alimenta l'annuncio e la stima prezzo, con lo stesso vincolo
+dell'agente: solo se la scheda di la' parla dello stesso capo.
 
 ## Deploy su Netlify
 
@@ -241,7 +329,19 @@ com'e' finche' non decidi tu.
 
 ## Come si usa l'analisi foto
 
-Fino a 4 foto. Il marcatore 🏷️ su un'anteprima dice "questa e' l'etichetta":
+Fino a 4 foto. Quanto pesante sia "troppo" lo decide il provider, cambia col
+modello e non coincide col numero che sta scritto nella sua documentazione:
+qui e' stato sbagliato due volte di fila. Quindi non si indovina piu'. Si
+parte dalla qualita' migliore che sta in un budget di partenza, e **si scende
+di un gradino ogni volta che e' il server a dire che e' troppo** - la function
+lo segnala con un campo apposta, non con una frase da leggere. Il numero non
+deve piu' essere giusto: deve solo essere un punto da cui partire.
+
+La foto dell'etichetta ha un tetto suo, piu' alto: viaggia in una richiesta
+tutta sua, e la sua risoluzione e' esattamente quella da cui dipende se marca,
+composizione e taglia si leggono o si indovinano.
+
+Il marcatore 🏷️ su un'anteprima dice "questa e' l'etichetta":
 quella foto viene mandata **a parte e a piena risoluzione**, con una richiesta
 che chiede solo di trascrivere quello che c'e' scritto. Quello che si legge
 sull'etichetta sovrascrive quello che il modello ha dedotto guardando il capo.

@@ -32,13 +32,20 @@ async function apri(browser, opzioni) {
   console.log('\n-- il sole e la home: i raggi sono le funzioni --');
   check('la pagina si apre sul sole', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-sole', await page.evaluate(() => document.querySelector('.tp.on').id));
   check('il sole vive fuori dalle schede, non dentro la home', await page.evaluate(() => !document.getElementById('tab-sole').querySelector('.soleWrap') && !!document.querySelector('#soleApp .soleWrap')));
-  check('cinque raggi, una funzione ciascuno', await page.evaluate(() => document.querySelectorAll('.raggio').length) === 5);
+  check('sei raggi, una funzione ciascuno', await page.evaluate(() => document.querySelectorAll('.raggio').length) === 6);
+  check('il nome sta dentro al disco, non in una fascia in cima',
+    await page.evaluate(() => document.querySelector('.dSotto').textContent.trim()) === 'ALBA',
+    await page.evaluate(() => document.querySelector('.dSotto').textContent));
+  check('e sopra al nome c\'e la funzione, che e la cosa che cambia',
+    await page.evaluate(() => document.getElementById('dScelta').textContent.trim()) === 'ANALIZZA');
+  check('di intestazioni non ce ne sono piu',
+    await page.evaluate(() => !document.querySelector('.hdr') && !document.querySelector('.damn')));
   const raggi = await page.evaluate(() => Array.from(document.querySelectorAll('.raggio')).map(r => ({
     scheda: r.dataset.scheda, ruolo: r.getAttribute('role'), nome: r.getAttribute('aria-label'),
     etichetta: r.querySelector('.rEti').textContent, tab: r.getAttribute('tabindex')
   })));
   check('sono bottoni veri, non disegni', raggi.every(r => r.ruolo === 'button' && r.tab === '0' && r.nome && r.nome.length > 5), raggi);
-  check('e dicono a voce cosa fanno', raggi.map(r => r.etichetta).join(',') === 'ANALIZZA,ANNUNCIO,PREZZO,RICERCA,STORICO', raggi.map(r => r.etichetta));
+  check('e dicono a voce cosa fanno', raggi.map(r => r.etichetta).join(',') === 'ANALIZZA,ANNUNCIO,PREZZO,RICERCA,STORICO,SCANNER', raggi.map(r => r.etichetta));
 
   const doveSta = () => page.evaluate(() => {
     const d = document.querySelector('#soleApp .disco').getBoundingClientRect();
@@ -90,12 +97,22 @@ async function apri(browser, opzioni) {
   check('Invio preme al centro e apre quello scelto', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-prezzo', await page.evaluate(() => document.querySelector('.tp.on').id));
 
   await page.click('#soleApp .dTitolo');
+  // Il sole risale con una transizione, e girarlo mentre e' ancora per aria
+  // vuol dire girare intorno a un centro che si sta spostando: gli scatti non
+  // tornano, e ne esce un fallimento che parla del tasto centrale mentre il
+  // problema era il giro. Si aspetta che sia arrivato, non un tempo a caso.
+  await page.waitForFunction(() => !document.getElementById('soleApp').classList.contains('parcheggiato'));
   await page.waitForTimeout(700);
   await gira(0, 90, 10);
-  // Subito, senza aspettare: dopo un giro il tasto centrale deve rispondere
-  // al primo tocco, non dopo un tempo di grazia.
+  // Quello che il controllo afferma non e' "si apre lo storico": e' che il
+  // tasto centrale apre QUELLO CHE IL DISCO MOSTRA, al primo tocco e senza
+  // tempo di grazia. Legarlo a una scheda fissa lo faceva dipendere da quanti
+  // scatti fosse riuscito a fare il giro, che e' un'altra cosa.
+  const staPerAprire = (await accesi())[0];
   await page.click('#soleApp .dTitolo');
-  check('il tasto centrale apre quello che il disco mostra', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-storico', await page.evaluate(() => document.querySelector('.tp.on').id));
+  check('il tasto centrale apre quello che il disco mostra',
+    await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-' + staPerAprire,
+    { disco: await scelta(), aperta: await page.evaluate(() => document.querySelector('.tp.on').id) });
   await page.click('#soleApp .dTitolo');
   await page.waitForTimeout(700);
 
@@ -114,15 +131,57 @@ async function apri(browser, opzioni) {
   check('e il sole passa in stato parcheggiato', await page.evaluate(() => document.getElementById('soleApp').classList.contains('parcheggiato')));
   await page.waitForTimeout(700);
   const parcheggiato = await doveSta();
-  check('si appoggia sul bordo di sotto, mezzo dentro e mezzo fuori',
-    parcheggiato.centro > parcheggiato.fondo - 80 && parcheggiato.centro < parcheggiato.fondo + 10, parcheggiato);
-  check('e se ne vede abbastanza da capire che si puo toccare',
-    parcheggiato.fondo - (parcheggiato.centro - parcheggiato.largo / 2) > 50,
-    { visibile: Math.round(parcheggiato.fondo - (parcheggiato.centro - parcheggiato.largo / 2)) });
+  const ingombro = await page.evaluate(() => {
+    const n = document.querySelector('#soleApp .soleNav').getBoundingClientRect();
+    return { sopra: Math.round(n.top), sotto: Math.round(n.bottom), schermo: window.innerHeight };
+  });
+  check('ci sta tutto dentro: non e piu un mezzo sole che spunta dal bordo',
+    ingombro.sotto <= ingombro.schermo, ingombro);
+  check('e sta appoggiato in fondo, non in mezzo alla pagina',
+    ingombro.sotto > ingombro.schermo - 60 && ingombro.sopra > ingombro.schermo / 2, ingombro);
+  check('e il contenuto gli riserva almeno tutta la sua altezza', await page.evaluate(() => {
+    const riservato = parseInt(getComputedStyle(document.querySelector('.shell')).paddingBottom, 10);
+    return riservato >= document.querySelector('#soleApp .soleNav').getBoundingClientRect().height;
+  }), await page.evaluate(() => ({
+    riservato: parseInt(getComputedStyle(document.querySelector('.shell')).paddingBottom, 10),
+    sole: Math.round(document.querySelector('#soleApp .soleNav').getBoundingClientRect().height)
+  })));
   check('rimpicciolito, ma ancora visibile', parcheggiato.largo > 40 && parcheggiato.largo < aCasa.largo * 0.6, { parcheggiato: parcheggiato.largo, casa: aCasa.largo });
   check('le scritte dei raggi spariscono: a quella scala sarebbero macchie', await page.evaluate(() => getComputedStyle(document.querySelector('.rEti')).opacity) === '0');
   check('e i raggi non si toccano piu uno per uno', await page.evaluate(() => getComputedStyle(document.querySelector('.raggio')).pointerEvents) === 'none');
   check('il contenuto lascia spazio al sole parcheggiato', await page.evaluate(() => parseInt(getComputedStyle(document.querySelector('.shell')).paddingBottom, 10)) > 90);
+
+  console.log('\n-- parcheggiato resta una ghiera viva --');
+  check('il disco dice quale funzione e aperta',
+    await page.evaluate(() => document.getElementById('dScelta').textContent.trim()) === 'RICERCA',
+    await scelta());
+  check('e il raggio di quella funzione e l unico pieno', await page.evaluate(() => {
+    const acceso = document.querySelectorAll('.raggio.selezionato');
+    return acceso.length === 1 && acceso[0].dataset.scheda === 'ricerca';
+  }), await accesi());
+
+  // Il punto di tutto il disegno: da qui si cambia funzione girando, senza
+  // dover prima tornare al sole intero.
+  const primaDelloScatto = await page.evaluate(() => document.querySelector('.tp.on').id);
+  await page.evaluate(() => { document.getElementById('soleApp').dispatchEvent(new WheelEvent('wheel', { deltaY: 120, bubbles: true, cancelable: true })); });
+  await page.waitForTimeout(120);
+  check('uno scatto da parcheggiato cambia funzione da solo',
+    await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-storico',
+    { prima: primaDelloScatto, dopo: await page.evaluate(() => document.querySelector('.tp.on').id) });
+  check('e il disco lo dice subito', await scelta() === 'STORICO', await scelta());
+  check('il sole resta parcheggiato: non si torna a casa a ogni scatto',
+    await page.evaluate(() => document.getElementById('soleApp').classList.contains('parcheggiato')));
+  await page.evaluate(() => document.querySelector('#soleApp .soleNav').focus());
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForTimeout(120);
+  check('anche le frecce girano la ghiera parcheggiata',
+    await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-ricerca',
+    await page.evaluate(() => document.querySelector('.tp.on').id));
+
+  // E arrivarci da un bottone invece che dalla ghiera non deve lasciare il
+  // disco a mostrare la funzione sbagliata.
+  await page.evaluate(() => sw('prezzo'));
+  check('aprendo una scheda da altrove la ghiera segue', await scelta() === 'PREZZO', await scelta());
 
   await page.click('#soleApp .dTitolo');
   check('toccando il sole si torna a scegliere', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-sole');
@@ -251,8 +310,10 @@ async function apri(browser, opzioni) {
     return getComputedStyle(s).color === 'rgb(232, 200, 74)';
   }), await page.evaluate(() => getComputedStyle(document.querySelector('.soleSpin')).color));
   check('gira mentre l\'app lavora', await page.evaluate(() => getComputedStyle(document.querySelector('.soleSpin')).animationName) === 'spin');
-  check('sorge dietro ogni risultato', await page.evaluate(() => document.querySelectorAll('.res .alba').length) === 4,
-    await page.evaluate(() => document.querySelectorAll('.res .alba').length));
+  check('sorge dietro ogni risultato', await page.evaluate(() => {
+    const res = Array.from(document.querySelectorAll('.res'));
+    return res.length >= 4 && res.every(r => r.querySelector(':scope > .alba'));
+  }), await page.evaluate(() => Array.from(document.querySelectorAll('.res')).map(r => r.id + ':' + !!r.querySelector(':scope > .alba'))));
   check('ma resta dietro: non si puo cliccare', await page.evaluate(() => getComputedStyle(document.querySelector('.alba')).pointerEvents) === 'none');
   check('e non lo legge chi usa uno screen reader', await page.evaluate(() => Array.from(document.querySelectorAll('.alba,.soleSpin,.soleLogo')).every(e => e.getAttribute('aria-hidden') === 'true')));
   await page.evaluate(() => sw('storico'));

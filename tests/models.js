@@ -6,6 +6,7 @@ const { EventEmitter } = require('events');
 
 let plan = [];        // risposte in coda per chat/completions
 let calls = [];       // modelli effettivamente provati
+let corpi = [];       // e i corpi mandati, per guardarci dentro
 let catalogCalls = 0;
 let catalog = ['meta-llama/llama-4-scout-17b-16e-instruct','openai/gpt-oss-120b','openai/whisper-large-v3','qwen/qwen3-32b'];
 let latency = 0;
@@ -22,8 +23,9 @@ https.request = function (opts, cb) {
         status = 200;
         body = JSON.stringify({ data: catalog.map(id => ({ id })) });
       } else {
-        const model = JSON.parse(req._payload || '{}').model;
-        calls.push(model);
+        const corpo = JSON.parse(req._payload || '{}');
+        calls.push(corpo.model);
+        corpi.push(corpo);
         const next = plan.shift() || { status: 200, body: JSON.stringify({ choices: [{ message: { content: 'ok' } }] }) };
         status = next.status; body = next.body;
       }
@@ -49,7 +51,20 @@ let pass = 0, fail = 0;
 const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else { fail++; console.log(`  FAIL ${n}${e !== undefined ? ' -> ' + e : ''}`); } };
 
 const MISSING = { status: 404, body: JSON.stringify({ error: { message: 'The model does not exist or you do not have access to it' } }) };
+// Come Groq annuncia davvero un modello ritirato: 400, non 404. Guardando solo
+// il 404 il ripiego non partiva, e ogni foto finiva con "Il modello ha
+// rifiutato la richiesta. Riprova.".
+const DISMESSO = { status: 400, body: JSON.stringify({ error: { code: 'model_decommissioned', message: 'The model `meta-llama/llama-4-scout-17b-16e-instruct` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations' } }) };
+const NONSUPPORTATO = { status: 400, body: JSON.stringify({ error: { code: 'model_not_supported', message: "The requested model 'meta-llama/llama-4-scout-17b-16e-instruct' is not supported by provider 'groq'." } }) };
 const NOVISION = { status: 400, body: JSON.stringify({ error: { message: 'this model does not support image input' } }) };
+// Il 400 vero di Groq quando la richiesta supera i suoi 4MB di base64. Nomina
+// l'immagine, e senza un controllo apposta finiva nel ramo "prova un altro
+// modello": otto tentativi con lo stesso payload, e lo stesso errore.
+const TROPPOGROSSA = { status: 400, body: JSON.stringify({ error: { message: 'Request too large: the maximum allowed size for a request containing a base64 encoded image is 4MB' } }) };
+// Lo stesso "Request too large", ma per i TOKEN: la cura non e' rimpicciolire,
+// e' mandare meno foto. Prima finiva nello stesso secchio dei byte, e il
+// client scendeva di qualita' a vuoto.
+const TROPPITOKEN = { status: 400, body: JSON.stringify({ error: { message: 'Request too large for model `qwen/qwen3.6-27b` in organization `org_01abc` on tokens per minute (TPM): Limit 15000, Requested 21000.' } }) };
 const OK = { status: 200, body: JSON.stringify({ choices: [{ message: { content: '{"ok":true}' } }] }) };
 
 async function post(ip, payload) {
@@ -79,6 +94,28 @@ async function post(ip, payload) {
   r = await post('1.0.0.3', { type: 'image', prompt: 'ciao', images: [{ base64: 'AAA' }] });
   check('la scelta resta in cache: niente secondo giro', r.statusCode === 200 && calls.length === 1, calls.join(','));
   check('e niente seconda richiesta di catalogo', catalogCalls === 0, catalogCalls);
+
+  console.log('\n-- modello ritirato: Groq lo dice con un 400, non con un 404 --');
+  plan = [DISMESSO, OK]; calls = []; catalogCalls = 0;
+  r = await post('1.0.1.1', { type: 'image', prompt: 'x', images: [{ base64: 'AAA' }] });
+  check('un 400 "decommissioned" fa ripiegare sul modello dopo',
+    r.statusCode === 200 && calls.length === 2, `${r.statusCode} / ${calls.join(',')}`);
+  check('e il modello morto non e quello che risponde',
+    JSON.parse(r.body).model === calls[1], r.body);
+  check('non resta l errore che invitava a riprovare a vuoto',
+    !/rifiutato la richiesta/.test(r.body), r.body);
+
+  plan = [NONSUPPORTATO, OK]; calls = []; catalogCalls = 0;
+  r = await post('1.0.1.2', { type: 'image', prompt: 'x', images: [{ base64: 'AAA' }] });
+  check('lo stesso per "not supported by provider"',
+    r.statusCode === 200 && calls.length === 2, `${r.statusCode} / ${calls.join(',')}`);
+
+  // Il testo passa dallo stesso giro: se il modello di testo viene ritirato,
+  // l'annuncio e la stima devono ripiegare come fa l'analisi foto.
+  plan = [DISMESSO, OK]; calls = [];
+  r = await post('1.0.1.3', { type: 'text', prompt: 'ciao' });
+  check('vale anche per il testo, non solo per le foto',
+    r.statusCode === 200 && calls.length === 2, `${r.statusCode} / ${calls.join(',')}`);
 
   console.log('\n-- cache negativa e sua scadenza --');
   plan = Array(12).fill(NOVISION); calls = [];
@@ -113,6 +150,64 @@ async function post(ip, payload) {
   plan = [{ status: 502, body: '<html>Bad Gateway</html>' }];
   r = await post('1.0.0.9', { type: 'text', prompt: 'ciao' });
   check('risposta non JSON -> 502 con messaggio pulito', r.statusCode === 502 && /Riprova/.test(r.body), r.body);
+
+  console.log('\n-- richiesta troppo pesante --');
+  plan = Array(12).fill(TROPPOGROSSA); calls = []; catalogCalls = 0;
+  r = await post('1.0.0.10', { type: 'image', prompt: 'x', images: [{ base64: 'AAA' }] });
+  check('non gira su altri modelli: il peso non cambia da modello a modello',
+    calls.length === 1, calls.join(','));
+  check('e non chiede nemmeno il catalogo', catalogCalls === 0, catalogCalls);
+  check('dice che le foto sono troppo pesanti', /troppo pesanti/i.test(r.body), r.body);
+  check('e non dice "riprova" e basta, che manderebbe a ripetere lo stesso errore',
+    !/^.*rifiutato la richiesta/.test(JSON.parse(r.body).error), r.body);
+  check('il motivo arriva, cosi si sa perche', /maximum allowed size/.test(JSON.parse(r.body).dettaglio || ''), r.body);
+  check('ma il messaggio grande resta nostro', /troppo pesanti/.test(JSON.parse(r.body).error), r.body);
+
+  console.log('\n-- il ragionamento ad alta voce si spegne --');
+  // Il guasto che si vedeva sul sito: il modello con visione ragionava dentro
+  // un <think> che non si chiudeva, finiva i token e il JSON non arrivava mai.
+  // Con una foto sola ci stava, con due no.
+  catalog = ['qwen/qwen3.6-27b', 'openai/gpt-oss-120b'];
+  plan = [OK]; calls = []; corpi = [];
+  r = await post('1.0.2.1', { type: 'image', prompt: 'x', images: [{ base64: 'AAA' }] });
+  check('a un qwen3 si dice di non ragionare', corpi[0].reasoning_effort === 'none', JSON.stringify(corpi[0].reasoning_effort));
+
+  plan = [OK]; calls = []; corpi = [];
+  r = await post('1.0.2.2', { type: 'text', prompt: 'ciao' });
+  check('ma non a gpt-oss, che su "none" risponderebbe 400',
+    corpi[0].reasoning_effort === undefined, JSON.stringify(corpi[0].reasoning_effort));
+
+  // I provider spostano questi parametri da un modello all'altro: se un
+  // giorno smette di accettarlo, non deve cadere tutta l'analisi foto.
+  plan = [{ status: 400, body: JSON.stringify({ error: { message: '`reasoning_effort` must be one of `low`, `medium`, or `high`' } }) }, OK];
+  calls = []; corpi = [];
+  r = await post('1.0.2.3', { type: 'image', prompt: 'x', images: [{ base64: 'AAA' }] });
+  check('e se lo rifiuta, si riprova senza invece di arrendersi',
+    r.statusCode === 200 && corpi.length === 2 && corpi[1].reasoning_effort === undefined,
+    `${r.statusCode} / ${corpi.length}`);
+  catalog = ['meta-llama/llama-4-scout-17b-16e-instruct','openai/gpt-oss-120b','openai/whisper-large-v3','qwen/qwen3-32b'];
+
+  console.log('\n-- troppi token non e la stessa cosa di troppi byte --');
+  plan = [TROPPITOKEN]; calls = [];
+  r = await post('1.0.0.11', { type: 'image', prompt: 'x', images: [{ base64: 'AAA' }] });
+  const rispostaToken = JSON.parse(r.body);
+  check('lo riconosce come problema di token, non di peso', rispostaToken.pesante === 'token', r.body);
+  check('e lo dice: meno foto, non foto piu piccole', /troppe per questo modello/.test(rispostaToken.error), rispostaToken.error);
+  check('mentre il peso vero resta peso', await (async () => {
+    plan = [TROPPOGROSSA]; calls = [];
+    const b = JSON.parse((await post('1.0.0.12', { type: 'image', prompt: 'x', images: [{ base64: 'AAA' }] })).body);
+    return b.pesante === 'byte';
+  })());
+
+  console.log('\n-- il motivo arriva a chi tiene il sito, senza i segreti --');
+  plan = [TROPPITOKEN]; calls = [];
+  r = await post('1.0.0.13', { type: 'image', prompt: 'x', images: [{ base64: 'AAA' }] });
+  const conDettaglio = JSON.parse(r.body);
+  check('il dettaglio del provider arriva', /tokens per minute/.test(conDettaglio.dettaglio || ''), conDettaglio.dettaglio);
+  check('ma senza l id dell organizzazione', !/org_01abc/.test(r.body), r.body);
+  plan = [{ status: 400, body: JSON.stringify({ error: { message: 'Invalid API Key gsk_abc123def456 on request' } }) }];
+  r = await post('1.0.0.14', { type: 'text', prompt: 'x' });
+  check('ne pezzi di chiave', !/gsk_abc123def456/.test(r.body), r.body);
 
   console.log('\n-- deadline --');
   process.env.AI_TIMEOUT_MS = '9000';

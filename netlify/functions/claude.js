@@ -22,13 +22,24 @@ const TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || 9000);
 // preavviso. Se non esistono piu', la function chiede il catalogo e ripiega
 // da sola. Le env var, se impostate, hanno la precedenza.
 const MODEL_TEXT = process.env.GROQ_MODEL_TEXT || 'openai/gpt-oss-120b';
-const MODEL_VISION = process.env.GROQ_MODEL_VISION || 'meta-llama/llama-4-scout-17b-16e-instruct';
+// llama-4-scout, che stava qui, Groq l'ha spento il 17 luglio 2026 (e maverick
+// ancora prima). Il ripiego ora lo riconosce e cambia modello da solo, ma
+// partire da un modello morto costa comunque un giro: e con 3.6MB di foto da
+// caricare due volte, dentro i 9s di budget, quel giro puo' essere la
+// differenza fra una risposta e un timeout. Il default va tenuto vivo anche
+// se il ripiego esiste.
+const MODEL_VISION = process.env.GROQ_MODEL_VISION || 'qwen/qwen3.6-27b';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || '';
 
-// Ordine di gradimento, applicato a quello che il provider dichiara disponibile.
+// Ordine di gradimento, applicato a quello che il provider dichiara
+// disponibile. Sono preferenze, non certezze: il pool da ordinare arriva dal
+// catalogo dell'account, quindi un nome che qui e' rimasto indietro non fa
+// danno - semplicemente non trovera' niente da ordinare. Ma tenerli aggiornati
+// fa trovare prima quello giusto, e ogni tentativo in meno e' un secondo in
+// piu' dentro il budget.
 const MODEL_PREFERENCES = {
-  image: [/llama-4-scout/i, /llama-4-maverick/i, /llama-4/i, /vision/i, /qwen/i],
-  text: [/llama-3\.3-70b/i, /llama-3\.[12]-70b/i, /^openai\/gpt-oss/i, /llama-3/i]
+  image: [/qwen3\.\d/i, /qwen/i, /llama-4/i, /vision|multimodal/i],
+  text: [/^openai\/gpt-oss/i, /llama-3\.3-70b/i, /llama-3/i]
 };
 
 const POSITIVE_TTL_MS = 30 * 60 * 1000;  // "questo modello funziona"
@@ -69,7 +80,7 @@ exports.handler = async (event) => {
     ? Buffer.from(event.body || '', 'base64').toString('utf8')
     : (event.body || '');
   if (Buffer.byteLength(rawBody) > MAX_BODY) {
-    return S.json(413, cors, { error: 'Immagini troppo pesanti' });
+    return S.json(413, cors, { error: 'Immagini troppo pesanti', pesante: 'byte' });
   }
 
   // Una sola deadline per tutta la richiesta, tentativi di fallback inclusi.
@@ -112,8 +123,11 @@ exports.handler = async (event) => {
       temperature: kind === 'image' ? 0.2 : (body.creative ? 0.85 : 0.6),
       // Il JSON dell'analisi foto ha molti campi con testo libero: a 1024
       // token rischiava di troncarsi a meta' e diventare impossibile da
-      // interpretare, il che si vede come "analisi imprecisa".
-      maxTokens: kind === 'image' ? 2048 : 1024,
+      // interpretare, il che si vede come "analisi imprecisa". E i modelli
+      // con visione rimasti su Groq sono modelli che ragionano ad alta voce:
+      // il ragionamento si mangia una fetta del budget PRIMA di arrivare al
+      // JSON, quindi 2048 rischiava di far finire i token a meta' risposta.
+      maxTokens: kind === 'image' ? 3072 : 1024,
       json: body.json === true
     };
 
@@ -136,7 +150,12 @@ exports.handler = async (event) => {
       esito = await tentaGroq(richiesta, kind, deadline);
     }
 
-    if (!esito.ok) return S.json(esito.status || 502, cors, { error: esito.error });
+    if (!esito.ok) {
+      const corpo = { error: esito.error };
+      if (esito.pesante) corpo.pesante = esito.pesante;
+      if (esito.dettaglio) corpo.dettaglio = esito.dettaglio;
+      return S.json(esito.status || 502, cors, corpo);
+    }
 
     // Rimandiamo anche chi ha risposto: serve a capire da cosa dipende la
     // qualita' dell'analisi e quale modello conviene fissare a mano.
@@ -256,9 +275,9 @@ async function tentaGemini(richiesta, kind, deadline) {
       return { status: 0, body: String(e && e.message || e) };
     });
 
-    // 404 = modello inesistente, si prova il prossimo. 429 = quota gratuita
-    // finita per oggi: cambiare modello non aiuta, si esce subito.
-    if (res.status === 404) continue;
+    // Modello inesistente o ritirato: si prova il prossimo. Vale anche qui la
+    // lezione di Groq - il ritiro non arriva sempre come 404.
+    if (res.status === 404 || modelloSparito(res)) continue;
     if (res.status === 429) return { ok: false, motivo: 'quota giornaliera esaurita' };
     if (res.status >= 400 || res.status === 0) {
       console.error(`Gemini ${res.status} su ${modello}: ${(res.body || '').slice(0, 300)}`);
@@ -288,6 +307,20 @@ async function tentaGemini(richiesta, kind, deadline) {
 
 const GROQ_HOST = 'api.groq.com';
 
+// I modelli che ragionano ad alta voce si mangiano il budget di token PRIMA
+// di arrivare alla risposta: con due foto il blocco <think> non si chiudeva
+// nemmeno, e il JSON non usciva mai. Con una foto sola ci stava - ed e'
+// esattamente il sintomo che si vedeva sul sito.
+//
+// Su Groq il ragionamento si spegne, ma il parametro e' specifico per
+// famiglia e sbagliarlo costa un 400:
+//   qwen3   -> reasoning_effort 'none' lo spegne davvero
+//   gpt-oss -> accetta solo low|medium|high, 'none' e' un 400
+//   altri   -> non si manda niente, l'unica cosa sempre sicura
+// reasoning_format:'hidden' non servirebbe: nasconde il ragionamento ma il
+// modello lo fa lo stesso, e i token se li prende comunque.
+const QWEN3 = /qwen3/i;
+
 function corpoGroq(richiesta, modello) {
   let content;
   if (richiesta.images.length) {
@@ -307,6 +340,7 @@ function corpoGroq(richiesta, modello) {
   // JSON mode: solo per il testo. Sul multimodale di Groq non e' garantito,
   // li' ci affidiamo al parsing tollerante lato client.
   if (richiesta.json && !richiesta.images.length) out.response_format = { type: 'json_object' };
+  if (QWEN3.test(modello) && !richiesta.senzaRagionamento) out.reasoning_effort = 'none';
   return out;
 }
 
@@ -370,6 +404,16 @@ async function tentaGroq(richiesta, kind, deadline) {
     res = await chiamataGroq(Object.assign({}, richiesta, { json: false }), modello, deadline);
   }
 
+  // Stessa rete di sicurezza per reasoning_effort: e' un parametro che i
+  // provider spostano da un modello all'altro, e non deve poter rompere
+  // tutta l'analisi foto se un giorno questo modello smette di accettarlo.
+  if (res.status >= 400 && /reasoning_effort|reasoning/i.test(res.body || '')
+      && !richiesta.senzaRagionamento
+      && deadline - Date.now() >= MIN_ATTEMPT_MS) {
+    console.error(`reasoning_effort rifiutato da ${modello}, riprovo senza`);
+    res = await chiamataGroq(Object.assign({}, richiesta, { senzaRagionamento: true }), modello, deadline);
+  }
+
   let data;
   try {
     data = JSON.parse(res.body);
@@ -385,7 +429,16 @@ async function tentaGroq(richiesta, kind, deadline) {
     // Il testo di Groq puo' contenere id di organizzazione, nomi di modello e
     // dettagli di quota: resta nei log, al client va un messaggio nostro.
     console.error(`Groq ${res.status} su ${modello}: ${dettaglio}`);
-    return { ok: false, status: statusPerIlClient(res.status), error: erroreLeggibile(res.status), motivo: `HTTP ${res.status}` };
+    return {
+      ok: false,
+      status: statusPerIlClient(res.status),
+      error: erroreLeggibile(res.status, dettaglio),
+      // Il client su questo non deve leggere un messaggio: deve poterci
+      // reagire, e la reazione giusta dipende da QUALE dei due rifiuti e'.
+      pesante: pesaTroppo(res.status, dettaglio),
+      dettaglio: redigi(dettaglio),
+      motivo: `HTTP ${res.status}`
+    };
   }
 
   const text = data.choices && data.choices[0] && data.choices[0].message
@@ -405,10 +458,37 @@ function statusPerIlClient(status) {
   return 502;
 }
 
-function erroreLeggibile(status) {
+// Il limite di peso lo decide il provider, cambia col modello e non e' scritto
+// da nessuna parte su cui si possa fare affidamento: qui si riconosce che il
+// rifiuto E' per peso, e sara' il client a scendere di qualita' e riprovare.
+function pesaTroppo(status, dettaglio) {
+  if (status === 413) return 'byte';
+  return status === 400 ? tipoDiRifiuto(dettaglio) : '';
+}
+
+// Il testo di Groq puo' contenere l'id dell'organizzazione e - in teoria -
+// pezzi di chiave: quelli non escono di qui. Il resto invece serve, e serve
+// a chi il sito ce l'ha: senza, ogni rifiuto nuovo del provider costa un
+// giro di ipotesi. E' finito nel diario dello scanner, non nel messaggio
+// grande, che resta nostro.
+function redigi(dettaglio) {
+  return String(dettaglio || '')
+    .replace(/\b(?:sk|gsk|org)[-_][A-Za-z0-9]+/gi, '[omesso]')
+    .replace(/\b[0-9a-f]{24,}\b/gi, '[omesso]')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 200);
+}
+
+function erroreLeggibile(status, dettaglio) {
   if (status === 429) return 'Troppe richieste, riprova tra qualche secondo.';
   if (status === 401 || status === 403) return 'Il servizio AI ha rifiutato le credenziali del sito.';
-  if (status === 413) return 'Richiesta troppo pesante per il modello. Prova con meno foto.';
+  // Groq risponde 400, non 413, quando la richiesta supera i suoi 4MB: dire
+  // "riprova" mandava a ripetere identica una richiesta che non poteva
+  // passare. Qui si dice cosa fare davvero.
+  const tipo = pesaTroppo(status, dettaglio);
+  if (tipo === 'byte') return 'Le foto sono troppo pesanti per il modello. Sto riprovando piu\' leggero.';
+  if (tipo === 'token') return 'Le foto sono troppe per questo modello. Sto riprovando con meno foto.';
   if (status === 400) return 'Il modello ha rifiutato la richiesta. Riprova.';
   return 'Servizio AI non disponibile al momento. Riprova tra poco.';
 }
@@ -431,17 +511,54 @@ function dettaglioNessunModello(kind, provati) {
 
 // Groq risponde 404 con "does not exist or you do not have access to it"
 // quando il modello e' stato ritirato dal catalogo.
+// Un modello ritirato Groq lo annuncia con un 400, non con un 404:
+//   model_decommissioned: 400 The model `X` has been decommissioned...
+//   model_not_supported:  400 The requested model 'X' is not supported...
+// Guardando solo il 404 - com'era prima - quel 400 non veniva riconosciuto,
+// il giro dei candidati non partiva mai, e ogni analisi foto finiva con "Il
+// modello ha rifiutato la richiesta. Riprova.", che invitava a ripetere una
+// richiesta destinata a fallire identica finche' non si cambiava modello a
+// mano. E' esattamente il caso per cui esiste tutto il meccanismo di
+// ripiego: era il codice di stato a tenerlo spento.
+const MODELLO_SPARITO = /does not exist|model_not_found|model_decommissioned|decommissioned|model_not_supported|not supported by provider|no longer supported|has been deprecated/i;
+
 function modelloSparito(res) {
-  if (!res || res.status !== 404) return false;
-  return /does not exist|model_not_found|decommissioned/i.test(res.body || '');
+  if (!res) return false;
+  if (res.status !== 404 && res.status !== 400) return false;
+  return MODELLO_SPARITO.test(res.body || '');
 }
 
 // Vale la pena provare un altro modello? Sia se questo non esiste piu', sia
 // se esiste ma rifiuta le immagini: Groq lo segnala con un 400 che parla di
 // image/vision/multimodal.
+// Groq rifiuta con un 400 le richieste sopra i 4MB di base64. Il messaggio
+// nomina spesso l'immagine, quindi senza questo controllo finiva nel ramo
+// "prova un altro modello": otto tentativi con lo stesso payload da 4MB, il
+// budget di 9s bruciato, e lo stesso errore alla fine.
+// Due rifiuti diversi che finivano nello stesso secchio, e la cura e'
+// opposta. BYTE: la richiesta pesa troppo, si rimpicciolisce e passa.
+// TOKEN: le immagini occupano troppo contesto o troppa quota al minuto -
+// rimpicciolire aiuta poco, quello che serve e' mandare MENO foto.
+// "exceed" da solo prendeva dentro anche i secondi, e il client scendeva di
+// qualita' all'infinito su un problema che la qualita' non risolve.
+const TROPPI_BYTE = /too large|too big|maximum (?:allowed )?size|size limit|entity too large|payload too/i;
+const TROPPI_TOKEN = /token|context length|context window|reduce the length|tokens per minute|tpm/i;
+
+// L'ordine conta: "Request too large ... on tokens per minute" parla di
+// token, non di byte, e la parola "large" non deve trarre in inganno.
+function tipoDiRifiuto(dettaglio) {
+  const testo = dettaglio || '';
+  if (TROPPI_TOKEN.test(testo)) return 'token';
+  if (TROPPI_BYTE.test(testo)) return 'byte';
+  return '';
+}
+
+const TROPPO_GRANDE = /too large|too big|maximum (?:allowed )?size|size limit|entity too large|payload too|token|context length|reduce the length/i;
+
 function serveUnAltroModello(res, kind) {
   if (modelloSparito(res)) return true;
   if (kind !== 'image' || !res || res.status !== 400) return false;
+  if (TROPPO_GRANDE.test(res.body || '')) return false;
   return /image|vision|multimodal|modality/i.test(res.body || '');
 }
 

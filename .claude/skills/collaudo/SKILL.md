@@ -15,7 +15,7 @@ npm install     # solo se manca node_modules: playwright-core, nessun browser
 npm test
 ```
 
-`npm test` esegue otto suite e stampa il totale. Le prime quattro girano offline
+`npm test` esegue le suite e stampa il totale. Le prime cinque girano offline
 con `https` sostituito da uno stub, le altre guidano Chromium.
 
 | suite | cosa protegge |
@@ -25,8 +25,15 @@ con `https` sostituito da uno stub, le altre guidano Chromium.
 | `lens.js` `ricerca.js` | le due ricerche: richieste a SerpApi, prezzi, cache, errori |
 | `ui.js` `photo.js` `nuove.js` | interfaccia, analisi foto, etichetta |
 | `agente.js` | il ciclo dell'agente: piano, ricerche, raffinamento, rapporto |
+| `scanner.js` | lo scanner: identita' con le fonti, usato separato dal nuovo, giri di ricerca, banda dei prezzi |
 | `interazioni.js` | ghiera, sole parcheggiato, attesa, focus, vibrazione, motion |
 | `tocco.js` | **gli stessi gesti col dito vero**, su un Chromium in modalita' telefono |
+
+In `scanner.js` i controlli che contano davvero sono quelli sulla separazione
+fra usato e nuovo, sullo scarto degli estremi e sui risultati fuori tema: sono
+la ragione per cui lo scanner esiste, e un errore li' esce come un prezzo
+sbagliato costruito su numeri veri - la forma di guasto piu' difficile da
+vedere a occhio.
 
 `tocco.js` esiste perche' un bug e' passato da tutte le altre: col puntatore
 andava, sul telefono il click che il browser sintetizza dopo un tocco non
