@@ -82,6 +82,12 @@ Si impostano su Netlify in **Site configuration > Environment variables**.
 Solo la prima e' obbligatoria; le altre due accendono funzionalita' in piu' e
 senza di loro il sito continua a funzionare come prima.
 
+> **Aggiungere una chiave non basta.** Le function leggono l'ambiente al
+> momento del **deploy**: finche' non ne parte uno nuovo continuano a girare
+> con quello di prima, e la chiave appena messa sembra non funzionare. Dopo
+> averla salvata: **Deploys > Trigger deploy > Deploy site**. Vale per
+> aggiungere una chiave, cambiarla e toglierla.
+
 | Variabile | Serve a | Obbligatoria |
 |---|---|---|
 | `GROQ_API_KEY` | Scrittura annuncio, stima prezzo, e analisi foto se manca Gemini | Si' |
@@ -97,6 +103,12 @@ piccolo di un cartellino non ci arrivano, quindi finiscono per indovinare.
 1. Vai su **aistudio.google.com**, accedi con un account Google.
 2. **Get API key** > **Create API key**.
 3. Incolla la chiave in `GEMINI_API_KEY` su Netlify.
+4. **Fai partire un deploy nuovo** (vedi il riquadro qui sopra), o la chiave
+   resta li' senza che nessuno la legga.
+
+Che sia entrata si vede senza aprire niente: sotto il risultato dell'analisi
+foto c'e' scritto quale modello ha risposto. Prima diceva `groq`, dopo deve
+dire `gemini`.
 
 Piano gratuito: nessuna carta richiesta, con un tetto di richieste al giorno
 per modello. Se la quota finisce, la function ripiega su Groq da sola.
