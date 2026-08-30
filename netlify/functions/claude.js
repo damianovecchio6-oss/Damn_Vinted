@@ -307,6 +307,20 @@ async function tentaGemini(richiesta, kind, deadline) {
 
 const GROQ_HOST = 'api.groq.com';
 
+// I modelli che ragionano ad alta voce si mangiano il budget di token PRIMA
+// di arrivare alla risposta: con due foto il blocco <think> non si chiudeva
+// nemmeno, e il JSON non usciva mai. Con una foto sola ci stava - ed e'
+// esattamente il sintomo che si vedeva sul sito.
+//
+// Su Groq il ragionamento si spegne, ma il parametro e' specifico per
+// famiglia e sbagliarlo costa un 400:
+//   qwen3   -> reasoning_effort 'none' lo spegne davvero
+//   gpt-oss -> accetta solo low|medium|high, 'none' e' un 400
+//   altri   -> non si manda niente, l'unica cosa sempre sicura
+// reasoning_format:'hidden' non servirebbe: nasconde il ragionamento ma il
+// modello lo fa lo stesso, e i token se li prende comunque.
+const QWEN3 = /qwen3/i;
+
 function corpoGroq(richiesta, modello) {
   let content;
   if (richiesta.images.length) {
@@ -326,6 +340,7 @@ function corpoGroq(richiesta, modello) {
   // JSON mode: solo per il testo. Sul multimodale di Groq non e' garantito,
   // li' ci affidiamo al parsing tollerante lato client.
   if (richiesta.json && !richiesta.images.length) out.response_format = { type: 'json_object' };
+  if (QWEN3.test(modello) && !richiesta.senzaRagionamento) out.reasoning_effort = 'none';
   return out;
 }
 
@@ -387,6 +402,16 @@ async function tentaGroq(richiesta, kind, deadline) {
       && /response_format|json/i.test(res.body || '')
       && deadline - Date.now() >= MIN_ATTEMPT_MS) {
     res = await chiamataGroq(Object.assign({}, richiesta, { json: false }), modello, deadline);
+  }
+
+  // Stessa rete di sicurezza per reasoning_effort: e' un parametro che i
+  // provider spostano da un modello all'altro, e non deve poter rompere
+  // tutta l'analisi foto se un giorno questo modello smette di accettarlo.
+  if (res.status >= 400 && /reasoning_effort|reasoning/i.test(res.body || '')
+      && !richiesta.senzaRagionamento
+      && deadline - Date.now() >= MIN_ATTEMPT_MS) {
+    console.error(`reasoning_effort rifiutato da ${modello}, riprovo senza`);
+    res = await chiamataGroq(Object.assign({}, richiesta, { senzaRagionamento: true }), modello, deadline);
   }
 
   let data;

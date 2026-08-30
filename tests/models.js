@@ -6,6 +6,7 @@ const { EventEmitter } = require('events');
 
 let plan = [];        // risposte in coda per chat/completions
 let calls = [];       // modelli effettivamente provati
+let corpi = [];       // e i corpi mandati, per guardarci dentro
 let catalogCalls = 0;
 let catalog = ['meta-llama/llama-4-scout-17b-16e-instruct','openai/gpt-oss-120b','openai/whisper-large-v3','qwen/qwen3-32b'];
 let latency = 0;
@@ -22,8 +23,9 @@ https.request = function (opts, cb) {
         status = 200;
         body = JSON.stringify({ data: catalog.map(id => ({ id })) });
       } else {
-        const model = JSON.parse(req._payload || '{}').model;
-        calls.push(model);
+        const corpo = JSON.parse(req._payload || '{}');
+        calls.push(corpo.model);
+        corpi.push(corpo);
         const next = plan.shift() || { status: 200, body: JSON.stringify({ choices: [{ message: { content: 'ok' } }] }) };
         status = next.status; body = next.body;
       }
@@ -160,6 +162,30 @@ async function post(ip, payload) {
     !/^.*rifiutato la richiesta/.test(JSON.parse(r.body).error), r.body);
   check('il motivo arriva, cosi si sa perche', /maximum allowed size/.test(JSON.parse(r.body).dettaglio || ''), r.body);
   check('ma il messaggio grande resta nostro', /troppo pesanti/.test(JSON.parse(r.body).error), r.body);
+
+  console.log('\n-- il ragionamento ad alta voce si spegne --');
+  // Il guasto che si vedeva sul sito: il modello con visione ragionava dentro
+  // un <think> che non si chiudeva, finiva i token e il JSON non arrivava mai.
+  // Con una foto sola ci stava, con due no.
+  catalog = ['qwen/qwen3.6-27b', 'openai/gpt-oss-120b'];
+  plan = [OK]; calls = []; corpi = [];
+  r = await post('1.0.2.1', { type: 'image', prompt: 'x', images: [{ base64: 'AAA' }] });
+  check('a un qwen3 si dice di non ragionare', corpi[0].reasoning_effort === 'none', JSON.stringify(corpi[0].reasoning_effort));
+
+  plan = [OK]; calls = []; corpi = [];
+  r = await post('1.0.2.2', { type: 'text', prompt: 'ciao' });
+  check('ma non a gpt-oss, che su "none" risponderebbe 400',
+    corpi[0].reasoning_effort === undefined, JSON.stringify(corpi[0].reasoning_effort));
+
+  // I provider spostano questi parametri da un modello all'altro: se un
+  // giorno smette di accettarlo, non deve cadere tutta l'analisi foto.
+  plan = [{ status: 400, body: JSON.stringify({ error: { message: '`reasoning_effort` must be one of `low`, `medium`, or `high`' } }) }, OK];
+  calls = []; corpi = [];
+  r = await post('1.0.2.3', { type: 'image', prompt: 'x', images: [{ base64: 'AAA' }] });
+  check('e se lo rifiuta, si riprova senza invece di arrendersi',
+    r.statusCode === 200 && corpi.length === 2 && corpi[1].reasoning_effort === undefined,
+    `${r.statusCode} / ${corpi.length}`);
+  catalog = ['meta-llama/llama-4-scout-17b-16e-instruct','openai/gpt-oss-120b','openai/whisper-large-v3','qwen/qwen3-32b'];
 
   console.log('\n-- troppi token non e la stessa cosa di troppi byte --');
   plan = [TROPPITOKEN]; calls = [];

@@ -140,6 +140,13 @@ per questo le function non si fidano dei valori di default. Se il modello non
 esiste piu' chiedono il catalogo e ripiegano da sole, e il modello che ha
 davvero risposto compare sotto il risultato dell'analisi.
 
+I modelli con visione rimasti su Groq sono modelli che **ragionano ad alta
+voce**, e il ragionamento si mangia i token prima di arrivare alla risposta:
+con una foto ci stava, con due il JSON non arrivava piu'. Si spegne con
+`reasoning_effort`, ma il valore giusto dipende dalla famiglia - `none` per i
+qwen3, mentre gpt-oss lo rifiuta con un 400 - e la function lo manda solo a
+chi lo accetta, con un ripiego se un giorno smette di accettarlo.
+
 Attenzione a **come** arriva il ritiro: Groq lo annuncia con un **400**, non
 con un 404 (`model_decommissioned`, `model_not_supported`). Chi tocca quel
 riconoscimento si ricordi che guardare il solo 404 spegne tutto il ripiego, e
