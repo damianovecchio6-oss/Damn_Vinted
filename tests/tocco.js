@@ -67,6 +67,26 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
     return Math.round(window.innerHeight - (d.y));
   });
   check('e se ne vede una parte buona', visibile > 40, { visibile });
+  check('anzi, ci sta tutto dentro: e una ghiera, non un ornamento', await page.evaluate(() => {
+    const n = document.querySelector('#soleApp .soleNav').getBoundingClientRect();
+    return n.bottom <= window.innerHeight;
+  }), await page.evaluate(() => {
+    const n = document.querySelector('#soleApp .soleNav').getBoundingClientRect();
+    return { sotto: Math.round(n.bottom), schermo: window.innerHeight };
+  }));
+
+  // Il pezzo nuovo, e quello che col solo mouse non si vedrebbe: da
+  // parcheggiato il giro del dito non prepara una scelta, la fa.
+  const schedaPrima = await scheda();
+  await giroDelDito(0, 60, 10);
+  await aspetta();
+  check('girandolo da parcheggiato il dito cambia funzione',
+    await scheda() !== schedaPrima, { prima: schedaPrima, ora: await scheda() });
+  check('e il sole resta parcheggiato invece di tornare a casa',
+    await page.evaluate(() => document.getElementById('soleApp').classList.contains('parcheggiato')));
+  check('il disco mostra quella nuova',
+    (await scheda()).toUpperCase().endsWith(await scelta()), { disco: await scelta(), scheda: await scheda() });
+
   await dito([await dove('#soleApp .disco')]);
   await aspetta();
   check('toccandolo si torna a scegliere', await scheda() === 'tab-sole', await scheda());

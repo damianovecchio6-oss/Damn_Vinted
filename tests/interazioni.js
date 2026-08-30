@@ -33,6 +33,13 @@ async function apri(browser, opzioni) {
   check('la pagina si apre sul sole', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-sole', await page.evaluate(() => document.querySelector('.tp.on').id));
   check('il sole vive fuori dalle schede, non dentro la home', await page.evaluate(() => !document.getElementById('tab-sole').querySelector('.soleWrap') && !!document.querySelector('#soleApp .soleWrap')));
   check('sei raggi, una funzione ciascuno', await page.evaluate(() => document.querySelectorAll('.raggio').length) === 6);
+  check('il nome sta dentro al disco, non in una fascia in cima',
+    await page.evaluate(() => document.querySelector('.dSotto').textContent.trim()) === 'ALBA',
+    await page.evaluate(() => document.querySelector('.dSotto').textContent));
+  check('e sopra al nome c\'e la funzione, che e la cosa che cambia',
+    await page.evaluate(() => document.getElementById('dScelta').textContent.trim()) === 'ANALIZZA');
+  check('di intestazioni non ce ne sono piu',
+    await page.evaluate(() => !document.querySelector('.hdr') && !document.querySelector('.damn')));
   const raggi = await page.evaluate(() => Array.from(document.querySelectorAll('.raggio')).map(r => ({
     scheda: r.dataset.scheda, ruolo: r.getAttribute('role'), nome: r.getAttribute('aria-label'),
     etichetta: r.querySelector('.rEti').textContent, tab: r.getAttribute('tabindex')
@@ -114,15 +121,60 @@ async function apri(browser, opzioni) {
   check('e il sole passa in stato parcheggiato', await page.evaluate(() => document.getElementById('soleApp').classList.contains('parcheggiato')));
   await page.waitForTimeout(700);
   const parcheggiato = await doveSta();
-  check('si appoggia sul bordo di sotto, mezzo dentro e mezzo fuori',
-    parcheggiato.centro > parcheggiato.fondo - 80 && parcheggiato.centro < parcheggiato.fondo + 10, parcheggiato);
-  check('e se ne vede abbastanza da capire che si puo toccare',
-    parcheggiato.fondo - (parcheggiato.centro - parcheggiato.largo / 2) > 50,
-    { visibile: Math.round(parcheggiato.fondo - (parcheggiato.centro - parcheggiato.largo / 2)) });
+  const ingombro = await page.evaluate(() => {
+    const n = document.querySelector('#soleApp .soleNav').getBoundingClientRect();
+    return { sopra: Math.round(n.top), sotto: Math.round(n.bottom), schermo: window.innerHeight };
+  });
+  check('ci sta tutto dentro: non e piu un mezzo sole che spunta dal bordo',
+    ingombro.sotto <= ingombro.schermo, ingombro);
+  check('e sta appoggiato in fondo, non in mezzo alla pagina',
+    ingombro.sotto > ingombro.schermo - 60 && ingombro.sopra > ingombro.schermo / 2, ingombro);
+  check('e il contenuto gli riserva almeno tutta la sua altezza', await page.evaluate(() => {
+    const riservato = parseInt(getComputedStyle(document.querySelector('.shell')).paddingBottom, 10);
+    return riservato >= document.querySelector('#soleApp .soleNav').getBoundingClientRect().height;
+  }), await page.evaluate(() => ({
+    riservato: parseInt(getComputedStyle(document.querySelector('.shell')).paddingBottom, 10),
+    sole: Math.round(document.querySelector('#soleApp .soleNav').getBoundingClientRect().height)
+  })));
   check('rimpicciolito, ma ancora visibile', parcheggiato.largo > 40 && parcheggiato.largo < aCasa.largo * 0.6, { parcheggiato: parcheggiato.largo, casa: aCasa.largo });
   check('le scritte dei raggi spariscono: a quella scala sarebbero macchie', await page.evaluate(() => getComputedStyle(document.querySelector('.rEti')).opacity) === '0');
   check('e i raggi non si toccano piu uno per uno', await page.evaluate(() => getComputedStyle(document.querySelector('.raggio')).pointerEvents) === 'none');
   check('il contenuto lascia spazio al sole parcheggiato', await page.evaluate(() => parseInt(getComputedStyle(document.querySelector('.shell')).paddingBottom, 10)) > 90);
+
+  console.log('\n-- parcheggiato resta una ghiera viva --');
+  check('le frecce dicono che si gira ancora',
+    await page.evaluate(() => Number(getComputedStyle(document.querySelector('.giraSegno')).opacity)) > 0.5,
+    await page.evaluate(() => getComputedStyle(document.querySelector('.giraSegno')).opacity));
+  check('il disco dice quale funzione e aperta',
+    await page.evaluate(() => document.getElementById('dScelta').textContent.trim()) === 'RICERCA',
+    await scelta());
+  check('e il raggio di quella funzione e l unico pieno', await page.evaluate(() => {
+    const acceso = document.querySelectorAll('.raggio.selezionato');
+    return acceso.length === 1 && acceso[0].dataset.scheda === 'ricerca';
+  }), await accesi());
+
+  // Il punto di tutto il disegno: da qui si cambia funzione girando, senza
+  // dover prima tornare al sole intero.
+  const primaDelloScatto = await page.evaluate(() => document.querySelector('.tp.on').id);
+  await page.evaluate(() => { document.getElementById('soleApp').dispatchEvent(new WheelEvent('wheel', { deltaY: 120, bubbles: true, cancelable: true })); });
+  await page.waitForTimeout(120);
+  check('uno scatto da parcheggiato cambia funzione da solo',
+    await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-storico',
+    { prima: primaDelloScatto, dopo: await page.evaluate(() => document.querySelector('.tp.on').id) });
+  check('e il disco lo dice subito', await scelta() === 'STORICO', await scelta());
+  check('il sole resta parcheggiato: non si torna a casa a ogni scatto',
+    await page.evaluate(() => document.getElementById('soleApp').classList.contains('parcheggiato')));
+  await page.evaluate(() => document.querySelector('#soleApp .soleNav').focus());
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForTimeout(120);
+  check('anche le frecce girano la ghiera parcheggiata',
+    await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-ricerca',
+    await page.evaluate(() => document.querySelector('.tp.on').id));
+
+  // E arrivarci da un bottone invece che dalla ghiera non deve lasciare il
+  // disco a mostrare la funzione sbagliata.
+  await page.evaluate(() => sw('prezzo'));
+  check('aprendo una scheda da altrove la ghiera segue', await scelta() === 'PREZZO', await scelta());
 
   await page.click('#soleApp .dTitolo');
   check('toccando il sole si torna a scegliere', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-sole');

@@ -1,5 +1,8 @@
 # Damn Vinted
 
+Sulla pagina si chiama **ALBA**: il nome sta dentro al disco del sole, che non
+se ne va mai dallo schermo. Il repo resta Damn Vinted.
+
 Assistente per vendere su Vinted: analizza le foto di un capo, cerca online
 quanto vale davvero, scrive l'annuncio e stima il prezzo. Lo **scanner** fa
 tutto il giro da solo, dalle foto al prezzo. Sito statico + tre Netlify
@@ -157,11 +160,18 @@ corta a fare da "click". Il disco al centro fa da schermo - dice cosa stai per
 aprire - e da tasto: si preme li' per entrare. Anche la rotella del mouse e le
 frecce della tastiera fanno scattare la ghiera, e Invio preme al centro.
 
-Scelto un raggio il sole non sparisce: **si rimpicciolisce e va a parcheggiarsi
-a meta' sul bordo di sotto**, e li' resta mentre usi la funzione. Toccarlo lo fa
-risalire e tornare a schermo intero, pronto per la scelta successiva. E' anche
-tutta la navigazione che c'e': la barra in basso non esiste piu', perche'
-diceva le stesse cose dei raggi.
+Scelto un raggio il sole non sparisce: **si rimpicciolisce e va a posarsi sotto
+al contenuto**, e li' resta mentre usi la funzione. Ci sta tutto dentro, non
+mezzo fuori dal bordo, e non e' un vezzo: li' sotto **resta una ghiera viva**.
+Le due frecce ai lati lo dicono, e girandolo la funzione **cambia mentre giri**
+- il contenuto sopra si sostituisce a ogni scatto, il raggio pieno si sposta, e
+il disco scrive dove sei: `SCANNER` sopra, `ALBA` sotto. Per passare da una
+funzione all'altra non si torna piu' indietro ogni volta.
+
+Toccarlo al centro invece lo fa risalire a schermo intero, per riprendere la
+scelta dal sole grande. Ed e' tutta la navigazione che c'e': niente barra in
+basso, e nemmeno un'intestazione in cima - diceva il nome, e il nome sta gia'
+nel disco.
 
 Il movimento e' una transizione sola sul `transform`, con una curva che parte
 all'indietro: quel valore negativo nella `cubic-bezier` e' lo strappo verso

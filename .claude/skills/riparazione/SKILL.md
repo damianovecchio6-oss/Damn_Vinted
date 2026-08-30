@@ -46,6 +46,9 @@ lanciare. `(x || {}).campo` invece di `x.campo` costa niente e salva un'ora.
 | un tocco non fa niente sul telefono ma col mouse si | il click sintetizzato non arriva sempre: l'attivazione sta sul `pointerup` |
 | la ghiera si blocca dopo un giro | trascinamento nativo del disegno, fermato su `dragstart` |
 | un raggio si apre da solo finendo un giro | la guardia `giroConScatti`, che si azzera a ogni tocco nuovo |
+| il sole parcheggiato non si gira | `pointer-events`/`touch-action` su `#soleApp.parcheggiato`: senza, il dito scorre la pagina invece di girare |
+| girando cambia il disco ma non il contenuto | `scatta()`: da parcheggiato deve chiamare `sw()`, non solo `mostraSelezione()` |
+| il disco mostra una funzione diversa da quella aperta | `sincronizzaGhiera()`, chiamata da `sw()` |
 | lo storico perde dei campi | `soloNoti()`: un patch non cancella quello che non contiene |
 | dati di un capo nella stima di un altro | `stessoCapo()` |
 | lo scanner dice un prezzo che non c'entra | la separazione usato/nuovo: `sxDoveSta()` (dominio prima del testo) e `sxPertinente()` |
