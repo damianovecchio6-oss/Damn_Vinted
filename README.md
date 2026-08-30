@@ -163,7 +163,7 @@ frecce della tastiera fanno scattare la ghiera, e Invio preme al centro.
 Scelto un raggio il sole non sparisce: **si rimpicciolisce e va a posarsi sotto
 al contenuto**, e li' resta mentre usi la funzione. Ci sta tutto dentro, non
 mezzo fuori dal bordo, e non e' un vezzo: li' sotto **resta una ghiera viva**.
-Le due frecce ai lati lo dicono, e girandolo la funzione **cambia mentre giri**
+Girandolo la funzione **cambia mentre giri**
 - il contenuto sopra si sostituisce a ogni scatto, il raggio pieno si sposta, e
 il disco scrive dove sei: `SCANNER` sopra, `ALBA` sotto. Per passare da una
 funzione all'altra non si torna piu' indietro ogni volta.

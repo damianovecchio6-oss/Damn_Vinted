@@ -142,9 +142,6 @@ async function apri(browser, opzioni) {
   check('il contenuto lascia spazio al sole parcheggiato', await page.evaluate(() => parseInt(getComputedStyle(document.querySelector('.shell')).paddingBottom, 10)) > 90);
 
   console.log('\n-- parcheggiato resta una ghiera viva --');
-  check('le frecce dicono che si gira ancora',
-    await page.evaluate(() => Number(getComputedStyle(document.querySelector('.giraSegno')).opacity)) > 0.5,
-    await page.evaluate(() => getComputedStyle(document.querySelector('.giraSegno')).opacity));
   check('il disco dice quale funzione e aperta',
     await page.evaluate(() => document.getElementById('dScelta').textContent.trim()) === 'RICERCA',
     await scelta());

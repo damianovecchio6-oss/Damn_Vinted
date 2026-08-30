@@ -183,9 +183,7 @@ body{
 .disco{fill:var(--t)}
 .dTitolo{font-family:'Orbitron',sans-serif;font-size:15px;font-weight:900;fill:#111;text-anchor:middle;letter-spacing:1.5px}
 .dSotto{font-family:'Bebas Neue',sans-serif;font-size:30px;fill:#111;text-anchor:middle;letter-spacing:4px;opacity:.85}
-.giraSegno{fill:none;stroke:var(--t);stroke-width:7;stroke-linecap:round;stroke-linejoin:round;
-  opacity:0;transition:opacity .3s ease;pointer-events:none}
-#soleApp.parcheggiato .giraSegno{opacity:.9}
+
 
 .raggio{cursor:pointer;-webkit-tap-highlight-color:transparent}
 .raggio .lama{fill:var(--t);opacity:.34;transition:opacity .18s ease,transform .18s ease;transform-origin:200px 200px}
@@ -463,15 +461,6 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
     <circle class="disco" cx="200" cy="200" r="72"/>
     <text class="dTitolo" id="dScelta" x="200" y="194">ANALIZZA</text>
     <text class="dSotto" x="200" y="222">ALBA</text>
-    <!-- Le due frecce dicono l'unica cosa che il sole parcheggiato non
-         riesce a dire da solo: che si gira ancora, e che girandolo cambi
-         funzione senza tornare indietro. Si vedono solo da parcheggiato. -->
-    <g class="giraSegno" aria-hidden="true">
-      <path d="M48 220 Q28 200 48 180"/>
-      <path d="M39 184 L48 179 L51 189"/>
-      <path d="M352 180 Q372 200 352 220"/>
-      <path d="M361 216 L352 221 L349 211"/>
-    </g>
     </svg>
     <p class="soleAiuto" id="soleAiuto">Gira intorno · premi al centro</p>
   </div>
