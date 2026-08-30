@@ -97,12 +97,22 @@ async function apri(browser, opzioni) {
   check('Invio preme al centro e apre quello scelto', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-prezzo', await page.evaluate(() => document.querySelector('.tp.on').id));
 
   await page.click('#soleApp .dTitolo');
+  // Il sole risale con una transizione, e girarlo mentre e' ancora per aria
+  // vuol dire girare intorno a un centro che si sta spostando: gli scatti non
+  // tornano, e ne esce un fallimento che parla del tasto centrale mentre il
+  // problema era il giro. Si aspetta che sia arrivato, non un tempo a caso.
+  await page.waitForFunction(() => !document.getElementById('soleApp').classList.contains('parcheggiato'));
   await page.waitForTimeout(700);
   await gira(0, 90, 10);
-  // Subito, senza aspettare: dopo un giro il tasto centrale deve rispondere
-  // al primo tocco, non dopo un tempo di grazia.
+  // Quello che il controllo afferma non e' "si apre lo storico": e' che il
+  // tasto centrale apre QUELLO CHE IL DISCO MOSTRA, al primo tocco e senza
+  // tempo di grazia. Legarlo a una scheda fissa lo faceva dipendere da quanti
+  // scatti fosse riuscito a fare il giro, che e' un'altra cosa.
+  const staPerAprire = (await accesi())[0];
   await page.click('#soleApp .dTitolo');
-  check('il tasto centrale apre quello che il disco mostra', await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-storico', await page.evaluate(() => document.querySelector('.tp.on').id));
+  check('il tasto centrale apre quello che il disco mostra',
+    await page.evaluate(() => document.querySelector('.tp.on').id) === 'tab-' + staPerAprire,
+    { disco: await scelta(), aperta: await page.evaluate(() => document.querySelector('.tp.on').id) });
   await page.click('#soleApp .dTitolo');
   await page.waitForTimeout(700);
 
