@@ -50,6 +50,10 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
 
 const MISSING = { status: 404, body: JSON.stringify({ error: { message: 'The model does not exist or you do not have access to it' } }) };
 const NOVISION = { status: 400, body: JSON.stringify({ error: { message: 'this model does not support image input' } }) };
+// Il 400 vero di Groq quando la richiesta supera i suoi 4MB di base64. Nomina
+// l'immagine, e senza un controllo apposta finiva nel ramo "prova un altro
+// modello": otto tentativi con lo stesso payload, e lo stesso errore.
+const TROPPOGROSSA = { status: 400, body: JSON.stringify({ error: { message: 'Request too large: the maximum allowed size for a request containing a base64 encoded image is 4MB' } }) };
 const OK = { status: 200, body: JSON.stringify({ choices: [{ message: { content: '{"ok":true}' } }] }) };
 
 async function post(ip, payload) {
@@ -113,6 +117,17 @@ async function post(ip, payload) {
   plan = [{ status: 502, body: '<html>Bad Gateway</html>' }];
   r = await post('1.0.0.9', { type: 'text', prompt: 'ciao' });
   check('risposta non JSON -> 502 con messaggio pulito', r.statusCode === 502 && /Riprova/.test(r.body), r.body);
+
+  console.log('\n-- richiesta troppo pesante --');
+  plan = Array(12).fill(TROPPOGROSSA); calls = []; catalogCalls = 0;
+  r = await post('1.0.0.10', { type: 'image', prompt: 'x', images: [{ base64: 'AAA' }] });
+  check('non gira su altri modelli: il peso non cambia da modello a modello',
+    calls.length === 1, calls.join(','));
+  check('e non chiede nemmeno il catalogo', catalogCalls === 0, catalogCalls);
+  check('dice che le foto sono troppo pesanti', /troppo pesanti/i.test(r.body), r.body);
+  check('e non dice "riprova" e basta, che manderebbe a ripetere lo stesso errore',
+    !/^.*rifiutato la richiesta/.test(JSON.parse(r.body).error), r.body);
+  check('non trapela il messaggio grezzo del provider', !/base64 encoded/.test(r.body), r.body);
 
   console.log('\n-- deadline --');
   process.env.AI_TIMEOUT_MS = '9000';

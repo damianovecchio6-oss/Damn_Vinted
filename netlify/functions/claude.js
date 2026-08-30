@@ -385,7 +385,7 @@ async function tentaGroq(richiesta, kind, deadline) {
     // Il testo di Groq puo' contenere id di organizzazione, nomi di modello e
     // dettagli di quota: resta nei log, al client va un messaggio nostro.
     console.error(`Groq ${res.status} su ${modello}: ${dettaglio}`);
-    return { ok: false, status: statusPerIlClient(res.status), error: erroreLeggibile(res.status), motivo: `HTTP ${res.status}` };
+    return { ok: false, status: statusPerIlClient(res.status), error: erroreLeggibile(res.status, dettaglio), motivo: `HTTP ${res.status}` };
   }
 
   const text = data.choices && data.choices[0] && data.choices[0].message
@@ -405,10 +405,15 @@ function statusPerIlClient(status) {
   return 502;
 }
 
-function erroreLeggibile(status) {
+function erroreLeggibile(status, dettaglio) {
   if (status === 429) return 'Troppe richieste, riprova tra qualche secondo.';
   if (status === 401 || status === 403) return 'Il servizio AI ha rifiutato le credenziali del sito.';
-  if (status === 413) return 'Richiesta troppo pesante per il modello. Prova con meno foto.';
+  // Groq risponde 400, non 413, quando la richiesta supera i suoi 4MB: dire
+  // "riprova" mandava a ripetere identica una richiesta che non poteva
+  // passare. Qui si dice cosa fare davvero.
+  if (status === 413 || (status === 400 && TROPPO_GRANDE.test(dettaglio || ''))) {
+    return 'Le foto sono troppo pesanti per il modello. Riprova con meno foto, o con scatti piu\' piccoli.';
+  }
   if (status === 400) return 'Il modello ha rifiutato la richiesta. Riprova.';
   return 'Servizio AI non disponibile al momento. Riprova tra poco.';
 }
@@ -439,9 +444,16 @@ function modelloSparito(res) {
 // Vale la pena provare un altro modello? Sia se questo non esiste piu', sia
 // se esiste ma rifiuta le immagini: Groq lo segnala con un 400 che parla di
 // image/vision/multimodal.
+// Groq rifiuta con un 400 le richieste sopra i 4MB di base64. Il messaggio
+// nomina spesso l'immagine, quindi senza questo controllo finiva nel ramo
+// "prova un altro modello": otto tentativi con lo stesso payload da 4MB, il
+// budget di 9s bruciato, e lo stesso errore alla fine.
+const TROPPO_GRANDE = /too large|too big|request too|payload|exceed|maximum (?:allowed )?size|size limit|entity too/i;
+
 function serveUnAltroModello(res, kind) {
   if (modelloSparito(res)) return true;
   if (kind !== 'image' || !res || res.status !== 400) return false;
+  if (TROPPO_GRANDE.test(res.body || '')) return false;
   return /image|vision|multimodal|modality/i.test(res.body || '');
 }
 

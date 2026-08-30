@@ -313,7 +313,13 @@ com'e' finche' non decidi tu.
 
 ## Come si usa l'analisi foto
 
-Fino a 4 foto. Il marcatore 🏷️ su un'anteprima dice "questa e' l'etichetta":
+Fino a 4 foto. Le immagini vengono rimpicciolite quanto basta a stare sotto i
+**4MB di base64 per richiesta**: e' il limite oltre il quale Groq risponde 400,
+ed e' piu' stretto dei 6MB di body che concede Netlify. Si parte alti e si
+scende solo quanto serve, perche' la precisione dipende quasi tutta da quanto
+resta leggibile l'etichetta.
+
+Il marcatore 🏷️ su un'anteprima dice "questa e' l'etichetta":
 quella foto viene mandata **a parte e a piena risoluzione**, con una richiesta
 che chiede solo di trascrivere quello che c'e' scritto. Quello che si legge
 sull'etichetta sovrascrive quello che il modello ha dedotto guardando il capo.

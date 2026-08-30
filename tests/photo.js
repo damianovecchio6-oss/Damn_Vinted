@@ -48,6 +48,17 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
   const files = dataUrls.map((u, i) => ({ name: `foto${i}.jpg`, mimeType: 'image/jpeg', buffer: Buffer.from(u.split(',')[1], 'base64') }));
   console.log('\n  (4 foto da ' + files.map(f => Math.round(f.buffer.length / 1024) + 'KB').join(', ') + ')');
 
+  console.log('\n-- il tetto che ci diamo --');
+  // Il guasto vero era qui, e nessuna foto di prova lo faceva vedere: il
+  // budget che ci davamo (4.2MB) stava SOPRA il limite di Groq (4MB per
+  // richiesta), quindi encodeAll accettava payload che il provider rifiutava
+  // con un 400. Solo le foto che cadevano fra i due numeri si rompevano, ed
+  // e' una fascia stretta: un controllo end-to-end la manca quasi sempre.
+  // Questo invece dice il fatto: il nostro tetto non puo' stare sopra il suo.
+  check('il budget di codifica sta sotto i 4MB di Groq',
+    await page.evaluate(() => MAX_PAYLOAD_B64) <= 4 * 1024 * 1024,
+    (await page.evaluate(() => MAX_PAYLOAD_B64) / 1024 / 1024).toFixed(2) + 'MB');
+
   console.log('\n-- analisi foto --');
   await page.setInputFiles('#fileInput', files);
   check('le 4 foto vengono prese', await page.evaluate(() => selFiles.length) === 4);
@@ -65,9 +76,32 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
   console.log(`  (payload inviato: ${mb.toFixed(2)}MB)`);
   check('4 immagini nel payload', payload.images.length === 4);
   check('il payload sta sotto il limite di 6MB della function', mb < 6, mb.toFixed(2) + 'MB');
-  check('e sotto il budget che ci siamo dati (4.2MB di base64)', payload.images.reduce((n, i) => n + i.base64.length, 0) <= 4.2 * 1024 * 1024);
+  // Il metro vero e' Groq, non noi: sopra i 4MB di base64 PER RICHIESTA
+  // risponde 400. Il controllo di prima misurava un budget nostro che stava
+  // sopra quel limite, e passava mentre il sito si prendeva l'errore.
+  const base64Totale = payload.images.reduce((n, i) => n + i.base64.length, 0);
+  check('il base64 sta sotto i 4MB oltre i quali Groq risponde 400',
+    base64Totale <= 4 * 1024 * 1024, (base64Totale / 1024 / 1024).toFixed(2) + 'MB');
+  check('e la richiesta intera, prompt compreso, pure',
+    Buffer.byteLength(inviato) <= 4 * 1024 * 1024, mb.toFixed(2) + 'MB');
   check('la miniatura per lo storico e\' stata prodotta', await page.evaluate(() => typeof lastThumbnail === 'string' && lastThumbnail.startsWith('data:image/jpeg;base64,')));
   check('la miniatura e\' piccola (< 30KB)', await page.evaluate(() => lastThumbnail.length) < 30000, await page.evaluate(() => lastThumbnail.length));
+
+  console.log('\n-- anche l\'etichetta, che viaggia da sola --');
+  bodies = [];
+  await page.setInputFiles('#fileInput', files);
+  await page.evaluate(() => segnaEtichetta(0));
+  await page.click('#btnA');
+  await page.waitForSelector('#rFoto:not([style*="display: none"])', { timeout: 30000 });
+  const richieste = bodies.map(b => JSON.parse(b));
+  const etichetta = richieste.find(b => /Trascrivi ESATTAMENTE/.test(b.prompt || ''));
+  check('la foto dell\'etichetta parte in una richiesta sua', !!etichetta, richieste.length);
+  check('e anche lei sta sotto i 4MB', etichetta && etichetta.images[0].base64.length <= 4 * 1024 * 1024,
+    etichetta ? (etichetta.images[0].base64.length / 1024 / 1024).toFixed(2) + 'MB' : 'assente');
+  check('nessuna delle richieste sfonda il limite',
+    bodies.every(b => Buffer.byteLength(b) <= 4 * 1024 * 1024),
+    bodies.map(b => (Buffer.byteLength(b) / 1024 / 1024).toFixed(2) + 'MB'));
+  await page.evaluate(() => segnaEtichetta(0));
 
   console.log('\n-- una foto sola: si tiene la risoluzione alta --');
   bodies = [];

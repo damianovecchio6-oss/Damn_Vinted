@@ -1243,13 +1243,33 @@ function encodeImage(source, maxSize, quality){
 
 function releaseImage(source){ if(source&&source.close) source.close(); }
 
-// Il limite di body della function e' 6MB: sotto i 4.2MB di base64 restiamo
-// comodi anche col resto del JSON.
-const MAX_PAYLOAD_B64=4.2*1024*1024;
+// Il tetto NON e' quello di Netlify (6MB di body): e' quello di Groq, che
+// rifiuta con un 400 ogni richiesta con base64 sopra i 4MB - quattro mega per
+// RICHIESTA, non per immagine. Il vecchio budget di 4.2MB stava sopra quel
+// limite, quindi quattro foto pesanti passavano il nostro controllo e si
+// prendevano un 400 dal provider: "Il modello ha rifiutato la richiesta",
+// che non diceva niente di vero. 3.6MB lascia spazio al prompt e al JSON
+// intorno e resta comodamente sotto.
+const MAX_PAYLOAD_B64=3.6*1024*1024;
 // La precisione dipende quasi tutta da quanto resta leggibile l'etichetta: a
 // 1024px il testo di un cartellino diventa poltiglia. Quindi si parte alti e
 // si scende solo quanto basta a starci, invece di prendere un 413 in faccia.
 const ENCODE_STEPS=[[1600,0.92],[1280,0.86],[1024,0.78],[800,0.7]];
+
+// L'etichetta parte in una richiesta tutta sua, quindi ha il budget intero a
+// disposizione - ma un budget ce l'ha: a piena risoluzione una foto da 12
+// megapixel supera i 4MB da sola, e finiva nello stesso 400 senza che si
+// vedesse, perche' leggiEtichetta si mangia i suoi errori.
+const ETICHETTA_STEPS=[[2000,0.94],[1600,0.9],[1280,0.85]];
+
+function codificaEtichetta(bitmap){
+  for(let i=0;i<ETICHETTA_STEPS.length;i++){
+    const b64=encodeImage(bitmap, ETICHETTA_STEPS[i][0], ETICHETTA_STEPS[i][1]);
+    if(b64.length<=MAX_PAYLOAD_B64 || i===ETICHETTA_STEPS.length-1){
+      return { base64:b64, mime:'image/jpeg' };
+    }
+  }
+}
 
 function encodeAll(bitmaps){
   const start=bitmaps.length>2?1:0;
@@ -1276,7 +1296,7 @@ async function leggiFoto(){
       // deve stare nel budget di peso delle altre. A 1280px il testo di un
       // cartellino di composizione e' gia' illeggibile.
       if(labelIndex>=0 && bitmaps[labelIndex]){
-        fotoEtichetta={ base64: encodeImage(bitmaps[labelIndex], 2000, 0.94), mime:'image/jpeg' };
+        fotoEtichetta=codificaEtichetta(bitmaps[labelIndex]);
       }
       // La miniatura riusa la decodifica gia' fatta, senza rileggere il file.
       try{
