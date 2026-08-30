@@ -706,7 +706,20 @@ let schedaCorrente='sole';
 // il CSS non puo' fermare.
 const menoMovimento=()=>window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-function sw(n){
+// Girando la ghiera parcheggiata la scheda cambia a ogni scatto, e scorrere
+// in cima a ognuna vuol dire far ballare la pagina sotto al dito per tutto il
+// giro - sei funzioni, sei salti. Mentre giri la pagina sta ferma; in cima ci
+// si va una volta sola, quando ti fermi.
+let scorriDopoIlGiro=null;
+function inCimaQuandoTiFermi(){
+  clearTimeout(scorriDopoIlGiro);
+  scorriDopoIlGiro=setTimeout(inCima, 260);
+}
+function inCima(){
+  window.scrollTo({top:0,behavior:menoMovimento()?'auto':'smooth'});
+}
+
+function sw(n, opzioni){
   const pannello=document.getElementById('tab-'+n);
   if(!pannello) return;
   // La scheda entra dal lato da cui l'hai chiamata: seguire il movimento costa
@@ -730,7 +743,12 @@ function sw(n){
   if(n==='storico') renderHistory();
   if(n==='ricerca') prefillRicerca();
   if(n==='scanner') syncUploadUI();
-  window.scrollTo({top:0,behavior:menoMovimento()?'auto':'smooth'});
+
+  if(opzioni && opzioni.senzaScorrimento) return;
+  // Una scorsa vera annulla quella rimandata: se sei arrivato qui da un
+  // bottone mentre un giro si stava assestando, non deve scorrere due volte.
+  clearTimeout(scorriDopoIlGiro);
+  inCima();
 }
 
 
@@ -814,7 +832,10 @@ function scatta(verso){
   // sopra si sostituisce a ogni scatto - perche' li' il sole non e' piu' un
   // menu da confermare, e' la manopola con cui passi da una funzione
   // all'altra senza tornare indietro ogni volta.
-  if(soleParcheggiato()) sw(RAGGI[selezione].dataset.scheda);
+  if(soleParcheggiato()){
+    sw(RAGGI[selezione].dataset.scheda, { senzaScorrimento:true });
+    inCimaQuandoTiFermi();
+  }
 }
 
 function apriRaggio(raggio){

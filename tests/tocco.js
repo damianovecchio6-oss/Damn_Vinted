@@ -23,6 +23,23 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
     for (const p of punti.slice(1)) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: p[0], y: p[1] }] });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   };
+  const ditoTrattenuto = async (punti) => {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: punti[0][0], y: punti[0][1] }] });
+    for (const p of punti.slice(1)) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: p[0], y: p[1] }] });
+    return () => cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  };
+  const puntiDelGiro = async (daGradi, aGradi, passo) => {
+    const c = await page.evaluate(() => {
+      const r = document.getElementById('soleApp').getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2, raggio: r.width * 0.36 };
+    });
+    const punti = [];
+    for (let g = daGradi; passo > 0 ? g <= aGradi : g >= aGradi; g += passo) {
+      const a = g * Math.PI / 180;
+      punti.push([c.x + c.raggio * Math.cos(a), c.y + c.raggio * Math.sin(a)]);
+    }
+    return punti;
+  };
   const dove = sel => page.evaluate(s => {
     const r = document.querySelector(s).getBoundingClientRect();
     return [r.x + r.width / 2, r.y + r.height / 2];
@@ -108,6 +125,37 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
   const scorrimento = await page.evaluate(() => window.scrollY);
   await giroDelDito(0, 180, 15);
   check('lo scorrimento resta fermo', await page.evaluate(() => window.scrollY) === scorrimento);
+
+  console.log('\n-- la pagina sta ferma mentre giri il sole parcheggiato --');
+  // Serve una pagina piu' alta dello schermo, o non c'e' niente da tenere fermo.
+  await page.evaluate(() => {
+    document.querySelectorAll('.tp').forEach(t => {
+      const d = document.createElement('div');
+      d.className = 'riempitivoDiProva'; d.style.height = '1600px';
+      t.appendChild(d);
+    });
+  });
+  await dito([await dove('.raggio[data-scheda="scanner"] .presa')]);
+  await aspetta();
+  check('si parte da una funzione aperta e dal sole parcheggiato',
+    await page.evaluate(() => document.getElementById('soleApp').classList.contains('parcheggiato')));
+  await page.evaluate(() => window.scrollTo(0, 500));
+  await page.waitForTimeout(400);
+  const scorrimentoPrima = await page.evaluate(() => Math.round(window.scrollY));
+
+  const rilascia = await ditoTrattenuto(await puntiDelGiro(0, 100, 10));
+  const scorrimentoDurante = await page.evaluate(() => Math.round(window.scrollY));
+  const schedaDurante = await page.evaluate(() => document.querySelector('.tp.on').id);
+  check('la funzione e gia cambiata mentre il dito e ancora giu',
+    schedaDurante !== 'tab-scanner', schedaDurante);
+  check('ma la pagina non si e mossa di un pixel',
+    scorrimentoDurante === scorrimentoPrima, { prima: scorrimentoPrima, durante: scorrimentoDurante });
+  await rilascia();
+  await page.waitForTimeout(1200);
+  check('e quando ti fermi va in cima una volta sola',
+    await page.evaluate(() => Math.round(window.scrollY)) === 0,
+    await page.evaluate(() => Math.round(window.scrollY)));
+  await page.evaluate(() => document.querySelectorAll('.riempitivoDiProva').forEach(d => d.remove()));
 
   console.log('\n-- errori JS accumulati --');
   check('nessun errore JS in tutta la sessione', errori.length === 0, errori);
