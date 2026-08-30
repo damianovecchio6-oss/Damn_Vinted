@@ -48,6 +48,34 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
   const files = dataUrls.map((u, i) => ({ name: `foto${i}.jpg`, mimeType: 'image/jpeg', buffer: Buffer.from(u.split(',')[1], 'base64') }));
   console.log('\n  (4 foto da ' + files.map(f => Math.round(f.buffer.length / 1024) + 'KB').join(', ') + ')');
 
+  console.log('\n-- il JSON arriva quasi mai da solo --');
+  // Le forme in cui i modelli rispondono davvero. La prima e' quella che ha
+  // rotto lo scanner sul sito: i modelli con visione rimasti su Groq sono
+  // della famiglia Qwen3, che ragiona ad alta voce prima di rispondere.
+  const risposte = [
+    ['ragionamento davanti', '<think>Vedo una giacca di jeans, la marca non si legge.</think>{"tipo":"giacca"}'],
+    ['ragionamento su piu righe', '<think>\nprimo\nsecondo\n</think>\n{"tipo":"giacca"}'],
+    ['dentro i backtick', '```json\n{"tipo":"giacca"}\n```'],
+    ['con una frase di cortesia prima', 'Ecco l\'analisi richiesta:\n{"tipo":"giacca"}'],
+    ['e anche dopo', '{"tipo":"giacca"}\nSpero sia utile!'],
+    ['tutto insieme', '<think>rifletto</think>Ecco:\n```json\n{"tipo":"giacca"}\n```\nfine'],
+    ['pulito, come dovrebbe', '{"tipo":"giacca"}']
+  ];
+  for (const [nome, grezzo] of risposte) {
+    const letto = await page.evaluate(t => { const d = estraiJson(t); return d && d.tipo; }, grezzo);
+    check('lo capisce col ' + nome, letto === 'giacca', letto);
+  }
+  // E quello che NON si puo' salvare deve restare non salvato, invece di
+  // diventare un oggetto vuoto che sembra un'analisi riuscita.
+  const nonSalvabili = [
+    ['risposta a parole', 'Mi dispiace, non riesco ad analizzare questa immagine.'],
+    ['ragionamento troncato', '<think>sto ancora pensando e i token sono finiti'],
+    ['vuota', '']
+  ];
+  for (const [nome, grezzo] of nonSalvabili) {
+    check('si arrende sulla ' + nome, await page.evaluate(t => estraiJson(t) === null, grezzo));
+  }
+
   console.log('\n-- il tetto che ci diamo --');
   // Il guasto vero era qui, e nessuna foto di prova lo faceva vedere: il
   // budget che ci davamo (4.2MB) stava SOPRA il limite di Groq (4MB per

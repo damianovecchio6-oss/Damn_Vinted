@@ -123,8 +123,11 @@ exports.handler = async (event) => {
       temperature: kind === 'image' ? 0.2 : (body.creative ? 0.85 : 0.6),
       // Il JSON dell'analisi foto ha molti campi con testo libero: a 1024
       // token rischiava di troncarsi a meta' e diventare impossibile da
-      // interpretare, il che si vede come "analisi imprecisa".
-      maxTokens: kind === 'image' ? 2048 : 1024,
+      // interpretare, il che si vede come "analisi imprecisa". E i modelli
+      // con visione rimasti su Groq sono modelli che ragionano ad alta voce:
+      // il ragionamento si mangia una fetta del budget PRIMA di arrivare al
+      // JSON, quindi 2048 rischiava di far finire i token a meta' risposta.
+      maxTokens: kind === 'image' ? 3072 : 1024,
       json: body.json === true
     };
 

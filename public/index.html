@@ -1162,15 +1162,45 @@ async function inviaA(url, payload, token){
   return d;
 }
 
-// Le tre funzioni AI ripetevano lo stesso identico giro: togli i backtick,
-// prova a interpretare il JSON, e se non ci riesci arrangiati col testo grezzo.
+// Il modello risponde con del JSON, ma quasi mai SOLO con quello. I modelli
+// che ragionano ad alta voce - la famiglia Qwen3, che su Groq e' l'unica con
+// visione rimasta - premettono un blocco <think>; altri incorniciano coi
+// backtick, o aggiungono una frase di cortesia prima e dopo. Il codice diceva
+// gia' di affidarsi al "parsing tollerante lato client", ma tollerante non
+// era: toglieva i backtick e basta, e su tutto il resto si arrendeva.
+function estraiJson(raw){
+  const testo=String(raw==null?'':raw);
+  const pulito=testo
+    .replace(/<think>[\s\S]*?<\/think>/gi,'')
+    // Un <think> che non si chiude vuol dire risposta tagliata a meta' del
+    // ragionamento: da li' in poi non c'e' niente da salvare.
+    .replace(/<think>[\s\S]*$/i,'')
+    .replace(/```(?:json)?/gi,'')
+    .trim();
+
+  // Prima si prova il testo intero: se il modello ha risposto pulito, e'
+  // finita qui. Poi si va a prendere l'oggetto piu' esterno, che e' quello
+  // che salva le risposte con del discorso intorno.
+  const prove=[pulito];
+  const apre=pulito.indexOf('{'), chiude=pulito.lastIndexOf('}');
+  if(apre>=0 && chiude>apre) prove.push(pulito.slice(apre, chiude+1));
+
+  for(const prova of prove){
+    if(!prova) continue;
+    try{
+      const dati=JSON.parse(prova);
+      if(dati && typeof dati==='object') return dati;
+    }catch(e){}
+  }
+  return null;
+}
+
+// Le funzioni AI ripetevano lo stesso identico giro: interpreta il JSON, e se
+// non ci riesci arrangiati col testo grezzo.
 async function callAIJson(payload){
   const raw=await callAI(payload);
-  try{
-    return { ok:true, data:JSON.parse(raw.replace(/```json|```/g,'').trim()), raw };
-  }catch(parseErr){
-    return { ok:false, data:null, raw };
-  }
+  const data=estraiJson(raw);
+  return data ? { ok:true, data, raw } : { ok:false, data:null, raw };
 }
 
 // Un'azione AI alla volta per scheda. Senza, "Genera annuncio", "Rigenera" e
@@ -2316,7 +2346,7 @@ async function sxScansione(){
     throw new Error('Non sono riuscito a leggere le foto: '+e.message);
   }
   if(!letto.risposta.ok){
-    sxChiudi(iFoto,'ko','il modello non ha risposto in JSON');
+    sxChiudi(iFoto,'ko', sxCosaHaDetto(letto.risposta.raw));
     throw new Error('Analisi delle foto non interpretabile, riprova.');
   }
   const analisi=letto.risposta.data;
@@ -2676,6 +2706,15 @@ function sxOrdina(prove){
   return prove.slice().sort((a,b)=>peso(b)-peso(a)).slice(0,SX_PROVE_PROMPT);
 }
 
+// "Il modello non ha risposto in JSON" non dice niente a nessuno: quello che
+// ha risposto davvero e' l'unica cosa che spiega perche', e il diario e' il
+// posto giusto per scriverlo.
+function sxCosaHaDetto(raw){
+  const testo=String(raw==null?'':raw).replace(/\s+/g,' ').trim();
+  if(!testo) return 'il modello non ha risposto niente';
+  return 'il modello non ha risposto in JSON, ha detto: '+testo.slice(0,180);
+}
+
 async function sxVerdetto(identita, mercato, prove){
   const i=sxPasso('Leggo i prezzi e decido');
   const u=mercato.usato, n=mercato.nuovo;
@@ -2711,7 +2750,7 @@ Rispondi SOLO con questo JSON valido, senza backtick né markdown:
   });
 
   if(!r.ok){
-    sxChiudi(i,'ko','il modello non ha risposto in JSON');
+    sxChiudi(i,'ko', sxCosaHaDetto(r.raw));
     throw new Error('Verdetto non interpretabile, riprova.');
   }
   sxChiudi(i,'fatto');

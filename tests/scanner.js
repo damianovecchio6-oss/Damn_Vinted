@@ -37,7 +37,12 @@ const NEGOZIO = (titolo, prezzo) => ({
     perche: ['Il listino del nuovo (5) resta molto sopra'], rischi: ['La taglia L vende piu\' lenta'],
     consigli: ['Metti la foto dell\'etichetta interna']
   };
-  let analisiJson = true, verdettoJson = true;
+  let analisiJson = true, verdettoJson = true, ragionaAdAltaVoce = false;
+  // Come risponde davvero un modello della famiglia Qwen3: il ragionamento
+  // davanti, poi il JSON, spesso dentro i backtick.
+  const comeRisponde = (oggetto) => ragionaAdAltaVoce
+    ? '<think>Guardo le foto. La felpa sembra Carhartt, controllo l\'etichetta.</think>\n```json\n' + JSON.stringify(oggetto) + '\n```'
+    : JSON.stringify(oggetto);
   let lensStatus = 200, lensErrore = 'Ricerca per immagine non configurata';
   let ricercaStatus = 200, ricercaErrore = 'Ricerca online non disponibile al momento. Riprova tra poco.';
   // Il caso normale: sei annunci Vinted e due schede di negozio. Le mediane
@@ -68,8 +73,8 @@ const NEGOZIO = (titolo, prezzo) => ({
     aiPost.push(b);
     let risposta;
     switch (tipoPrompt(b)) {
-      case 'analisi': risposta = analisiJson ? JSON.stringify(analisi) : 'non e json'; break;
-      case 'etichetta': risposta = JSON.stringify(etichetta); break;
+      case 'analisi': risposta = analisiJson ? comeRisponde(analisi) : 'non e json'; break;
+      case 'etichetta': risposta = comeRisponde(etichetta); break;
       case 'piano': risposta = JSON.stringify({ queries: [{ q: 'carhartt chase sweat usato vinted', tipo: 'web' }] }); break;
       case 'verdetto': risposta = verdettoJson ? JSON.stringify(verdetto) : 'nemmeno questo e json'; break;
       default: risposta = JSON.stringify({ prezzoSuggerito: 40, rangeMin: 30, rangeMax: 50, percentuale: 50, motivazione: 'ok', fattori: [], consiglio: 'ok' });
@@ -161,6 +166,31 @@ const NEGOZIO = (titolo, prezzo) => ({
   check('il diario racconta Lens', passi.some(p => /Cerco il prodotto con la foto/.test(p)), passi);
   check('il diario racconta ogni ricerca', passi.some(p => /Cerco:/.test(p)));
   check('il diario si chiude col verdetto', /decido/i.test(passi[passi.length - 1]), passi[passi.length - 1]);
+
+  console.log('\n-- il modello che ragiona ad alta voce --');
+  // Com'e' arrivato il guasto sul sito: il modello con visione risponde col
+  // suo ragionamento davanti al JSON, e lo scanner si fermava a "analisi non
+  // interpretabile" senza dire cosa avesse letto.
+  reset();
+  const analisiPulita0 = analisi;
+  ragionaAdAltaVoce = true;
+  await page.click('#btnSx');
+  await attendiRapporto();
+  check('la scansione va avanti lo stesso', /Carhartt/.test(await page.textContent('#rSxBody')));
+  check('e il diario non segnala nessun problema',
+    await page.evaluate(() => document.querySelectorAll('#sxList .agp.ko').length) === 0);
+  ragionaAdAltaVoce = false;
+  analisi = analisiPulita0;
+
+  console.log('\n-- quando invece non c\'e proprio JSON, lo dice --');
+  reset();
+  analisiJson = false;
+  await page.click('#btnSx');
+  await attendiFine();
+  const diario = await page.textContent('#sxList');
+  check('il diario riporta cosa ha risposto il modello',
+    /ha detto/.test(diario) && /non e json/.test(diario), diario.slice(0, 300));
+  analisiJson = true;
 
   console.log('\n-- doppio invio --');
   reset();
