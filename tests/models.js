@@ -59,6 +59,10 @@ const NOVISION = { status: 400, body: JSON.stringify({ error: { message: 'this m
 // l'immagine, e senza un controllo apposta finiva nel ramo "prova un altro
 // modello": otto tentativi con lo stesso payload, e lo stesso errore.
 const TROPPOGROSSA = { status: 400, body: JSON.stringify({ error: { message: 'Request too large: the maximum allowed size for a request containing a base64 encoded image is 4MB' } }) };
+// Lo stesso "Request too large", ma per i TOKEN: la cura non e' rimpicciolire,
+// e' mandare meno foto. Prima finiva nello stesso secchio dei byte, e il
+// client scendeva di qualita' a vuoto.
+const TROPPITOKEN = { status: 400, body: JSON.stringify({ error: { message: 'Request too large for model `qwen/qwen3.6-27b` in organization `org_01abc` on tokens per minute (TPM): Limit 15000, Requested 21000.' } }) };
 const OK = { status: 200, body: JSON.stringify({ choices: [{ message: { content: '{"ok":true}' } }] }) };
 
 async function post(ip, payload) {
@@ -154,7 +158,30 @@ async function post(ip, payload) {
   check('dice che le foto sono troppo pesanti', /troppo pesanti/i.test(r.body), r.body);
   check('e non dice "riprova" e basta, che manderebbe a ripetere lo stesso errore',
     !/^.*rifiutato la richiesta/.test(JSON.parse(r.body).error), r.body);
-  check('non trapela il messaggio grezzo del provider', !/base64 encoded/.test(r.body), r.body);
+  check('il motivo arriva, cosi si sa perche', /maximum allowed size/.test(JSON.parse(r.body).dettaglio || ''), r.body);
+  check('ma il messaggio grande resta nostro', /troppo pesanti/.test(JSON.parse(r.body).error), r.body);
+
+  console.log('\n-- troppi token non e la stessa cosa di troppi byte --');
+  plan = [TROPPITOKEN]; calls = [];
+  r = await post('1.0.0.11', { type: 'image', prompt: 'x', images: [{ base64: 'AAA' }] });
+  const rispostaToken = JSON.parse(r.body);
+  check('lo riconosce come problema di token, non di peso', rispostaToken.pesante === 'token', r.body);
+  check('e lo dice: meno foto, non foto piu piccole', /troppe per questo modello/.test(rispostaToken.error), rispostaToken.error);
+  check('mentre il peso vero resta peso', await (async () => {
+    plan = [TROPPOGROSSA]; calls = [];
+    const b = JSON.parse((await post('1.0.0.12', { type: 'image', prompt: 'x', images: [{ base64: 'AAA' }] })).body);
+    return b.pesante === 'byte';
+  })());
+
+  console.log('\n-- il motivo arriva a chi tiene il sito, senza i segreti --');
+  plan = [TROPPITOKEN]; calls = [];
+  r = await post('1.0.0.13', { type: 'image', prompt: 'x', images: [{ base64: 'AAA' }] });
+  const conDettaglio = JSON.parse(r.body);
+  check('il dettaglio del provider arriva', /tokens per minute/.test(conDettaglio.dettaglio || ''), conDettaglio.dettaglio);
+  check('ma senza l id dell organizzazione', !/org_01abc/.test(r.body), r.body);
+  plan = [{ status: 400, body: JSON.stringify({ error: { message: 'Invalid API Key gsk_abc123def456 on request' } }) }];
+  r = await post('1.0.0.14', { type: 'text', prompt: 'x' });
+  check('ne pezzi di chiave', !/gsk_abc123def456/.test(r.body), r.body);
 
   console.log('\n-- deadline --');
   process.env.AI_TIMEOUT_MS = '9000';

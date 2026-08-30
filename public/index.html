@@ -1153,9 +1153,11 @@ async function inviaA(url, payload, token){
   }
   if(d&&d.error){
     const e=new Error(d.error);
-    // Il server dice che e' il peso: chi ha chiamato puo' rimpicciolire e
-    // riprovare invece di fermarsi qui.
-    if(d.pesante) e.troppoPesante=true;
+    // Il server non dice solo "e' troppo": dice DI COSA. 'byte' si cura
+    // rimpicciolendo, 'token' si cura mandando meno foto - rimpicciolire li'
+    // non basta, e insistere sarebbe solo tempo perso.
+    if(d.pesante) e.troppoPesante=d.pesante;
+    if(d.dettaglio) e.dettaglio=d.dettaglio;
     throw e;
   }
   if(!r.ok){
@@ -1163,7 +1165,7 @@ async function inviaA(url, payload, token){
     if(r.status===429) throw new Error('Troppe richieste. Aspetta un attimo e riprova.');
     if(r.status===413){
       const e=new Error('Foto troppo pesanti. Prova con meno immagini.');
-      e.troppoPesante=true;
+      e.troppoPesante='byte';
       throw e;
     }
     throw new Error(`Errore del server (HTTP ${r.status}). Riprova.`);
@@ -1369,23 +1371,42 @@ async function leggiFoto(){
 // ogni volta che e' il SERVER a dire che e' troppo. Il numero smette di
 // dover essere giusto: basta che sia un punto di partenza.
 async function analizzaScendendo(bitmaps){
-  const partenza = bitmaps.length>2 ? 1 : 0;
+  // La scala dei tentativi, dal migliore al piu' magro. Prima si scende di
+  // qualita' tenendo tutte le foto; se il rifiuto e' per token invece che
+  // per byte, la qualita' non c'entra e si scende di NUMERO, perche' ogni
+  // foto costa contesto per conto suo. L'ultimo tentativo - una foto sola,
+  // piccola - passa praticamente ovunque, e vale comunque piu' di niente:
+  // l'etichetta viaggia in una richiesta sua e non si perde.
+  const tentativi=[];
+  for(let passo=bitmaps.length>2?1:0; passo<ENCODE_STEPS.length; passo++){
+    tentativi.push({ passo, quante:bitmaps.length });
+  }
+  for(let quante=bitmaps.length-1; quante>=1; quante--){
+    tentativi.push({ passo:ENCODE_STEPS.length-1, quante });
+  }
+
   let ultimoErrore=null;
-  for(let passo=partenza; passo<ENCODE_STEPS.length; passo++){
+  for(let i=0;i<tentativi.length;i++){
+    const { passo, quante }=tentativi[i];
     const lato=ENCODE_STEPS[passo][0], q=ENCODE_STEPS[passo][1];
-    const images=bitmaps.map(b=>({ base64:encodeImage(b, lato, q), mime:'image/jpeg' }));
+    const images=bitmaps.slice(0, quante).map(b=>({ base64:encodeImage(b, lato, q), mime:'image/jpeg' }));
     const peso=images.reduce((n,img)=>n+img.base64.length, 0);
     // Gia' sopra il budget in partenza: si scende senza sprecare l'invio.
-    // All'ultimo gradino si prova comunque: sotto non c'e' piu' niente.
-    if(peso>MAX_PAYLOAD_B64 && passo<ENCODE_STEPS.length-1) continue;
+    // Sull'ultimo tentativo si prova comunque: sotto non c'e' piu' niente.
+    if(peso>MAX_PAYLOAD_B64 && i<tentativi.length-1) continue;
     try{
       return await chiediAnalisi(images);
     }catch(e){
-      // Solo il "troppo pesante" si cura scendendo. Un timeout, una quota
-      // finita o una chiave scaduta non migliorano con foto piu' piccole, e
-      // riprovarle tre volte ruberebbe solo tempo.
-      if(!e || !e.troppoPesante || passo===ENCODE_STEPS.length-1) throw e;
+      // Solo i due "e' troppo" si curano insistendo. Un timeout, una quota
+      // finita o una chiave scaduta non migliorano con foto piu' piccole o
+      // piu' poche, e riprovarli ruberebbe solo tempo.
+      if(!e || !e.troppoPesante || i===tentativi.length-1) throw e;
       ultimoErrore=e;
+      // Un rifiuto per token non si cura con la qualita': si salta dritti
+      // ai tentativi con meno foto invece di scendere a vuoto.
+      if(e.troppoPesante==='token' && quante===bitmaps.length){
+        while(i+1<tentativi.length && tentativi[i+1].quante===bitmaps.length) i++;
+      }
     }
   }
   throw ultimoErrore || new Error('Non sono riuscito a preparare le foto.');
@@ -2391,7 +2412,7 @@ async function sxScansione(){
   try{
     letto=await leggiFoto();
   }catch(e){
-    sxChiudi(iFoto,'ko',e.message);
+    sxChiudi(iFoto,'ko', e.dettaglio ? e.message+' — il server dice: '+e.dettaglio : e.message);
     throw new Error('Non sono riuscito a leggere le foto: '+e.message);
   }
   if(!letto.risposta.ok){

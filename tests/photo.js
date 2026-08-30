@@ -134,7 +134,7 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
     bodies.push(req.postData());
     if (rifiutiRimasti-- > 0) {
       return route.fulfill({ status: 502, contentType: 'application/json',
-        body: JSON.stringify({ error: 'Le foto sono troppo pesanti per il modello.', pesante: true }) });
+        body: JSON.stringify({ error: 'Le foto sono troppo pesanti.', pesante: 'byte' }) });
     }
     return route.fulfill({
       status: 200, contentType: 'application/json',
@@ -158,6 +158,38 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
   check('e ogni tentativo e piu piccolo del precedente',
     lati.every((l, i) => i === 0 || l < lati[i - 1]), lati);
   check('alla fine l analisi arriva lo stesso', (await page.textContent('#rFotoTxt')).includes('Giacca'));
+
+  console.log('\n-- troppi token: si mandano meno foto, non foto piu piccole --');
+  // Rimpicciolire non riduce abbastanza il contesto: ogni foto costa per
+  // conto suo, quindi la cura e' toglierne.
+  bodies = [];
+  let tokenRimasti = 1;
+  await page.unroute('**/.netlify/functions/claude');
+  await page.route('**/.netlify/functions/claude', async route => {
+    const req = route.request();
+    if (req.method() === 'GET')
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 't.t', expiresIn: 900000 }) });
+    const corpo = JSON.parse(req.postData());
+    if (/Trascrivi ESATTAMENTE/.test(corpo.prompt || '')) {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: '{}' }) });
+    }
+    bodies.push(req.postData());
+    if (tokenRimasti-- > 0) {
+      return route.fulfill({ status: 502, contentType: 'application/json',
+        body: JSON.stringify({ error: 'Le foto sono troppe per questo modello.', pesante: 'token', dettaglio: 'tokens per minute (TPM): Limit 15000' }) });
+    }
+    return route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ text: JSON.stringify({ tipo: 'Giacca', brand: 'Non identificato', condizione: 'Ottimo', vintageStima: 'Non vintage' }), model: 'vision-finto' })
+    });
+  });
+  await page.setInputFiles('#fileInput', files);
+  await page.click('#btnA');
+  await page.waitForSelector('#rFoto:not([style*="display: none"])', { timeout: 40000 });
+  const quante = bodies.map(b => JSON.parse(b).images.length);
+  check('il secondo tentativo manda meno foto, non le stesse piu piccole',
+    quante.length === 2 && quante[1] < quante[0], quante);
+  check('e l analisi arriva lo stesso', (await page.textContent('#rFotoTxt')).includes('Giacca'));
 
   console.log('\n-- ma solo per il peso, non per ogni errore --');
   bodies = [];

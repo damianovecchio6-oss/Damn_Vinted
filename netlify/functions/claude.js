@@ -80,7 +80,7 @@ exports.handler = async (event) => {
     ? Buffer.from(event.body || '', 'base64').toString('utf8')
     : (event.body || '');
   if (Buffer.byteLength(rawBody) > MAX_BODY) {
-    return S.json(413, cors, { error: 'Immagini troppo pesanti', pesante: true });
+    return S.json(413, cors, { error: 'Immagini troppo pesanti', pesante: 'byte' });
   }
 
   // Una sola deadline per tutta la richiesta, tentativi di fallback inclusi.
@@ -151,8 +151,10 @@ exports.handler = async (event) => {
     }
 
     if (!esito.ok) {
-      return S.json(esito.status || 502, cors,
-        esito.pesante ? { error: esito.error, pesante: true } : { error: esito.error });
+      const corpo = { error: esito.error };
+      if (esito.pesante) corpo.pesante = esito.pesante;
+      if (esito.dettaglio) corpo.dettaglio = esito.dettaglio;
+      return S.json(esito.status || 502, cors, corpo);
     }
 
     // Rimandiamo anche chi ha risposto: serve a capire da cosa dipende la
@@ -407,8 +409,9 @@ async function tentaGroq(richiesta, kind, deadline) {
       status: statusPerIlClient(res.status),
       error: erroreLeggibile(res.status, dettaglio),
       // Il client su questo non deve leggere un messaggio: deve poterci
-      // reagire, rimpicciolendo le foto e riprovando. Un flag, non una frase.
+      // reagire, e la reazione giusta dipende da QUALE dei due rifiuti e'.
       pesante: pesaTroppo(res.status, dettaglio),
+      dettaglio: redigi(dettaglio),
       motivo: `HTTP ${res.status}`
     };
   }
@@ -434,7 +437,22 @@ function statusPerIlClient(status) {
 // da nessuna parte su cui si possa fare affidamento: qui si riconosce che il
 // rifiuto E' per peso, e sara' il client a scendere di qualita' e riprovare.
 function pesaTroppo(status, dettaglio) {
-  return status === 413 || (status === 400 && TROPPO_GRANDE.test(dettaglio || ''));
+  if (status === 413) return 'byte';
+  return status === 400 ? tipoDiRifiuto(dettaglio) : '';
+}
+
+// Il testo di Groq puo' contenere l'id dell'organizzazione e - in teoria -
+// pezzi di chiave: quelli non escono di qui. Il resto invece serve, e serve
+// a chi il sito ce l'ha: senza, ogni rifiuto nuovo del provider costa un
+// giro di ipotesi. E' finito nel diario dello scanner, non nel messaggio
+// grande, che resta nostro.
+function redigi(dettaglio) {
+  return String(dettaglio || '')
+    .replace(/\b(?:sk|gsk|org)[-_][A-Za-z0-9]+/gi, '[omesso]')
+    .replace(/\b[0-9a-f]{24,}\b/gi, '[omesso]')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 200);
 }
 
 function erroreLeggibile(status, dettaglio) {
@@ -443,9 +461,9 @@ function erroreLeggibile(status, dettaglio) {
   // Groq risponde 400, non 413, quando la richiesta supera i suoi 4MB: dire
   // "riprova" mandava a ripetere identica una richiesta che non poteva
   // passare. Qui si dice cosa fare davvero.
-  if (pesaTroppo(status, dettaglio)) {
-    return 'Le foto sono troppo pesanti per il modello. Riprova con meno foto, o con scatti piu\' piccoli.';
-  }
+  const tipo = pesaTroppo(status, dettaglio);
+  if (tipo === 'byte') return 'Le foto sono troppo pesanti per il modello. Sto riprovando piu\' leggero.';
+  if (tipo === 'token') return 'Le foto sono troppe per questo modello. Sto riprovando con meno foto.';
   if (status === 400) return 'Il modello ha rifiutato la richiesta. Riprova.';
   return 'Servizio AI non disponibile al momento. Riprova tra poco.';
 }
@@ -492,7 +510,25 @@ function modelloSparito(res) {
 // nomina spesso l'immagine, quindi senza questo controllo finiva nel ramo
 // "prova un altro modello": otto tentativi con lo stesso payload da 4MB, il
 // budget di 9s bruciato, e lo stesso errore alla fine.
-const TROPPO_GRANDE = /too large|too big|request too|payload|exceed|maximum (?:allowed )?size|size limit|entity too/i;
+// Due rifiuti diversi che finivano nello stesso secchio, e la cura e'
+// opposta. BYTE: la richiesta pesa troppo, si rimpicciolisce e passa.
+// TOKEN: le immagini occupano troppo contesto o troppa quota al minuto -
+// rimpicciolire aiuta poco, quello che serve e' mandare MENO foto.
+// "exceed" da solo prendeva dentro anche i secondi, e il client scendeva di
+// qualita' all'infinito su un problema che la qualita' non risolve.
+const TROPPI_BYTE = /too large|too big|maximum (?:allowed )?size|size limit|entity too large|payload too/i;
+const TROPPI_TOKEN = /token|context length|context window|reduce the length|tokens per minute|tpm/i;
+
+// L'ordine conta: "Request too large ... on tokens per minute" parla di
+// token, non di byte, e la parola "large" non deve trarre in inganno.
+function tipoDiRifiuto(dettaglio) {
+  const testo = dettaglio || '';
+  if (TROPPI_TOKEN.test(testo)) return 'token';
+  if (TROPPI_BYTE.test(testo)) return 'byte';
+  return '';
+}
+
+const TROPPO_GRANDE = /too large|too big|maximum (?:allowed )?size|size limit|entity too large|payload too|token|context length|reduce the length/i;
 
 function serveUnAltroModello(res, kind) {
   if (modelloSparito(res)) return true;
