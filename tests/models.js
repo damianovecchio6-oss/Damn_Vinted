@@ -49,6 +49,11 @@ let pass = 0, fail = 0;
 const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else { fail++; console.log(`  FAIL ${n}${e !== undefined ? ' -> ' + e : ''}`); } };
 
 const MISSING = { status: 404, body: JSON.stringify({ error: { message: 'The model does not exist or you do not have access to it' } }) };
+// Come Groq annuncia davvero un modello ritirato: 400, non 404. Guardando solo
+// il 404 il ripiego non partiva, e ogni foto finiva con "Il modello ha
+// rifiutato la richiesta. Riprova.".
+const DISMESSO = { status: 400, body: JSON.stringify({ error: { code: 'model_decommissioned', message: 'The model `meta-llama/llama-4-scout-17b-16e-instruct` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations' } }) };
+const NONSUPPORTATO = { status: 400, body: JSON.stringify({ error: { code: 'model_not_supported', message: "The requested model 'meta-llama/llama-4-scout-17b-16e-instruct' is not supported by provider 'groq'." } }) };
 const NOVISION = { status: 400, body: JSON.stringify({ error: { message: 'this model does not support image input' } }) };
 // Il 400 vero di Groq quando la richiesta supera i suoi 4MB di base64. Nomina
 // l'immagine, e senza un controllo apposta finiva nel ramo "prova un altro
@@ -83,6 +88,28 @@ async function post(ip, payload) {
   r = await post('1.0.0.3', { type: 'image', prompt: 'ciao', images: [{ base64: 'AAA' }] });
   check('la scelta resta in cache: niente secondo giro', r.statusCode === 200 && calls.length === 1, calls.join(','));
   check('e niente seconda richiesta di catalogo', catalogCalls === 0, catalogCalls);
+
+  console.log('\n-- modello ritirato: Groq lo dice con un 400, non con un 404 --');
+  plan = [DISMESSO, OK]; calls = []; catalogCalls = 0;
+  r = await post('1.0.1.1', { type: 'image', prompt: 'x', images: [{ base64: 'AAA' }] });
+  check('un 400 "decommissioned" fa ripiegare sul modello dopo',
+    r.statusCode === 200 && calls.length === 2, `${r.statusCode} / ${calls.join(',')}`);
+  check('e il modello morto non e quello che risponde',
+    JSON.parse(r.body).model === calls[1], r.body);
+  check('non resta l errore che invitava a riprovare a vuoto',
+    !/rifiutato la richiesta/.test(r.body), r.body);
+
+  plan = [NONSUPPORTATO, OK]; calls = []; catalogCalls = 0;
+  r = await post('1.0.1.2', { type: 'image', prompt: 'x', images: [{ base64: 'AAA' }] });
+  check('lo stesso per "not supported by provider"',
+    r.statusCode === 200 && calls.length === 2, `${r.statusCode} / ${calls.join(',')}`);
+
+  // Il testo passa dallo stesso giro: se il modello di testo viene ritirato,
+  // l'annuncio e la stima devono ripiegare come fa l'analisi foto.
+  plan = [DISMESSO, OK]; calls = [];
+  r = await post('1.0.1.3', { type: 'text', prompt: 'ciao' });
+  check('vale anche per il testo, non solo per le foto',
+    r.statusCode === 200 && calls.length === 2, `${r.statusCode} / ${calls.join(',')}`);
 
   console.log('\n-- cache negativa e sua scadenza --');
   plan = Array(12).fill(NOVISION); calls = [];

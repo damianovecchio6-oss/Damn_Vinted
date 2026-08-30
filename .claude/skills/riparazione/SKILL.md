@@ -35,7 +35,8 @@ lanciare. `(x || {}).campo` invece di `x.campo` costa niente e salva un'ora.
 | 429 improvvisi | rate limit per IP, 20/min, finestra scorrevole |
 | "nessun modello disponibile" | `claude.js`: catalogo, cache positiva 30 min e negativa 5 min |
 | l'analisi foto peggiora | `claude.js`: e' passata da Gemini a Groq? Il modello che ha risposto e' scritto sotto il risultato |
-| "Il modello ha rifiutato la richiesta" con piu' foto | il peso: Groq risponde **400** sopra i **4MB di base64 per richiesta**. Il tetto sta in `MAX_PAYLOAD_B64` e deve restare sotto quel numero, non sotto i 6MB di Netlify |
+| "Il modello ha rifiutato la richiesta" | e' un **400 di Groq**, non un rifiuto di contenuto. Nell'ordine: (1) modello ritirato - Groq lo dice con un **400**, non un 404, e `modelloSparito()` deve riconoscerlo o il ripiego non parte; (2) il peso - 400 sopra i **4MB di base64 per richiesta**, tetto in `MAX_PAYLOAD_B64`. Il messaggio vero sta nei log della function: `Groq 400 su <modello>: <dettaglio>` |
+| l'analisi foto non va e il testo si | e' il modello con visione: quello di testo e quello di visione si ritirano separatamente, e la cache li tiene per chiave diversa (`groq:model:image` / `groq:model:text`) |
 | prezzi che non vengono letti | `ricerca.js`, `PREZZO_RE`: gli annunci scrivono l'euro in quattro modi |
 | ricerche doppie, quota che vola | cache per query+tipo, 10 minuti |
 | tutto lento o 504 | il budget e' 10s per function: **mai due chiamate AI in fila dentro la stessa** |

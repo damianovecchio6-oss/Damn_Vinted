@@ -256,9 +256,9 @@ async function tentaGemini(richiesta, kind, deadline) {
       return { status: 0, body: String(e && e.message || e) };
     });
 
-    // 404 = modello inesistente, si prova il prossimo. 429 = quota gratuita
-    // finita per oggi: cambiare modello non aiuta, si esce subito.
-    if (res.status === 404) continue;
+    // Modello inesistente o ritirato: si prova il prossimo. Vale anche qui la
+    // lezione di Groq - il ritiro non arriva sempre come 404.
+    if (res.status === 404 || modelloSparito(res)) continue;
     if (res.status === 429) return { ok: false, motivo: 'quota giornaliera esaurita' };
     if (res.status >= 400 || res.status === 0) {
       console.error(`Gemini ${res.status} su ${modello}: ${(res.body || '').slice(0, 300)}`);
@@ -436,9 +436,21 @@ function dettaglioNessunModello(kind, provati) {
 
 // Groq risponde 404 con "does not exist or you do not have access to it"
 // quando il modello e' stato ritirato dal catalogo.
+// Un modello ritirato Groq lo annuncia con un 400, non con un 404:
+//   model_decommissioned: 400 The model `X` has been decommissioned...
+//   model_not_supported:  400 The requested model 'X' is not supported...
+// Guardando solo il 404 - com'era prima - quel 400 non veniva riconosciuto,
+// il giro dei candidati non partiva mai, e ogni analisi foto finiva con "Il
+// modello ha rifiutato la richiesta. Riprova.", che invitava a ripetere una
+// richiesta destinata a fallire identica finche' non si cambiava modello a
+// mano. E' esattamente il caso per cui esiste tutto il meccanismo di
+// ripiego: era il codice di stato a tenerlo spento.
+const MODELLO_SPARITO = /does not exist|model_not_found|model_decommissioned|decommissioned|model_not_supported|not supported by provider|no longer supported|has been deprecated/i;
+
 function modelloSparito(res) {
-  if (!res || res.status !== 404) return false;
-  return /does not exist|model_not_found|decommissioned/i.test(res.body || '');
+  if (!res) return false;
+  if (res.status !== 404 && res.status !== 400) return false;
+  return MODELLO_SPARITO.test(res.body || '');
 }
 
 // Vale la pena provare un altro modello? Sia se questo non esiste piu', sia
