@@ -1151,11 +1151,21 @@ async function inviaA(url, payload, token){
     e.nonConfigurato=true;
     throw e;
   }
-  if(d&&d.error) throw new Error(d.error);
+  if(d&&d.error){
+    const e=new Error(d.error);
+    // Il server dice che e' il peso: chi ha chiamato puo' rimpicciolire e
+    // riprovare invece di fermarsi qui.
+    if(d.pesante) e.troppoPesante=true;
+    throw e;
+  }
   if(!r.ok){
     if(r.status===504||r.status===502) throw new Error('L\'AI ci ha messo troppo. Riprova tra un momento.');
     if(r.status===429) throw new Error('Troppe richieste. Aspetta un attimo e riprova.');
-    if(r.status===413) throw new Error('Foto troppo pesanti. Prova con meno immagini.');
+    if(r.status===413){
+      const e=new Error('Foto troppo pesanti. Prova con meno immagini.');
+      e.troppoPesante=true;
+      throw e;
+    }
     throw new Error(`Errore del server (HTTP ${r.status}). Riprova.`);
   }
   if(!d) throw new Error('Risposta del server non leggibile. Riprova.');
@@ -1280,7 +1290,7 @@ function releaseImage(source){ if(source&&source.close) source.close(); }
 // prendevano un 400 dal provider: "Il modello ha rifiutato la richiesta",
 // che non diceva niente di vero. 3.6MB lascia spazio al prompt e al JSON
 // intorno e resta comodamente sotto.
-const MAX_PAYLOAD_B64=3.6*1024*1024;
+const MAX_PAYLOAD_B64=3*1024*1024;
 // La precisione dipende quasi tutta da quanto resta leggibile l'etichetta: a
 // 1024px il testo di un cartellino diventa poltiglia. Quindi si parte alti e
 // si scende solo quanto basta a starci, invece di prendere un 413 in faccia.
@@ -1291,11 +1301,17 @@ const ENCODE_STEPS=[[1600,0.92],[1280,0.86],[1024,0.78],[800,0.7]];
 // megapixel supera i 4MB da sola, e finiva nello stesso 400 senza che si
 // vedesse, perche' leggiEtichetta si mangia i suoi errori.
 const ETICHETTA_STEPS=[[2000,0.94],[1600,0.9],[1280,0.85]];
+// Il suo tetto e' piu' alto di quello delle altre, e non e' una svista: le
+// altre si dividono una richiesta in tre o quattro, lei ce l'ha tutta per se'.
+// Legarla al budget condiviso le toglieva risoluzione per colpa del peso
+// delle altre - e la risoluzione dell'etichetta e' esattamente la cosa da cui
+// dipende se marca, composizione e taglia si leggono o si indovinano.
+const MAX_ETICHETTA_B64=3.5*1024*1024;
 
 function codificaEtichetta(bitmap){
   for(let i=0;i<ETICHETTA_STEPS.length;i++){
     const b64=encodeImage(bitmap, ETICHETTA_STEPS[i][0], ETICHETTA_STEPS[i][1]);
-    if(b64.length<=MAX_PAYLOAD_B64 || i===ETICHETTA_STEPS.length-1){
+    if(b64.length<=MAX_ETICHETTA_B64 || i===ETICHETTA_STEPS.length-1){
       return { base64:b64, mime:'image/jpeg' };
     }
   }
@@ -1319,34 +1335,70 @@ async function leggiFoto(){
     const files=selFiles.slice(0,4);
     // Decodifica in parallelo: le foto non si aspettano piu' a vicenda.
     const bitmaps=await Promise.all(files.map(decodeImage));
-    let images, fotoEtichetta=null;
     try{
-      images=encodeAll(bitmaps);
       // L'etichetta va a parte e grande: e' una richiesta separata, quindi non
-      // deve stare nel budget di peso delle altre. A 1280px il testo di un
+      // deve stare nel budget di peso delle altre, e non va rifatta se
+      // l'analisi deve riprovare piu' leggera. A 1280px il testo di un
       // cartellino di composizione e' gia' illeggibile.
-      if(labelIndex>=0 && bitmaps[labelIndex]){
-        fotoEtichetta=codificaEtichetta(bitmaps[labelIndex]);
-      }
+      const fotoEtichetta = (labelIndex>=0 && bitmaps[labelIndex])
+        ? codificaEtichetta(bitmaps[labelIndex]) : null;
+      // Parte subito e in parallelo: ognuna ha il suo budget di 10s sulla
+      // function, e in fila non ci starebbero.
+      const attesaEtichetta = fotoEtichetta ? leggiEtichetta(fotoEtichetta) : Promise.resolve(null);
+
       // La miniatura riusa la decodifica gia' fatta, senza rileggere il file.
       try{
         lastThumbnail='data:image/jpeg;base64,'+encodeImage(bitmaps[0], 160, 0.5);
       }catch(thumbErr){
         lastThumbnail=null;
       }
+
+      const risposta = await analizzaScendendo(bitmaps);
+      const etichetta = await attesaEtichetta;
+      return { risposta, etichetta, cercataEtichetta: !!fotoEtichetta };
     }finally{
       bitmaps.forEach(releaseImage);
     }
-    const plurale = images.length>1
-      ? `Le ${images.length} foto ritraggono LO STESSO capo da angolazioni diverse: usale tutte insieme per una sola analisi.\n\n`
-      : '';
-    // Le due letture partono insieme: ognuna ha il suo budget di 10s sulla
-    // function, e in fila non ci starebbero.
-    const [risposta, etichetta] = await Promise.all([
-      callAIJson({
-      type:'image',
-      images,
-      prompt:`${plurale}Analizza questo capo di abbigliamento con l'occhio di un esperto di seconda mano e vintage. Guarda con attenzione l'etichetta (se visibile): il tipo di font del logo, il formato dell'etichetta di lavaggio/composizione, lo stile di cucitura, il tipo di tessuto, eventuali codici o scritte — questi sono indizi per capire se il capo è vintage e di che epoca.
+}
+
+// Quanto sia "troppo pesante" lo sa solo il provider, e il suo numero cambia
+// col modello e senza preavviso: qui l'abbiamo sbagliato due volte di fila,
+// prima a 4.2MB e poi a 3.6MB. Quindi non lo si indovina piu': si parte dalla
+// qualita' migliore che sta nel budget - perche' la precisione dipende quasi
+// tutta da quanto resta leggibile l'etichetta - e si scende di un gradino
+// ogni volta che e' il SERVER a dire che e' troppo. Il numero smette di
+// dover essere giusto: basta che sia un punto di partenza.
+async function analizzaScendendo(bitmaps){
+  const partenza = bitmaps.length>2 ? 1 : 0;
+  let ultimoErrore=null;
+  for(let passo=partenza; passo<ENCODE_STEPS.length; passo++){
+    const lato=ENCODE_STEPS[passo][0], q=ENCODE_STEPS[passo][1];
+    const images=bitmaps.map(b=>({ base64:encodeImage(b, lato, q), mime:'image/jpeg' }));
+    const peso=images.reduce((n,img)=>n+img.base64.length, 0);
+    // Gia' sopra il budget in partenza: si scende senza sprecare l'invio.
+    // All'ultimo gradino si prova comunque: sotto non c'e' piu' niente.
+    if(peso>MAX_PAYLOAD_B64 && passo<ENCODE_STEPS.length-1) continue;
+    try{
+      return await chiediAnalisi(images);
+    }catch(e){
+      // Solo il "troppo pesante" si cura scendendo. Un timeout, una quota
+      // finita o una chiave scaduta non migliorano con foto piu' piccole, e
+      // riprovarle tre volte ruberebbe solo tempo.
+      if(!e || !e.troppoPesante || passo===ENCODE_STEPS.length-1) throw e;
+      ultimoErrore=e;
+    }
+  }
+  throw ultimoErrore || new Error('Non sono riuscito a preparare le foto.');
+}
+
+function chiediAnalisi(images){
+  const plurale = images.length>1
+    ? `Le ${images.length} foto ritraggono LO STESSO capo da angolazioni diverse: usale tutte insieme per una sola analisi.\n\n`
+    : '';
+  return callAIJson({
+    type:'image',
+    images,
+    prompt:`${plurale}Analizza questo capo di abbigliamento con l'occhio di un esperto di seconda mano e vintage. Guarda con attenzione l'etichetta (se visibile): il tipo di font del logo, il formato dell'etichetta di lavaggio/composizione, lo stile di cucitura, il tipo di tessuto, eventuali codici o scritte — questi sono indizi per capire se il capo è vintage e di che epoca.
 
 REGOLE DI PRECISIONE — leggile prima di rispondere:
 - Descrivi SOLO quello che vedi davvero nella foto. Non dedurre, non completare, non immaginare.
@@ -1360,10 +1412,7 @@ REGOLE DI PRECISIONE — leggile prima di rispondere:
 
 Rispondi SOLO con questo JSON valido, senza backtick né markdown, nessun testo prima o dopo:
 {"tipo":"es: giacca in pelle","brand":"leggi l'etichetta, se non visibile scrivi Non identificato","colore":"","materiale":"es: 100% cotone, se visibile sull'etichetta","condizione":"una tra: Nuovo con etichetta, Nuovo senza etichetta, Ottimo, Buono, Soddisfacente","taglie":"taglie probabili","stagione":"","stile":"es: streetwear, casual, elegante, sportivo, vintage","fasciaPrezzo":"es: 20-50€","fasciaPrezzoMin":20,"fasciaPrezzoMax":50,"note":"difetti visibili, usura, dettagli particolari","vintageStima":"es: Anni 90, Y2K, Anni 80, oppure Non vintage se non ci sono indizi","vintageIndizi":"elenco breve degli indizi visivi concreti che ti fanno pensare sia vintage (o assenza di indizi), es: etichetta con font squadrato tipico anni 90, cucitura a doppio filo, tessuto pesante non più in uso","vintageConfidenza":"una tra: bassa, media, alta - quanto sei sicuro della stima vintage"}`
-      }),
-      fotoEtichetta ? leggiEtichetta(fotoEtichetta) : Promise.resolve(null)
-    ]);
-    return { risposta, etichetta, cercataEtichetta: !!fotoEtichetta };
+  });
 }
 
 async function analyzePhoto(){

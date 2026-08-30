@@ -115,6 +115,86 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
   check('la miniatura per lo storico e\' stata prodotta', await page.evaluate(() => typeof lastThumbnail === 'string' && lastThumbnail.startsWith('data:image/jpeg;base64,')));
   check('la miniatura e\' piccola (< 30KB)', await page.evaluate(() => lastThumbnail.length) < 30000, await page.evaluate(() => lastThumbnail.length));
 
+  console.log('\n-- quando il server dice che sono troppo pesanti --');
+  // Il limite vero lo decide il provider e cambia col modello: l'abbiamo
+  // sbagliato due volte. Adesso non si indovina piu' - si scende quando lo
+  // dice lui, e questo controllo e' la prova che la discesa avviene davvero.
+  bodies = [];
+  let rifiutiRimasti = 1;
+  await page.unroute('**/.netlify/functions/claude');
+  await page.route('**/.netlify/functions/claude', async route => {
+    const req = route.request();
+    if (req.method() === 'GET')
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 't.t', expiresIn: 900000 }) });
+    const corpo = JSON.parse(req.postData());
+    // L'etichetta ha una richiesta sua: qui si guarda solo l'analisi.
+    if (/Trascrivi ESATTAMENTE/.test(corpo.prompt || '')) {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: '{}' }) });
+    }
+    bodies.push(req.postData());
+    if (rifiutiRimasti-- > 0) {
+      return route.fulfill({ status: 502, contentType: 'application/json',
+        body: JSON.stringify({ error: 'Le foto sono troppo pesanti per il modello.', pesante: true }) });
+    }
+    return route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ text: JSON.stringify({ tipo: 'Giacca', brand: 'Non identificato', condizione: 'Ottimo', vintageStima: 'Non vintage' }), model: 'vision-finto' })
+    });
+  });
+
+  await page.setInputFiles('#fileInput', files);
+  await page.click('#btnA');
+  await page.waitForSelector('#rFoto:not([style*="display: none"])', { timeout: 40000 });
+  // Il budget di partenza salta gia' il gradino piu' alto, quindi i tentativi
+  // che restano sono due: uno rifiutato, uno buono.
+  check('non si arrende: riprova con foto piu leggere', bodies.length === 2, bodies.length);
+  const lati = [];
+  for (const b of bodies) {
+    lati.push(await page.evaluate(async (b64) => {
+      const bmp = await createImageBitmap(await (await fetch('data:image/jpeg;base64,' + b64)).blob());
+      return Math.max(bmp.width, bmp.height);
+    }, JSON.parse(b).images[0].base64));
+  }
+  check('e ogni tentativo e piu piccolo del precedente',
+    lati.every((l, i) => i === 0 || l < lati[i - 1]), lati);
+  check('alla fine l analisi arriva lo stesso', (await page.textContent('#rFotoTxt')).includes('Giacca'));
+
+  console.log('\n-- ma solo per il peso, non per ogni errore --');
+  bodies = [];
+  await page.unroute('**/.netlify/functions/claude');
+  await page.route('**/.netlify/functions/claude', async route => {
+    const req = route.request();
+    if (req.method() === 'GET')
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 't.t', expiresIn: 900000 }) });
+    const corpo = JSON.parse(req.postData());
+    if (/Trascrivi ESATTAMENTE/.test(corpo.prompt || '')) {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: '{}' }) });
+    }
+    bodies.push(req.postData());
+    return route.fulfill({ status: 429, contentType: 'application/json',
+      body: JSON.stringify({ error: 'Troppe richieste, riprova tra qualche secondo.' }) });
+  });
+  await page.setInputFiles('#fileInput', files);
+  await page.click('#btnA');
+  await page.waitForSelector('#eFoto:not([style*="display: none"])', { timeout: 40000 });
+  check('una quota finita non si cura rimpicciolendo: un tentativo solo',
+    bodies.length === 1, bodies.length);
+  check('e l errore arriva all utente', /Troppe richieste/.test(await page.textContent('#eFoto')), await page.textContent('#eFoto'));
+
+  // Le due prove qui sopra hanno lasciato installato uno stub che rifiuta:
+  // da qui in poi serve di nuovo quello che risponde bene.
+  await page.unroute('**/.netlify/functions/claude');
+  await page.route('**/.netlify/functions/claude', async route => {
+    const req = route.request();
+    if (req.method() === 'GET')
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 't.t', expiresIn: 900000 }) });
+    bodies.push(req.postData());
+    return route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ text: JSON.stringify({ tipo: 'Giacca', brand: 'Non identificato', colore: 'blu', condizione: 'Nuovo senza etichetta', fasciaPrezzoMin: 20, fasciaPrezzoMax: 40, vintageStima: 'Non vintage' }), model: 'vision-finto' })
+    });
+  });
+
   console.log('\n-- anche l\'etichetta, che viaggia da sola --');
   bodies = [];
   await page.setInputFiles('#fileInput', files);

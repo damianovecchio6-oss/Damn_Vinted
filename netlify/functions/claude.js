@@ -80,7 +80,7 @@ exports.handler = async (event) => {
     ? Buffer.from(event.body || '', 'base64').toString('utf8')
     : (event.body || '');
   if (Buffer.byteLength(rawBody) > MAX_BODY) {
-    return S.json(413, cors, { error: 'Immagini troppo pesanti' });
+    return S.json(413, cors, { error: 'Immagini troppo pesanti', pesante: true });
   }
 
   // Una sola deadline per tutta la richiesta, tentativi di fallback inclusi.
@@ -150,7 +150,10 @@ exports.handler = async (event) => {
       esito = await tentaGroq(richiesta, kind, deadline);
     }
 
-    if (!esito.ok) return S.json(esito.status || 502, cors, { error: esito.error });
+    if (!esito.ok) {
+      return S.json(esito.status || 502, cors,
+        esito.pesante ? { error: esito.error, pesante: true } : { error: esito.error });
+    }
 
     // Rimandiamo anche chi ha risposto: serve a capire da cosa dipende la
     // qualita' dell'analisi e quale modello conviene fissare a mano.
@@ -399,7 +402,15 @@ async function tentaGroq(richiesta, kind, deadline) {
     // Il testo di Groq puo' contenere id di organizzazione, nomi di modello e
     // dettagli di quota: resta nei log, al client va un messaggio nostro.
     console.error(`Groq ${res.status} su ${modello}: ${dettaglio}`);
-    return { ok: false, status: statusPerIlClient(res.status), error: erroreLeggibile(res.status, dettaglio), motivo: `HTTP ${res.status}` };
+    return {
+      ok: false,
+      status: statusPerIlClient(res.status),
+      error: erroreLeggibile(res.status, dettaglio),
+      // Il client su questo non deve leggere un messaggio: deve poterci
+      // reagire, rimpicciolendo le foto e riprovando. Un flag, non una frase.
+      pesante: pesaTroppo(res.status, dettaglio),
+      motivo: `HTTP ${res.status}`
+    };
   }
 
   const text = data.choices && data.choices[0] && data.choices[0].message
@@ -419,13 +430,20 @@ function statusPerIlClient(status) {
   return 502;
 }
 
+// Il limite di peso lo decide il provider, cambia col modello e non e' scritto
+// da nessuna parte su cui si possa fare affidamento: qui si riconosce che il
+// rifiuto E' per peso, e sara' il client a scendere di qualita' e riprovare.
+function pesaTroppo(status, dettaglio) {
+  return status === 413 || (status === 400 && TROPPO_GRANDE.test(dettaglio || ''));
+}
+
 function erroreLeggibile(status, dettaglio) {
   if (status === 429) return 'Troppe richieste, riprova tra qualche secondo.';
   if (status === 401 || status === 403) return 'Il servizio AI ha rifiutato le credenziali del sito.';
   // Groq risponde 400, non 413, quando la richiesta supera i suoi 4MB: dire
   // "riprova" mandava a ripetere identica una richiesta che non poteva
   // passare. Qui si dice cosa fare davvero.
-  if (status === 413 || (status === 400 && TROPPO_GRANDE.test(dettaglio || ''))) {
+  if (pesaTroppo(status, dettaglio)) {
     return 'Le foto sono troppo pesanti per il modello. Riprova con meno foto, o con scatti piu\' piccoli.';
   }
   if (status === 400) return 'Il modello ha rifiutato la richiesta. Riprova.';

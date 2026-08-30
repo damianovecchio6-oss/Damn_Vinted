@@ -322,11 +322,17 @@ com'e' finche' non decidi tu.
 
 ## Come si usa l'analisi foto
 
-Fino a 4 foto. Le immagini vengono rimpicciolite quanto basta a stare sotto i
-**4MB di base64 per richiesta**: e' il limite oltre il quale Groq risponde 400,
-ed e' piu' stretto dei 6MB di body che concede Netlify. Si parte alti e si
-scende solo quanto serve, perche' la precisione dipende quasi tutta da quanto
-resta leggibile l'etichetta.
+Fino a 4 foto. Quanto pesante sia "troppo" lo decide il provider, cambia col
+modello e non coincide col numero che sta scritto nella sua documentazione:
+qui e' stato sbagliato due volte di fila. Quindi non si indovina piu'. Si
+parte dalla qualita' migliore che sta in un budget di partenza, e **si scende
+di un gradino ogni volta che e' il server a dire che e' troppo** - la function
+lo segnala con un campo apposta, non con una frase da leggere. Il numero non
+deve piu' essere giusto: deve solo essere un punto da cui partire.
+
+La foto dell'etichetta ha un tetto suo, piu' alto: viaggia in una richiesta
+tutta sua, e la sua risoluzione e' esattamente quella da cui dipende se marca,
+composizione e taglia si leggono o si indovinano.
 
 Il marcatore 🏷️ su un'anteprima dice "questa e' l'etichetta":
 quella foto viene mandata **a parte e a piena risoluzione**, con una richiesta
