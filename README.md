@@ -126,7 +126,7 @@ chiave non puo' controllare i prezzi.
 | Variabile | Default | A cosa serve |
 |---|---|---|
 | `GROQ_MODEL_TEXT` | `openai/gpt-oss-120b` | Fissa il modello di testo |
-| `GROQ_MODEL_VISION` | `meta-llama/llama-4-scout-17b-16e-instruct` | Fissa il modello con visione di Groq |
+| `GROQ_MODEL_VISION` | `qwen/qwen3.6-27b` | Fissa il modello con visione di Groq |
 | `GEMINI_MODEL` | scelto dal catalogo | Fissa il modello Gemini |
 | `RATE_LIMIT_PER_MIN` | `20` | Richieste al minuto per IP (`0` disattiva) |
 | `AI_TIMEOUT_MS` | `9000` | Budget di una richiesta AI |
@@ -139,6 +139,15 @@ I nomi dei modelli cambiano spesso, e i provider li ritirano senza preavviso:
 per questo le function non si fidano dei valori di default. Se il modello non
 esiste piu' chiedono il catalogo e ripiegano da sole, e il modello che ha
 davvero risposto compare sotto il risultato dell'analisi.
+
+Attenzione a **come** arriva il ritiro: Groq lo annuncia con un **400**, non
+con un 404 (`model_decommissioned`, `model_not_supported`). Chi tocca quel
+riconoscimento si ricordi che guardare il solo 404 spegne tutto il ripiego, e
+il sintomo che si vede e' un innocuo "Il modello ha rifiutato la richiesta".
+
+I default qui sopra restano comunque da tenere vivi: il ripiego funziona, ma
+partire da un modello morto costa un giro, e con le foto da caricare due volte
+dentro i 9s della function quel giro puo' costare la risposta.
 
 ## Il sole
 

@@ -22,13 +22,24 @@ const TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || 9000);
 // preavviso. Se non esistono piu', la function chiede il catalogo e ripiega
 // da sola. Le env var, se impostate, hanno la precedenza.
 const MODEL_TEXT = process.env.GROQ_MODEL_TEXT || 'openai/gpt-oss-120b';
-const MODEL_VISION = process.env.GROQ_MODEL_VISION || 'meta-llama/llama-4-scout-17b-16e-instruct';
+// llama-4-scout, che stava qui, Groq l'ha spento il 17 luglio 2026 (e maverick
+// ancora prima). Il ripiego ora lo riconosce e cambia modello da solo, ma
+// partire da un modello morto costa comunque un giro: e con 3.6MB di foto da
+// caricare due volte, dentro i 9s di budget, quel giro puo' essere la
+// differenza fra una risposta e un timeout. Il default va tenuto vivo anche
+// se il ripiego esiste.
+const MODEL_VISION = process.env.GROQ_MODEL_VISION || 'qwen/qwen3.6-27b';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || '';
 
-// Ordine di gradimento, applicato a quello che il provider dichiara disponibile.
+// Ordine di gradimento, applicato a quello che il provider dichiara
+// disponibile. Sono preferenze, non certezze: il pool da ordinare arriva dal
+// catalogo dell'account, quindi un nome che qui e' rimasto indietro non fa
+// danno - semplicemente non trovera' niente da ordinare. Ma tenerli aggiornati
+// fa trovare prima quello giusto, e ogni tentativo in meno e' un secondo in
+// piu' dentro il budget.
 const MODEL_PREFERENCES = {
-  image: [/llama-4-scout/i, /llama-4-maverick/i, /llama-4/i, /vision/i, /qwen/i],
-  text: [/llama-3\.3-70b/i, /llama-3\.[12]-70b/i, /^openai\/gpt-oss/i, /llama-3/i]
+  image: [/qwen3\.\d/i, /qwen/i, /llama-4/i, /vision|multimodal/i],
+  text: [/^openai\/gpt-oss/i, /llama-3\.3-70b/i, /llama-3/i]
 };
 
 const POSITIVE_TTL_MS = 30 * 60 * 1000;  // "questo modello funziona"
