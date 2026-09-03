@@ -1,2 +1,5 @@
 node_modules/
 .netlify/
+
+# I worktree degli agenti: cartelle di lavoro temporanee, non codice del sito.
+.claude/worktrees/
