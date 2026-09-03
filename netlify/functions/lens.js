@@ -178,7 +178,7 @@ function normalizza(data) {
     risultati,
     // Non la media dei listini: la mediana, che non si fa trascinare dal
     // negozio fuori mercato di turno.
-    prezzi: S.statistichePrezzi(risultati.map(r => r.prezzo && r.prezzo.valore))
+    prezzi: S.statistichePrezzi(risultati.map(r => r.prezzo && r.prezzo.valuta === '€' ? r.prezzo.valore : null))
   };
 }
 
