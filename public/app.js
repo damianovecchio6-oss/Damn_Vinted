@@ -2200,6 +2200,12 @@ function sxCampioni(prove, mercato){
 // peso sposta il quantile solo quando le prove valgono davvero diverso.
 // Con pochi valori prendere l'elemento a indice intero salterebbe da un
 // annuncio all'altro invece di stare in mezzo.
+//
+// Il prezzo di quell'identita' e' che il primo e l'ultimo valore restano
+// ancorati a q=0 e q=1: un peso enorme su un estremo tira il quantile verso di
+// se' ma non se lo porta tutto, mentre in mezzo lo fa. E' voluto - quel bordo
+// e' l'unico posto dove un peso gonfiato potrebbe spostare la mediana da solo -
+// ma chi ci mette mano si aspetti questo e non la media pesata dei manuali.
 function sxQuantile(campioni, q){
   if(!campioni.length) return null;
   if(campioni.length===1) return campioni[0].valore;
