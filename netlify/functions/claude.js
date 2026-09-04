@@ -161,7 +161,7 @@ exports.handler = async (event) => {
     }
 
     if (!esito.ok) {
-      const corpo = { error: esito.error || messaggioDaMotivo(esito.motivo, kind) };
+      const corpo = { error: esito.error };
       if (esito.pesante) corpo.pesante = esito.pesante;
       if (esito.dettaglio) corpo.dettaglio = esito.dettaglio;
       return S.json(esito.status || 502, cors, corpo);
@@ -286,7 +286,7 @@ function testoGemini(data) {
 // esiste piu' e ha senso passare al prossimo; in ogni altro caso torna l'esito
 // definitivo, che sia una risposta o un errore su cui cambiare modello non
 // aiuterebbe.
-async function unTentativoGemini(richiesta, modello, cacheKey, deadline, memorizza) {
+async function unTentativoGemini(richiesta, modello, kind, deadline) {
   const res = await richiestaHttp({
     hostname: GEMINI_HOST,
     path: `/v1beta/models/${encodeURIComponent(modello)}:generateContent`,
@@ -300,43 +300,52 @@ async function unTentativoGemini(richiesta, modello, cacheKey, deadline, memoriz
   // Modello inesistente o ritirato: si prova il prossimo. Vale anche qui la
   // lezione di Groq - il ritiro non arriva sempre come 404.
   if (res.status === 404 || modelloSparito(res)) return null;
-  if (res.status === 429) return { ok: false, motivo: 'quota giornaliera esaurita' };
+  if (res.status === 429) {
+    return { ok: false, motivo: 'quota giornaliera esaurita', error: messaggioGemini('quota', kind) };
+  }
   if (res.status >= 400 || res.status === 0) {
     console.error(`Gemini ${res.status} su ${modello}: ${(res.body || '').slice(0, 300)}`);
-    return { ok: false, motivo: `HTTP ${res.status}` };
+    return { ok: false, motivo: `HTTP ${res.status}`, error: messaggioGemini('altro', kind) };
   }
 
   let data;
-  try { data = JSON.parse(res.body); } catch { return { ok: false, motivo: 'risposta non JSON' }; }
+  try { data = JSON.parse(res.body); }
+  catch { return { ok: false, motivo: 'risposta non JSON', error: messaggioGemini('altro', kind) }; }
   const text = testoGemini(data);
   if (!text) {
     // Succede quando il filtro di sicurezza blocca la risposta: e' un caso
     // reale su foto di persone, e cambiare modello non lo risolve.
     const stop = data.candidates && data.candidates[0] && data.candidates[0].finishReason;
     console.error(`Gemini ha risposto vuoto su ${modello} (finishReason: ${stop})`);
-    return { ok: false, motivo: `risposta vuota (${stop || 'ignoto'})` };
+    return { ok: false, motivo: `risposta vuota (${stop || 'ignoto'})`, error: messaggioGemini('vuota', kind) };
   }
-  // Il ripiego non si memorizza. Ricordarlo per mezz'ora vorrebbe dire restare
-  // su un nome cablato anche quando il catalogo, un secondo dopo, risponderebbe
-  // subito: cosi' invece la prossima richiesta torna a chiederglielo.
-  if (memorizza) S.cacheSet(cacheKey, modello);
   return { ok: true, text, model: modello, provider: 'gemini' };
 }
 
 async function tentaGemini(richiesta, kind, deadline) {
   const cacheKey = `gemini:model:${kind}`;
   const noto = resolvedModel(cacheKey);
-  if (noto === false) return { ok: false, motivo: 'nessun modello (in cache)' };
+  if (noto === false) {
+    return { ok: false, motivo: 'nessun modello (in cache)', error: messaggioNessunModello(kind) };
+  }
 
   const provati = [];
+  // memorizza dice se il nome che ha funzionato vale la pena ricordarlo. Sta
+  // qui e non dentro il tentativo perche' e' una proprieta' di DOVE viene il
+  // nome, non di come e' andata la chiamata: il tentativo non ha modo di
+  // saperlo, e passarglielo lo obbligava a portarsi dietro un flag e la chiave
+  // di cache che non usava per altro.
   const prova = async (lista, memorizza = true) => {
     for (const modello of lista) {
       if (!modello || provati.includes(modello)) continue;
       if (provati.length >= MAX_MODEL_ATTEMPTS) break;
       if (deadline - Date.now() < MIN_ATTEMPT_MS) break;
       provati.push(modello);
-      const esito = await unTentativoGemini(richiesta, modello, cacheKey, deadline, memorizza);
-      if (esito) return esito;
+      const esito = await unTentativoGemini(richiesta, modello, kind, deadline);
+      if (esito) {
+        if (esito.ok && memorizza) S.cacheSet(cacheKey, modello);
+        return esito;
+      }
     }
     return null;
   };
@@ -347,14 +356,16 @@ async function tentaGemini(richiesta, kind, deadline) {
   // Poi il catalogo, che resta chi sceglie: ma con un tetto sull'attesa, non
   // con mezzo budget in mano.
   if (!esito) esito = await prova(await listaGemini(deadline));
-  // E se il catalogo tace - Google oltre il tetto, o una lista vuota - si
-  // prova comunque il nome noto. Meglio un tentativo che un errore.
+  // E se il catalogo tace - Google oltre il tetto, o una lista vuota - si prova
+  // comunque il nome noto: meglio un tentativo che un errore. Ma non si
+  // memorizza, o resteremmo su un nome cablato per mezz'ora anche quando il
+  // catalogo, un secondo dopo, risponderebbe subito.
   if (!esito) esito = await prova([MODEL_GEMINI], false);
   if (esito) return esito;
 
   if (provati.length) S.cacheSet(cacheKey, false);
   console.error(`Nessun modello Gemini utilizzabile per "${kind}". Provati: ${provati.join(', ') || 'nessuno'}`);
-  return { ok: false, motivo: 'nessun modello utilizzabile' };
+  return { ok: false, motivo: 'nessun modello utilizzabile', error: messaggioNessunModello(kind) };
 }
 
 /* ============================= GROQ ============================= */
@@ -563,28 +574,27 @@ function erroreLeggibile(status, dettaglio) {
 }
 
 // Al client basta sapere che ora non si puo' fare e che vale la pena riprovare.
-// tentaGemini racconta sempre PERCHE' ha smesso, ma quel perche' finiva nel
-// nulla: solo tentaGroq riempiva esito.error, quindi con la sola chiave Gemini
-// il corpo usciva senza messaggio, il client non ne trovava uno e cadeva sul
-// ramo generico del 502 - "L'AI ci ha messo troppo. Riprova tra un momento."
-// Che e' falso due volte: niente e' andato in timeout, e riprovare subito con
-// una quota esaurita non serve a niente.
+// I due percorsi tornavano forme diverse: tentaGroq riempiva esito.error,
+// tentaGemini solo esito.motivo. Il chiamante non trovava un messaggio e
+// cadeva sul ramo generico del 502 - "L'AI ci ha messo troppo" - che dice una
+// cosa falsa. La cura non e' tradurre il motivo a valle con delle regex sulle
+// nostre stesse stringhe (basta riscrivere un motivo e la traduzione si stacca
+// in silenzio): e' che chi conosce la causa scriva subito tutte e due le cose.
+// motivo resta la nota tecnica per il log e per notaGemini, error e' la frase
+// che legge l'utente.
 //
-// I motivi sono parole nostre e non del provider, quindi si possono mostrare:
-// quello che non si mostra e' il testo grezzo di Google.
-function messaggioDaMotivo(motivo, kind) {
-  const m = String(motivo || '');
-  if (/quota/i.test(m)) {
+// Sono parole nostre e non del provider: il testo grezzo di Google non esce.
+function messaggioGemini(caso, kind) {
+  if (caso === 'quota') {
     return 'La quota giornaliera del servizio AI \u00e8 esaurita. Riprova domani, oppure configura una seconda chiave come riserva.';
   }
   // Il filtro di sicurezza scatta davvero sulle foto con delle persone, e
   // cambiare modello non lo aggira: l'unica mossa utile e' un'altra foto.
-  if (/vuota/i.test(m)) {
+  if (caso === 'vuota') {
     return kind === 'image'
       ? 'L\'AI non ha voluto rispondere su questa foto. Prova con un\'altra immagine, magari senza persone inquadrate.'
       : 'L\'AI ha risposto a vuoto. Riprova.';
   }
-  if (/nessun modello/i.test(m)) return messaggioNessunModello(kind);
   return kind === 'image'
     ? 'Analisi foto non disponibile in questo momento. Riprova tra qualche minuto.'
     : 'Servizio AI non disponibile in questo momento. Riprova tra qualche minuto.';

@@ -2613,6 +2613,17 @@ document.getElementById('historyList').addEventListener('click', e => {
 // questi bottoni non esistono al caricamento - le anteprime delle foto e le
 // righe dei risultati nascono dopo, e un giro di listener andrebbe rifatto a
 // ogni render.
+// Due cose che sembrano cerimonia e non lo sono, prima che qualcuno le tolga.
+//
+// Le voci sono scritte a mano invece di risolvere el.dataset.az su window: da
+// un data-az arriverebbe qualunque nome globale, e in questa pagina finisce
+// nel DOM anche testo che viene dal modello e da SerpApi. Questo elenco e' la
+// lista di cio' che un attributo puo' far partire.
+//
+// E ogni voce e' una arrow, non la funzione stessa: il dispatcher chiama
+// azione(elemento, argomento), e passare quei due parametri a una funzione con
+// parametri opzionali le cambia il senso - toRicerca(ipotesi) si ritroverebbe
+// un elemento DOM al posto dell'ipotesi.
 const AZIONI = {
   analyzePhoto:        () => analyzePhoto(),
   identificaProdotto:  () => identificaProdotto(),
