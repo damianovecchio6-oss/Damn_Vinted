@@ -1,9 +1,14 @@
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' blob: data: https://serpapi.com https://*.gstatic.com https://*.googleusercontent.com https://*.ggpht.com; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' blob: data: https://serpapi.com https://*.gstatic.com https://*.googleusercontent.com https://*.ggpht.com; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'
   Referrer-Policy: strict-origin-when-cross-origin
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+
+# script-src non ha 'unsafe-inline' e non deve riprenderlo: tutto lo script sta
+# in public/app.js e i bottoni passano da data-az, non da onclick. style-src ce
+# l'ha ancora perche' nel markup ci sono attributi style=, che quel permesso lo
+# richiedono comunque.
 
 # Le foto passano dal file picker di sistema, non da getUserMedia: negare la
 # camera qui non toglie niente all'app.

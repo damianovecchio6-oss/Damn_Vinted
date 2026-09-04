@@ -135,7 +135,7 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
   check('i link escono con noopener', (await page.evaluate(() => document.querySelector('#rLens a').rel)).includes('noopener'));
 
   console.log('\n-- i prezzi trovati entrano nella stima --');
-  await page.click('button[onclick="usaLensPerPrezzo()"]');
+  await page.click('button[data-az="usaLensPerPrezzo"]');
   check('il nome prodotto finisce nel campo', (await page.inputValue('#pNome')).includes('Levis Trucker'), await page.inputValue('#pNome'));
   aiPost = [];
   await page.click('#btnP');

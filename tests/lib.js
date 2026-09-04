@@ -46,7 +46,16 @@ function serviSito(porta) {
     const richiesto = req.url === '/' ? '/index.html' : req.url.split('?')[0];
     const completo = path.join(SITO, richiesto);
     if (!completo.startsWith(SITO) || !fs.existsSync(completo)) { res.writeHead(404); return res.end('no'); }
-    res.writeHead(200, { 'Content-Type': richiesto.endsWith('.html') ? 'text/html' : 'text/plain' });
+    // Il tipo giusto per i .js non e' pignoleria: servito come text/plain, uno
+    // <script src> viene rifiutato dal browser appena c'e' un nosniff di mezzo,
+    // e in produzione public/_headers il nosniff ce l'ha. Meglio che la suite
+    // giri nelle stesse condizioni del sito vero.
+    const tipo = richiesto.endsWith('.html') ? 'text/html'
+      : richiesto.endsWith('.js') ? 'text/javascript'
+      : richiesto.endsWith('.css') ? 'text/css'
+      : richiesto.endsWith('.svg') ? 'image/svg+xml'
+      : 'text/plain';
+    res.writeHead(200, { 'Content-Type': tipo });
     res.end(fs.readFileSync(completo));
   });
   return new Promise(r => server.listen(porta, () => r(server)));

@@ -9,7 +9,8 @@ tutto il giro da solo, dalle foto al prezzo. Sito statico + tre Netlify
 Function.
 
 ```
-public/index.html             tutta l'interfaccia (markup, stile, script)
+public/index.html             il markup e lo stile dell'interfaccia
+public/app.js                 tutto lo script della pagina, fuori da index.html
 public/_headers               header di sicurezza (CSP, ecc.)
 public/img/                   i disegni: il sole e la versione sole+luna
 netlify/functions/claude.js   proxy verso i modelli AI (Groq / Gemini)
@@ -28,7 +29,9 @@ piccolo: il click che il browser sintetizza dopo un tocco a volte non arriva, e
 col solo mouse quel buco non si vede.
 
 Il sito non ha build ne' dipendenze a runtime: `public/index.html` si apre e
-funziona. Il publish dir e' `public/` e non la root del repo, cosi' il sorgente
+funziona, anche da disco - `app.js` e' linkato con un path relativo apposta,
+perche' con `/app.js` da `file://` il browser cercherebbe nella radice del
+filesystem. Il publish dir e' `public/` e non la root del repo, cosi' il sorgente
 delle function e i test non finiscono serviti come file statici.
 
 ## Test
@@ -38,7 +41,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-534 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+538 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -336,6 +339,32 @@ Che la guardia sia legata al lavoro vero e non appesa sempre non e' un
 dettaglio: una che scatta a vuoto insegna a rispondere senza leggere, proprio
 la volta che contava. Tornare sulla scheda mentre il giro scrive non e'
 perderlo di vista, ed e' l'unico caso in cui non si chiede niente.
+
+## Perche' lo script sta in un file suo
+
+`public/index.html` non contiene una riga di JavaScript: nessun blocco
+`<script>`, nessun `onclick`. Tutto sta in `public/app.js`, e i bottoni portano
+un `data-az` che un solo ascoltatore delegato traduce in una chiamata.
+
+Non e' ordine per l'ordine: e' l'unica strada per cui `public/_headers` puo'
+dire **`script-src 'self'`** senza `'unsafe-inline'`. Quel permesso non vale
+solo per il codice che ci abbiamo messo noi - vale per qualunque script inline
+finisca nella pagina, compreso quello iniettato sfruttando un bug altrove. Ed
+e' tutto o niente: bastava un `onclick` rimasto indietro per doverlo
+riconcedere, e con lui la protezione se ne andava per intero.
+
+L'ascoltatore e' delegato e non uno per bottone perche' meta' di questi bottoni
+non esistono al caricamento: le anteprime delle foto e le righe dei risultati
+nascono dopo, e un giro di `addEventListener` andrebbe rifatto a ogni render.
+
+`style-src` invece `'unsafe-inline'` ce l'ha ancora, e non e' una svista: nel
+markup ci sono attributi `style=`, che quel permesso lo richiedono comunque.
+Toglierlo vorrebbe dire spostare anche quelli, ed e' un lavoro diverso.
+
+A tenerlo fermo c'e' un controllo in `tests/ui.js` che legge i file invece
+della pagina, di proposito: la CSP vera non passa dal server dei test, quindi
+una violazione la suite non la vedrebbe. Il controllo guarda la causa - codice
+inline nel sorgente - non il sintomo.
 
 ## Deploy su Netlify
 

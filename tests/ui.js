@@ -179,6 +179,32 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
   check('storico vuoto: lo dice invece di far finta di niente',
     (await page.textContent('#toast')).includes('vuoto'), await page.textContent('#toast'));
 
+  // -- niente codice inline, o la CSP stretta non regge --
+  // Questo si legge dai file e non dalla pagina apposta: la CSP vera non passa
+  // da serviSito, quindi una violazione qui la suite non la vedrebbe mai. Il
+  // controllo e' sulla causa - inline nel sorgente - non sul sintomo.
+  console.log('\n-- niente codice inline --');
+  const markup = fs.readFileSync(L.SITO + '/index.html', 'utf8');
+  const script = fs.readFileSync(L.SITO + '/app.js', 'utf8');
+  const headers = fs.readFileSync(L.SITO + '/_headers', 'utf8');
+
+  const handlerInline = /\son[a-z]+\s*=\s*["']/gi;
+  check('nessun handler inline nel markup', !handlerInline.test(markup),
+    (markup.match(handlerInline) || []).slice(0, 5));
+  // Anche l'HTML generato a runtime conta: e' markup come l'altro, solo scritto
+  // piu' tardi.
+  const generati = script.match(/\son(click|change|input|submit)\s*=\s*["']/gi) || [];
+  check('nessun handler inline nell HTML generato da app.js', generati.length === 0, generati);
+  check('nessun blocco <script> senza src', !/<script(?![^>]*\ssrc=)[^>]*>/i.test(markup),
+    (markup.match(/<script[^>]*>/gi) || []));
+  // Solo la riga della direttiva, non tutto il file: in _headers ci sono anche
+  // i commenti, e uno che spiega perche' unsafe-inline non c'e' contiene quella
+  // parola come qualunque altro testo.
+  const csp = (headers.match(/^\s*Content-Security-Policy:.*$/m) || [''])[0];
+  const scriptSrc = (csp.match(/script-src[^;]*/) || [''])[0];
+  check('la CSP non concede unsafe-inline agli script',
+    scriptSrc === "script-src 'self'", scriptSrc);
+
   console.log('\n-- errori JS accumulati --');
   check('nessun errore JS in tutta la sessione', errors.length === 0, errors);
 

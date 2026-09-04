@@ -256,7 +256,7 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
   check('con una foto sola resta a 1600px (etichetta leggibile)', lato === 1600, lato);
 
   console.log('\n-- passaggio ad annuncio --');
-  await page.click('button[onclick="toAnnuncio()"]');
+  await page.click('button[data-az="toAnnuncio"]');
   await page.waitForTimeout(200);
   check('il tipo finisce nel campo nome', await page.inputValue('#aNome') === 'Giacca');
   check('"Non identificato" non finisce nel campo marca', await page.inputValue('#aMarca') === '');
