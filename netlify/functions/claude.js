@@ -161,7 +161,7 @@ exports.handler = async (event) => {
     }
 
     if (!esito.ok) {
-      const corpo = { error: esito.error };
+      const corpo = { error: esito.error || messaggioDaMotivo(esito.motivo, kind) };
       if (esito.pesante) corpo.pesante = esito.pesante;
       if (esito.dettaglio) corpo.dettaglio = esito.dettaglio;
       return S.json(esito.status || 502, cors, corpo);
@@ -371,9 +371,21 @@ const GROQ_HOST = 'api.groq.com';
 //   qwen3   -> reasoning_effort 'none' lo spegne davvero
 //   gpt-oss -> accetta solo low|medium|high, 'none' e' un 400
 //   altri   -> non si manda niente, l'unica cosa sempre sicura
+//
+// Di gpt-oss sapevamo tutto questo e non gli mandavamo comunque niente, cioe'
+// lo lasciavamo ragionare al suo default su OGNI chiamata di testo - il piano
+// dell'agente, il raffinamento, la stima prezzo e soprattutto il rapporto
+// finale, che e' la chiamata piu' esposta ai 9s della function. 'low' e' il
+// minimo che accetta, e su un compito dove il ragionamento serve poco - leggere
+// una lista di annunci e riassumerla - e' tempo tolto all'attesa, non qualita'
+// tolta alla risposta.
+//
+// Se un giorno smettesse di accettarlo, la rete c'e' gia': un 400 che nomina
+// reasoning_effort fa ripartire la richiesta senza.
 // reasoning_format:'hidden' non servirebbe: nasconde il ragionamento ma il
 // modello lo fa lo stesso, e i token se li prende comunque.
 const QWEN3 = /qwen3/i;
+const GPT_OSS = /gpt-oss/i;
 
 function corpoGroq(richiesta, modello) {
   let content;
@@ -394,7 +406,10 @@ function corpoGroq(richiesta, modello) {
   // JSON mode: solo per il testo. Sul multimodale di Groq non e' garantito,
   // li' ci affidiamo al parsing tollerante lato client.
   if (richiesta.json && !richiesta.images.length) out.response_format = { type: 'json_object' };
-  if (QWEN3.test(modello) && !richiesta.senzaRagionamento) out.reasoning_effort = 'none';
+  if (!richiesta.senzaRagionamento) {
+    if (QWEN3.test(modello)) out.reasoning_effort = 'none';
+    else if (GPT_OSS.test(modello)) out.reasoning_effort = 'low';
+  }
   return out;
 }
 
@@ -548,6 +563,33 @@ function erroreLeggibile(status, dettaglio) {
 }
 
 // Al client basta sapere che ora non si puo' fare e che vale la pena riprovare.
+// tentaGemini racconta sempre PERCHE' ha smesso, ma quel perche' finiva nel
+// nulla: solo tentaGroq riempiva esito.error, quindi con la sola chiave Gemini
+// il corpo usciva senza messaggio, il client non ne trovava uno e cadeva sul
+// ramo generico del 502 - "L'AI ci ha messo troppo. Riprova tra un momento."
+// Che e' falso due volte: niente e' andato in timeout, e riprovare subito con
+// una quota esaurita non serve a niente.
+//
+// I motivi sono parole nostre e non del provider, quindi si possono mostrare:
+// quello che non si mostra e' il testo grezzo di Google.
+function messaggioDaMotivo(motivo, kind) {
+  const m = String(motivo || '');
+  if (/quota/i.test(m)) {
+    return 'La quota giornaliera del servizio AI \u00e8 esaurita. Riprova domani, oppure configura una seconda chiave come riserva.';
+  }
+  // Il filtro di sicurezza scatta davvero sulle foto con delle persone, e
+  // cambiare modello non lo aggira: l'unica mossa utile e' un'altra foto.
+  if (/vuota/i.test(m)) {
+    return kind === 'image'
+      ? 'L\'AI non ha voluto rispondere su questa foto. Prova con un\'altra immagine, magari senza persone inquadrate.'
+      : 'L\'AI ha risposto a vuoto. Riprova.';
+  }
+  if (/nessun modello/i.test(m)) return messaggioNessunModello(kind);
+  return kind === 'image'
+    ? 'Analisi foto non disponibile in questo momento. Riprova tra qualche minuto.'
+    : 'Servizio AI non disponibile in questo momento. Riprova tra qualche minuto.';
+}
+
 function messaggioNessunModello(kind) {
   return kind === 'image'
     ? 'Nessun modello disponibile per l\'analisi foto in questo momento. Riprova tra qualche minuto.'

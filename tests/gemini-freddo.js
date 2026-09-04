@@ -11,7 +11,7 @@ const { EventEmitter } = require('events');
 // Gira in un file suo perche' serve un catalogo LENTO e una cache vuota, e
 // tutte e due sono stato del processo: dentro tests/gemini.js il catalogo e'
 // gia' in cache dai controlli precedenti e il guasto non si vedrebbe.
-let latenzaCatalogo = 0;
+let latenzaCatalogo = 0, quotaFinita = false, vuota = false;
 let partite = [];   // cosa e' partito, e a che punto del budget
 
 const CATALOGO = { models: [
@@ -31,9 +31,14 @@ https.request = function (opts, cb) {
     partite.push({ cosa: catalogo ? 'catalogo' : 'foto', modello, quando: Date.now() - t0 });
     setTimeout(() => {
       const res = new EventEmitter();
-      res.statusCode = 200; res.setEncoding = () => {};
+      res.setEncoding = () => {};
+      let corpo;
+      if (catalogo) { res.statusCode = 200; corpo = JSON.stringify(CATALOGO); }
+      else if (quotaFinita) { res.statusCode = 429; corpo = JSON.stringify({ error: { message: 'quota' } }); }
+      else if (vuota) { res.statusCode = 200; corpo = JSON.stringify({ candidates: [{ finishReason: 'SAFETY', content: { parts: [] } }] }); }
+      else { res.statusCode = 200; corpo = RISPOSTA; }
       cb(res);
-      res.emit('data', catalogo ? JSON.stringify(CATALOGO) : RISPOSTA);
+      res.emit('data', corpo);
       res.emit('end');
     }, catalogo ? latenzaCatalogo : 0);
     return req;
@@ -82,6 +87,24 @@ async function analizza(ip) {
   r = await analizza('7.7.7.2');
   check('sceglie il flash piu recente, non il default',
     JSON.parse(r.body).model === 'gemini-3.7-flash', JSON.parse(r.body).model);
+
+  // Senza chiave Groq, un fallimento di Gemini non ha ripieghi: quello che
+  // resta e' il messaggio, ed e' l'unica cosa che l'utente vedra'.
+  console.log('\n-- quando Gemini dice di no, si dice cosa e successo --');
+  quotaFinita = true;
+  r = await analizza('7.7.7.3');
+  let d = JSON.parse(r.body);
+  check('non risponde 200', r.statusCode !== 200, r.statusCode);
+  check('un messaggio c e', typeof d.error === 'string' && d.error.length > 0, d);
+  check('e parla di quota, non di tempo scaduto',
+    /quota/i.test(d.error) && !/troppo/i.test(d.error), d.error);
+
+  quotaFinita = false; vuota = true;
+  r = await analizza('7.7.7.4');
+  d = JSON.parse(r.body);
+  check('foto rifiutata dal filtro: lo dice, e suggerisce un altra foto',
+    /foto|immagine/i.test(d.error) && !/troppo/i.test(d.error), d.error);
+  vuota = false;
 
   console.log(`\n${pass} passati, ${fail} falliti`);
   process.exit(fail ? 1 : 0);

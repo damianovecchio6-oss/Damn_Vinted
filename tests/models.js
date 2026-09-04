@@ -174,8 +174,32 @@ async function post(ip, payload) {
 
   plan = [OK]; calls = []; corpi = [];
   r = await post('1.0.2.2', { type: 'text', prompt: 'ciao' });
-  check('ma non a gpt-oss, che su "none" risponderebbe 400',
-    corpi[0].reasoning_effort === undefined, JSON.stringify(corpi[0].reasoning_effort));
+  check('e a un modello che non ragiona non si manda niente',
+    corpi[0].reasoning_effort === undefined,
+    JSON.stringify({ modello: corpi[0].model, effort: corpi[0].reasoning_effort }));
+
+  // Questo controllo prima diceva "ma non a gpt-oss" e non ci arrivava
+  // nemmeno: quella chiamata finiva su llama-scout, il modello di testo
+  // rimasto in cache dai controlli sopra, quindi verificava un'altra cosa da
+  // quella scritta nel nome. Qui gpt-oss si raggiunge davvero, facendo cadere
+  // il modello in cache.
+  //
+  // E il fatto da difendere e' piu' stretto di "non mandargli niente": a
+  // gpt-oss non si manda 'none', che sarebbe un 400. 'low' - il minimo che
+  // accetta - gli toglie il ragionamento a effort pieno prima del JSON, che
+  // sul rapporto dell'agente e' la differenza fra entrare nei 9s e non
+  // entrarci.
+  catalog = ['openai/gpt-oss-120b'];
+  plan = [DISMESSO, OK]; calls = []; corpi = [];
+  r = await post('1.0.2.9', { type: 'text', prompt: 'ciao' });
+  const suGptOss = corpi.find(c => /gpt-oss/.test(c.model || ''));
+  check('la richiesta arriva davvero a gpt-oss', !!suGptOss, calls);
+  check('a gpt-oss si dice di ragionare poco, non di non ragionare',
+    suGptOss && suGptOss.reasoning_effort === 'low',
+    JSON.stringify(suGptOss && suGptOss.reasoning_effort));
+  check('e mai "none", che su gpt-oss sarebbe un 400',
+    !suGptOss || suGptOss.reasoning_effort !== 'none',
+    JSON.stringify(suGptOss && suGptOss.reasoning_effort));
 
   // I provider spostano questi parametri da un modello all'altro: se un
   // giorno smette di accettarlo, non deve cadere tutta l'analisi foto.
