@@ -11,7 +11,7 @@ const { EventEmitter } = require('events');
 // Gira in un file suo perche' serve un catalogo LENTO e una cache vuota, e
 // tutte e due sono stato del processo: dentro tests/gemini.js il catalogo e'
 // gia' in cache dai controlli precedenti e il guasto non si vedrebbe.
-let latenzaCatalogo = 0, quotaFinita = false, vuota = false;
+let latenzaCatalogo = 0, quotaFinita = false, vuota = false, pieni = [];
 let partite = [];   // cosa e' partito, e a che punto del budget
 
 const CATALOGO = { models: [
@@ -28,6 +28,7 @@ https.request = function (opts, cb) {
   req.end = function () {
     const catalogo = /^\/v1beta\/models\?/.test(opts.path);
     const modello = catalogo ? null : decodeURIComponent(opts.path.split('/').pop().split(':')[0]);
+    const modelloChiesto = modello;
     partite.push({ cosa: catalogo ? 'catalogo' : 'foto', modello, quando: Date.now() - t0 });
     setTimeout(() => {
       const res = new EventEmitter();
@@ -35,6 +36,11 @@ https.request = function (opts, cb) {
       let corpo;
       if (catalogo) { res.statusCode = 200; corpo = JSON.stringify(CATALOGO); }
       else if (quotaFinita) { res.statusCode = 429; corpo = JSON.stringify({ error: { message: 'quota' } }); }
+      else if (pieni.includes(modelloChiesto)) {
+        res.statusCode = 503;
+        corpo = JSON.stringify({ error: { code: 503, status: 'UNAVAILABLE',
+          message: 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.' } });
+      }
       else if (vuota) { res.statusCode = 200; corpo = JSON.stringify({ candidates: [{ finishReason: 'SAFETY', content: { parts: [] } }] }); }
       else { res.statusCode = 200; corpo = RISPOSTA; }
       cb(res);
@@ -105,6 +111,30 @@ async function analizza(ip) {
   check('foto rifiutata dal filtro: lo dice, e suggerisce un altra foto',
     /foto|immagine/i.test(d.error) && !/troppo/i.test(d.error), d.error);
   vuota = false;
+
+  // Il guasto visto sul sito: gemini-3.8-flash rispondeva 503 "high demand,
+  // usually temporary" e la function abbandonava Gemini intero, quando nel
+  // catalogo c'erano altri modelli liberi. Un modello pieno non e' un modello
+  // rotto, ed e' il caso in cui cambiare modello e' l'unica cosa che funziona.
+  console.log('\n-- un modello pieno non ferma tutto --');
+  pieni = ['gemini-3.8-flash'];
+  r = await analizza('7.7.7.5');
+  d = JSON.parse(r.body);
+  check('non si arrende al primo 503', r.statusCode === 200, r.statusCode + ' ' + String(r.body).slice(0, 120));
+  check('passa al modello successivo del catalogo', d.model && d.model !== 'gemini-3.8-flash', d.model);
+
+  // E se sono pieni tutti: lo si dice per quello che e', e soprattutto non si
+  // scrive in cache "non esiste nessun modello" - fra cinque minuti sarebbe
+  // falso, e intanto ogni richiesta si prenderebbe la bugia senza provare.
+  pieni = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-2.5-flash'];
+  r = await analizza('7.7.7.6');
+  d = JSON.parse(r.body);
+  check('tutti pieni: lo dice come sovraccarico, non come "nessun modello"',
+    /sovraccarico/i.test(d.error || ''), d.error);
+  pieni = [];
+  r = await analizza('7.7.7.7');
+  check('e non resta avvelenata la cache: subito dopo funziona',
+    r.statusCode === 200, r.statusCode + ' ' + String(r.body).slice(0, 120));
 
   console.log(`\n${pass} passati, ${fail} falliti`);
   process.exit(fail ? 1 : 0);

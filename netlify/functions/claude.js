@@ -300,6 +300,11 @@ async function unTentativoGemini(richiesta, modello, kind, deadline) {
   // Modello inesistente o ritirato: si prova il prossimo. Vale anche qui la
   // lezione di Groq - il ritiro non arriva sempre come 404.
   if (res.status === 404 || modelloSparito(res)) return null;
+  // Pieno, non rotto: il prossimo del catalogo probabilmente risponde.
+  if (sovraccarico(res)) {
+    console.error(`Gemini ${res.status} su ${modello}: sovraccarico, provo il prossimo`);
+    return { pieno: true };
+  }
   if (res.status === 429) {
     return { ok: false, motivo: 'quota giornaliera esaurita', error: messaggioGemini('quota', kind) };
   }
@@ -330,6 +335,7 @@ async function tentaGemini(richiesta, kind, deadline) {
   }
 
   const provati = [];
+  let pieni = false;
   // memorizza dice se il nome che ha funzionato vale la pena ricordarlo. Sta
   // qui e non dentro il tentativo perche' e' una proprieta' di DOVE viene il
   // nome, non di come e' andata la chiamata: il tentativo non ha modo di
@@ -342,6 +348,9 @@ async function tentaGemini(richiesta, kind, deadline) {
       if (deadline - Date.now() < MIN_ATTEMPT_MS) break;
       provati.push(modello);
       const esito = await unTentativoGemini(richiesta, modello, kind, deadline);
+      // Pieno: non e' un esito, e' un "prova il prossimo" che pero' va
+      // ricordato, perche' cambia cosa diremo se finiscono tutti.
+      if (esito && esito.pieno) { pieni = true; continue; }
       if (esito) {
         if (esito.ok && memorizza) S.cacheSet(cacheKey, modello);
         return esito;
@@ -363,9 +372,14 @@ async function tentaGemini(richiesta, kind, deadline) {
   if (!esito) esito = await prova([MODEL_GEMINI], false);
   if (esito) return esito;
 
-  if (provati.length) S.cacheSet(cacheKey, false);
-  console.error(`Nessun modello Gemini utilizzabile per "${kind}". Provati: ${provati.join(', ') || 'nessuno'}`);
-  return { ok: false, motivo: 'nessun modello utilizzabile', error: messaggioNessunModello(kind) };
+  // Se erano pieni, non si scrive in cache che non esiste nessun modello: fra
+  // cinque minuti sara' falso, e intanto ogni richiesta si prenderebbe quella
+  // bugia senza nemmeno provare. Un sovraccarico dura quanto dura.
+  if (provati.length && !pieni) S.cacheSet(cacheKey, false);
+  console.error(`Nessun modello Gemini utilizzabile per "${kind}"${pieni ? ' (erano tutti sovraccarichi)' : ''}. Provati: ${provati.join(', ') || 'nessuno'}`);
+  return pieni
+    ? { ok: false, motivo: 'tutti i modelli sovraccarichi', error: messaggioGemini('pieno', kind) }
+    : { ok: false, motivo: 'nessun modello utilizzabile', error: messaggioNessunModello(kind) };
 }
 
 /* ============================= GROQ ============================= */
@@ -590,6 +604,9 @@ function messaggioGemini(caso, kind) {
   }
   // Il filtro di sicurezza scatta davvero sulle foto con delle persone, e
   // cambiare modello non lo aggira: l'unica mossa utile e' un'altra foto.
+  if (caso === 'pieno') {
+    return 'Il servizio AI \u00e8 sovraccarico in questo momento. Riprova fra un minuto: non \u00e8 un problema del sito.';
+  }
   if (caso === 'vuota') {
     return kind === 'image'
       ? 'L\'AI non ha voluto rispondere su questa foto. Prova con un\'altra immagine, magari senza persone inquadrate.'
@@ -628,6 +645,22 @@ function dettaglioNessunModello(kind, provati) {
 // ripiego: era il codice di stato a tenerlo spento.
 const MODELLO_SPARITO = /does not exist|model_not_found|model_decommissioned|decommissioned|model_not_supported|not supported by provider|no longer supported|has been deprecated/i;
 
+// Un modello sovraccarico non e' un modello sparito, e non e' nemmeno un
+// guasto nostro: e' il provider che dice "questo adesso e' pieno, riprova".
+// Gemini lo manda come 503 UNAVAILABLE ("This model is currently experiencing
+// high demand"), Groq allo stesso modo quando una famiglia e' satura.
+//
+// Finiva nel ramo generico degli errori, che smette di provare: bastava che il
+// flash piu' recente fosse pieno per far abbandonare Gemini intero e ripiegare
+// su Groq, quando nel catalogo c'erano altri tre modelli liberi. Ed e' proprio
+// il caso in cui cambiare modello funziona - e' l'unica cosa che funziona.
+function sovraccarico(res) {
+  if (!res) return false;
+  if (res.status === 503) return true;
+  if (res.status !== 500 && res.status !== 502) return false;
+  return /overload|high demand|unavailable|capacity|try again later/i.test(res.body || '');
+}
+
 function modelloSparito(res) {
   if (!res) return false;
   if (res.status !== 404 && res.status !== 400) return false;
@@ -663,6 +696,7 @@ const TROPPO_GRANDE = /too large|too big|maximum (?:allowed )?size|size limit|en
 
 function serveUnAltroModello(res, kind) {
   if (modelloSparito(res)) return true;
+  if (sovraccarico(res)) return true;
   if (kind !== 'image' || !res || res.status !== 400) return false;
   if (TROPPO_GRANDE.test(res.body || '')) return false;
   return /image|vision|multimodal|modality/i.test(res.body || '');
