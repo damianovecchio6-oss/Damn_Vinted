@@ -200,9 +200,14 @@ const GEMINI_HOST = 'generativelanguage.googleapis.com';
 // deploy. Groq questo problema non l'ha mai avuto: parte da un default e chiede
 // il catalogo solo se quel modello non va. Ora fanno la stessa cosa.
 //
-// Un nome cablato qui non e' una scommessa: se un giorno sparisce si paga UN
-// tentativo e si ripiega sul catalogo, che e' esattamente la rete di sicurezza
-// per cui esiste.
+// Il rimedio non e' smettere di chiedere il catalogo: e' smettere di
+// aspettarlo senza un tetto. La lista di Google normalmente arriva in poche
+// centinaia di ms, e i 4s erano il caso peggiore travestito da caso normale.
+// Con un tetto basso il catalogo continua a decidere quasi sempre - quindi la
+// regola "prendi il flash piu' recente" resta viva - e quando non ce la fa si
+// riparte da un nome noto invece di rispondere "nessun modello", che e' un
+// errore dove bastava un tentativo.
+const CATALOG_WAIT_MS = 1200;
 const MODEL_GEMINI = 'gemini-2.5-flash';
 
 const NON_TESTUALI = /embedding|aqa|imagen|veo|tts|native-audio|live-|image-generation/i;
@@ -226,7 +231,7 @@ function listaGemini(deadline) {
   const cached = S.cacheGet('gemini:catalog', CATALOG_TTL_MS);
   if (cached) return Promise.resolve(cached);
 
-  const budget = Math.min(4000, deadline - Date.now());
+  const budget = Math.min(CATALOG_WAIT_MS, deadline - Date.now());
   if (budget < 500) return Promise.resolve([]);
 
   return richiestaHttp({
@@ -281,7 +286,7 @@ function testoGemini(data) {
 // esiste piu' e ha senso passare al prossimo; in ogni altro caso torna l'esito
 // definitivo, che sia una risposta o un errore su cui cambiare modello non
 // aiuterebbe.
-async function unTentativoGemini(richiesta, modello, cacheKey, deadline) {
+async function unTentativoGemini(richiesta, modello, cacheKey, deadline, memorizza) {
   const res = await richiestaHttp({
     hostname: GEMINI_HOST,
     path: `/v1beta/models/${encodeURIComponent(modello)}:generateContent`,
@@ -311,7 +316,10 @@ async function unTentativoGemini(richiesta, modello, cacheKey, deadline) {
     console.error(`Gemini ha risposto vuoto su ${modello} (finishReason: ${stop})`);
     return { ok: false, motivo: `risposta vuota (${stop || 'ignoto'})` };
   }
-  S.cacheSet(cacheKey, modello);
+  // Il ripiego non si memorizza. Ricordarlo per mezz'ora vorrebbe dire restare
+  // su un nome cablato anche quando il catalogo, un secondo dopo, risponderebbe
+  // subito: cosi' invece la prossima richiesta torna a chiederglielo.
+  if (memorizza) S.cacheSet(cacheKey, modello);
   return { ok: true, text, model: modello, provider: 'gemini' };
 }
 
@@ -321,24 +329,27 @@ async function tentaGemini(richiesta, kind, deadline) {
   if (noto === false) return { ok: false, motivo: 'nessun modello (in cache)' };
 
   const provati = [];
-  const prova = async (lista) => {
+  const prova = async (lista, memorizza = true) => {
     for (const modello of lista) {
       if (!modello || provati.includes(modello)) continue;
       if (provati.length >= MAX_MODEL_ATTEMPTS) break;
       if (deadline - Date.now() < MIN_ATTEMPT_MS) break;
       provati.push(modello);
-      const esito = await unTentativoGemini(richiesta, modello, cacheKey, deadline);
+      const esito = await unTentativoGemini(richiesta, modello, cacheKey, deadline, memorizza);
       if (esito) return esito;
     }
     return null;
   };
 
-  // Prima quello che sappiamo gia' senza chiedere niente a nessuno: l'env, il
-  // modello che ha funzionato poco fa, il default.
-  let esito = await prova([GEMINI_MODEL, noto, MODEL_GEMINI]);
-  // Il catalogo si paga solo se sono spariti tutti - cioe' quasi mai, e non
-  // sulla richiesta di chi sta aspettando l'analisi delle sue foto.
+  // Prima quello che sappiamo gia' senza chiedere niente a nessuno: su
+  // un'istanza calda il catalogo non si tocca proprio.
+  let esito = await prova([GEMINI_MODEL, noto]);
+  // Poi il catalogo, che resta chi sceglie: ma con un tetto sull'attesa, non
+  // con mezzo budget in mano.
   if (!esito) esito = await prova(await listaGemini(deadline));
+  // E se il catalogo tace - Google oltre il tetto, o una lista vuota - si
+  // prova comunque il nome noto. Meglio un tentativo che un errore.
+  if (!esito) esito = await prova([MODEL_GEMINI], false);
   if (esito) return esito;
 
   if (provati.length) S.cacheSet(cacheKey, false);

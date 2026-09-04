@@ -10,6 +10,7 @@ const SUITE = [
   ['modelli Groq', 'models.js', 'fallback, cache a scadenza, errori upstream'],
   ['modelli Gemini', 'gemini.js', 'scelta provider, formato richiesta, ripieghi'],
   ['Gemini assente', 'gemini-assente.js', 'senza chiave: si ripiega, e si dice perche'],
+  ['Gemini a freddo', 'gemini-freddo.js', 'il catalogo non si mangia il budget delle foto'],
   ['ricerca immagine', 'lens.js', 'multipart SerpApi, prezzi, errori'],
   ['ricerca online', 'ricerca.js', 'query, prezzi negli snippet, cache, errori'],
   ['interfaccia', 'ui.js', 'accessibilita, doppio invio, storico'],
