@@ -644,6 +644,7 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
     <div class="card">
       <div class="ct">🗂️ Storico Annunci</div>
       <div style="font-size:12px;color:var(--mu);margin-bottom:14px">Salvato solo su questo dispositivo — non è sincronizzato altrove.</div>
+      <button class="btn" id="btnExportStorico" style="margin-bottom:8px" onclick="esportaStorico()">⬇ Esporta lo storico</button>
       <button class="btn" style="background:transparent;border:1px solid var(--re);color:var(--re)" onclick="clearHistoryConfirm()">🗑️ Cancella tutto lo storico</button>
     </div>
     <div id="historyList"></div>
@@ -3082,6 +3083,47 @@ function clearHistoryConfirm(){
     renderHistory();
     toast('🗑️ Storico cancellato');
   }
+}
+
+// Lo storico e' l'unica traccia del lavoro fatto e vive solo nel localStorage
+// di questo browser: basta un "cancella dati del sito" e mesi di annunci, stime
+// e consigli spariscono senza che da nessuna parte ne esista una copia. Questo
+// e' il modo di portarli via. Le voci escono intere, miniatura compresa: e'
+// dalla foto che l'utente riconosce di quale capo si trattava.
+function esportaStorico(){
+  const voci = loadHistory();
+  if(!voci.length){ toast('Storico vuoto: non c’è niente da esportare'); return; }
+  const ora = new Date();
+  const due = n => String(n).padStart(2, '0');
+  // Nel nome ci va anche l'ora, per due motivi. La sola data farebbe finire due
+  // esportazioni dello stesso giorno sullo stesso nome, e nella cartella dei
+  // download resterebbe solo l'ultima. E l'ora e' quella locale, la stessa che
+  // fmtDate mostra sotto ogni voce: con toISOString un export fatto in Italia
+  // dopo mezzanotte usciva col nome del giorno prima, e chi cerca "quello di
+  // stasera" non lo riconosce piu'.
+  const quando = ora.getFullYear() + '-' + due(ora.getMonth()+1) + '-' + due(ora.getDate()) +
+                 '_' + due(ora.getHours()) + '-' + due(ora.getMinutes()) + '-' + due(ora.getSeconds());
+  // Il numero di formato serve a chi un giorno rileggera' questo file: senza,
+  // un export di oggi e uno scritto dopo un cambio di forma delle voci sono
+  // indistinguibili, e chi lo rilegge deve indovinare cosa ha in mano.
+  const pacco = { formato: 1, esportatoIl: ora.toISOString(), voci: voci };
+  const url = URL.createObjectURL(new Blob([JSON.stringify(pacco, null, 2)], {type:'application/json'}));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'storico-alba-' + quando + '.json';
+  // Un anchor che non sta nel documento non fa partire il download su tutti i
+  // browser: va attaccato, cliccato e tolto.
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Revocare l'URL subito dopo il click taglia il download a meta': il browser
+  // legge il blob quando la scrittura parte davvero, e con "chiedi sempre dove
+  // salvare" attivo quel momento arriva solo dopo che l'utente ha scelto la
+  // cartella. Con cinquanta voci e le loro miniature il blob pesa qualche mega,
+  // quindi non e' roba che il browser si porta via in un attimo: due minuti
+  // sono piu' di quanto serva a chiunque per premere Salva.
+  setTimeout(()=>URL.revokeObjectURL(url), 120000);
+  toast('⬇ Storico esportato: ' + voci.length + (voci.length===1 ? ' voce' : ' voci'));
 }
 
 function fmtDate(ts){
