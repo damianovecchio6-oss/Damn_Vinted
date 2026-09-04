@@ -143,7 +143,23 @@ const RISULTATO = (titolo, prezzo, fonte) => ({
   rapportoJson = false;
   await page.click('#btnS');
   await attendiFine();
-  check('rapporto illeggibile: errore chiaro, non pagina rotta', /riprova/i.test(await page.textContent('#eRic')), await page.textContent('#eRic'));
+  // Questo controllo prima pretendeva che comparisse #eRic e basta. Pretendeva
+  // troppo poco: quando il rapporto non arriva, gli annunci sono gia' stati
+  // trovati e la quota di ricerca gia' spesa, e buttarli via e' il danno
+  // peggiore dell'errore. Ora la stessa proprieta' - "lo dice, non si rompe" -
+  // si verifica dentro il rapporto, con le prove ancora li'.
+  const corpoRapporto = await page.evaluate(() => ({
+    rRicVisibile: document.getElementById('rRic').style.display !== 'none',
+    eRicVisibile: document.getElementById('eRic').style.display !== 'none',
+    avviso: (document.querySelector('#rRicBody .tip') || {}).textContent || '',
+    annunci: document.querySelectorAll('#rRicBody .lr').length,
+    tessere: [...document.querySelectorAll('#rRicBody .agv')].map(e => e.textContent)
+  }));
+  check('rapporto illeggibile: lo dice, e non si rompe', /riassunto.*non e.* arrivato/i.test(corpoRapporto.avviso), corpoRapporto.avviso);
+  check('e non butta via le prove gia trovate', corpoRapporto.rRicVisibile && corpoRapporto.annunci === 6, corpoRapporto);
+  check('la mediana resta: la calcola la pagina, non il modello',
+    corpoRapporto.tessere.some(t => /Mediana/.test(t)), corpoRapporto.tessere);
+  check('niente cartello d\'errore al posto di tutto', corpoRapporto.eRicVisibile === false, corpoRapporto.eRicVisibile);
   check('il passo del rapporto risulta fallito', await page.evaluate(() => document.querySelectorAll('#agList .agp.ko').length) === 1);
   rapportoJson = true;
 

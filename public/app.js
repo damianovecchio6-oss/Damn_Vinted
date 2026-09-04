@@ -1396,9 +1396,22 @@ async function avviaAgente(){
     // schermo, nello stesso ordine: il modello cita per numero, e quel numero
     // deve portare a un link che si puo' aprire.
     const citate=ordinaProve(prove);
-    const rapporto=await sintetizza(capo, citate);
+
+    // Il rapporto e' l'ultimo passo ed e' il piu' caro: nel suo prompt ci
+    // stanno tutti i risultati trovati, e quando sfonda i 9s della function
+    // arriva un 504. Buttare via anche le prove sarebbe il danno peggiore -
+    // gli annunci ci sono, i prezzi pure, la quota di ricerca e' gia' spesa, e
+    // mediana e range li calcola prezziDelle() senza chiedere niente a
+    // nessuno. Quello che manca e' il commento, non i dati: si dice, e si
+    // mostra il resto.
+    let rapporto=null, senzaRapporto='';
+    try{
+      rapporto=await sintetizza(capo, citate);
+    }catch(e){
+      senzaRapporto=e.message;
+    }
     lastRicerca={ capo, prove:citate, prezzi:prezziDelle(citate), rapporto };
-    renderRicerca();
+    renderRicerca(senzaRapporto);
     show('rRic');
     tocco();
   }catch(e){
@@ -1552,7 +1565,12 @@ async function sintetizza(capo, prove){
     + (r.prezzo?` — ${r.prezzo.valore}${r.prezzo.valuta}`:' — prezzo non leggibile')
     + (r.snippet?`\n   ${String(r.snippet).slice(0,120)}`:'')).join('\n');
 
-  const r=await callAIJson({
+  // La chiamata puo' non tornare affatto - i 9s della function - e in quel caso
+  // il passo nel diario restava aperto per sempre, come se stesse ancora
+  // lavorando. Chi guarda deve vedere che si e' fermato, e dove.
+  let r;
+  try{
+    r=await callAIJson({
     type:'text',
     json:true,
     prompt:`Sei un esperto del mercato italiano dell'usato e stai scrivendo un rapporto per chi deve vendere questo capo su Vinted.
@@ -1574,7 +1592,11 @@ REGOLE:
 
 Rispondi SOLO con questo JSON valido, senza backtick né markdown:
 {"riassunto":"3-4 frasi su cosa dice il mercato per questo capo","prezzoConsigliato":25,"rangeMin":18,"rangeMax":35,"fiducia":"alta, media o bassa","domanda":"alta, media o bassa","osservazioni":["osservazione con il numero del risultato che la sostiene"],"consigli":["consiglio pratico per vendere questo capo"]}`
-  });
+    });
+  }catch(e){
+    chiudiPasso(i,'ko', e.message);
+    throw e;
+  }
 
   if(!r.ok){
     chiudiPasso(i,'ko','il modello non ha risposto in JSON');
@@ -1602,7 +1624,7 @@ function prezziDelle(prove){
   return { n:valori.length, min:valori[0], max:valori[valori.length-1], mediana:Math.round(mediana*100)/100 };
 }
 
-function renderRicerca(){
+function renderRicerca(senzaRapporto){
   const d=lastRicerca.rapporto||{}, p=lastRicerca.prezzi;
   const prezzo=num(d.prezzoConsigliato,null,0,100000);
   const rMin=num(d.rangeMin,null,0,100000), rMax=num(d.rangeMax,null,0,100000);
@@ -1621,7 +1643,10 @@ function renderRicerca(){
   const prove=lastRicerca.prove;
 
   document.getElementById('rRicBody').innerHTML=
-      `<div class="agm">${valori.map(x=>`<div class="agv"><div class="agvn">${esc(x.n)}</div><div class="agvl">${esc(x.l)}</div></div>`).join('')}</div>`
+      (senzaRapporto
+        ? `<div class="tip" style="border-color:var(--re);color:var(--re)">⚠️ Il riassunto dell'AI non e' arrivato (${esc(senzaRapporto)}). Gli annunci trovati e i loro prezzi sono qui sotto: mediana e range li calcola la pagina, non il modello.</div>`
+        : '')
+    + `<div class="agm">${valori.map(x=>`<div class="agv"><div class="agvn">${esc(x.n)}</div><div class="agvl">${esc(x.l)}</div></div>`).join('')}</div>`
     + (d.riassunto?`<p style="font-size:14px;line-height:1.7;color:#fff;margin-bottom:12px">${esc(d.riassunto)}</p>`:'')
     + (d.domanda?`<div class="hSub" style="margin-bottom:10px">Domanda sul mercato: ${esc(d.domanda)}</div>`:'')
     + (osservazioni.length?`<ul style="list-style:none;margin-bottom:6px">${osservazioni.map((o,i)=>`<li class="fli" style="--i:${i}"><span class="fdot"></span>${esc(o)}</li>`).join('')}</ul>`:'')
