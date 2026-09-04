@@ -1,3 +1,4 @@
+const fs = require('fs');
 const L = require('./lib');
 const { chromium } = require('playwright-core');
 let pass = 0, fail = 0;
@@ -130,6 +131,53 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
     renderHistory();
   });
   check('una foto valida invece si vede', await page.evaluate(() => document.querySelectorAll('#historyList img').length) === 1);
+
+  // Lo storico sta solo qui dentro: se l'export perde un campo, quel campo e'
+  // perso davvero il giorno che il browser cancella i dati del sito.
+  console.log('\n-- export dello storico --');
+  const CAMPI = ['id', 'createdAt', 'updatedAt', 'nome', 'marca', 'taglia', 'condizione', 'titolo',
+                 'descrizione', 'hashtag', 'prezzoSuggerito', 'rangeMin', 'rangeMax', 'consiglio', 'foto'];
+  await page.evaluate(() => {
+    localStorage.clear();
+    upsertHistoryItem('id_pieno', {
+      nome: 'Felpa', marca: 'Nike', taglia: 'M', condizione: 'Buono',
+      titolo: 'Felpa Nike taglia M', descrizione: 'Descrizione lunga', hashtag: '#nike #felpa',
+      prezzoSuggerito: 22, rangeMin: 18, rangeMax: 28, consiglio: 'vendi ora',
+      foto: 'data:image/jpeg;base64,/9j/4AAQSkZJRg=='
+    });
+    upsertHistoryItem('id_scarno', { nome: 'Jeans' });
+    renderHistory();
+  });
+  const [scarico] = await Promise.all([
+    page.waitForEvent('download'),
+    page.click('#btnExportStorico')
+  ]);
+  check('il nome del file porta data e ora, cosi due export non si sovrascrivono',
+    /^storico-alba-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.json$/.test(scarico.suggestedFilename()), scarico.suggestedFilename());
+  // path() torna null se il download e' fallito: senza questa guardia la suite
+  // moriva di TypeError e si portava via tutte le righe dopo, proprio quelle
+  // che spiegavano cosa era uscito dal file.
+  const percorso = await scarico.path();
+  const pacco = percorso ? JSON.parse(fs.readFileSync(percorso, 'utf8')) : {};
+  check('il file scaricato esiste davvero su disco', !!percorso, percorso);
+  check('il file dichiara il formato', pacco.formato === 1, pacco.formato);
+  check('e quando e stato esportato', !isNaN(Date.parse(pacco.esportatoIl)), pacco.esportatoIl);
+  check('ci sono tutte le voci', Array.isArray(pacco.voci) && pacco.voci.length === 2, pacco.voci);
+  const pieno = (pacco.voci || []).find(x => x && x.id === 'id_pieno') || {};
+  const mancanti = CAMPI.filter(k => pieno[k] === undefined);
+  check('la voce esce intera, nessun campo perso per strada', mancanti.length === 0, mancanti);
+  check('la miniatura esce com\'era, non svuotata', pieno.foto === 'data:image/jpeg;base64,/9j/4AAQSkZJRg==', pieno.foto);
+
+  let scaricato = false;
+  const spia = () => { scaricato = true; };
+  page.on('download', spia);
+  await page.evaluate(() => { localStorage.clear(); renderHistory(); });
+  await page.click('#btnExportStorico');
+  await page.waitForTimeout(500);
+  page.off('download', spia);
+  check('storico vuoto: non scarica un file vuoto', scaricato === false);
+  check('storico vuoto: lo dice invece di far finta di niente',
+    (await page.textContent('#toast')).includes('vuoto'), await page.textContent('#toast'));
 
   console.log('\n-- errori JS accumulati --');
   check('nessun errore JS in tutta la sessione', errors.length === 0, errors);
