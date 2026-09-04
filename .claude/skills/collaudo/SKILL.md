@@ -26,6 +26,7 @@ con `https` sostituito da uno stub, le altre guidano Chromium.
 | `ui.js` `photo.js` `nuove.js` | interfaccia, analisi foto, etichetta |
 | `agente.js` | il ciclo dell'agente: piano, ricerche, raffinamento, rapporto |
 | `scanner.js` | lo scanner: identita' con le fonti, usato separato dal nuovo, giri di ricerca, banda dei prezzi |
+| `prezzi.js` | i conti sui prezzi chiamati direttamente: quantile pesato, peso delle prove, casi limite, calibrazione dagli esiti |
 | `interazioni.js` | ghiera, sole parcheggiato, attesa, focus, vibrazione, motion |
 | `tocco.js` | **gli stessi gesti col dito vero**, su un Chromium in modalita' telefono |
 
@@ -34,6 +35,12 @@ fra usato e nuovo, sullo scarto degli estremi e sui risultati fuori tema: sono
 la ragione per cui lo scanner esiste, e un errore li' esce come un prezzo
 sbagliato costruito su numeri veri - la forma di guasto piu' difficile da
 vedere a occhio.
+
+`prezzi.js` guarda gli stessi conti di `scanner.js` ma da sotto, chiamando le
+funzioni una per una: serve per i casi che un giro normale non produce quasi
+mai - un annuncio solo, sei annunci allo stesso prezzo, un peso enorme, una
+voce di storico storta. Li' un errore non esce come un'eccezione, esce come un
+prezzo, e un prezzo sbagliato non si distingue da uno giusto guardandolo.
 
 `tocco.js` esiste perche' un bug e' passato da tutte le altre: col puntatore
 andava, sul telefono il click che il browser sintetizza dopo un tocco non

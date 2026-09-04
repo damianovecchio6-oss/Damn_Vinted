@@ -18,6 +18,7 @@ const SUITE = [
   ['etichetta e Lens', 'nuove.js', 'lettura dedicata, merge, identificazione prodotto'],
   ['agente di ricerca', 'agente.js', 'piano, ricerche, raffinamento, rapporto'],
   ['scanner', 'scanner.js', 'identita e fonti, usato vs nuovo, giri, banda dei prezzi'],
+  ['i conti sui prezzi', 'prezzi.js', 'quantile pesato, peso delle prove, casi limite, calibrazione'],
   ['micro-interazioni', 'interazioni.js', 'ghiera, attesa, focus, vibrazione, motion'],
   ['dito sul telefono', 'tocco.js', 'tocchi veri: ghiera, tasto centrale, parcheggio']
 ];
