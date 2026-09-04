@@ -188,9 +188,23 @@ exports.handler = async (event) => {
 
 const GEMINI_HOST = 'generativelanguage.googleapis.com';
 
-// I nomi dei modelli Gemini cambiano spesso (2.5, 3.5, 3.7 flash...), quindi
-// non ne cabliamo nessuno: chiediamo il catalogo e prendiamo il flash piu'
-// recente che sappia fare generateContent. GEMINI_MODEL scavalca tutto.
+// I nomi dei modelli Gemini cambiano spesso (2.5, 3.5, 3.7 flash...), e per
+// questo il catalogo resta: chiediamolo, e prendiamo il flash piu' recente che
+// sappia fare generateContent. GEMINI_MODEL scavalca tutto.
+//
+// Ma chiederlo PRIMA di ogni analisi costava caro. La cache del catalogo vive
+// in memoria e muore col deploy, quindi ogni istanza fredda pagava un giro a
+// Google - fino a 4s dei 9 di budget - prima di mandare un solo byte delle
+// foto. La stessa richiesta che a caldo aveva 8.7s per rispondere, a freddo ne
+// aveva 5, e il sintomo era "L'AI ci ha messo troppo. Riprova." subito dopo un
+// deploy. Groq questo problema non l'ha mai avuto: parte da un default e chiede
+// il catalogo solo se quel modello non va. Ora fanno la stessa cosa.
+//
+// Un nome cablato qui non e' una scommessa: se un giorno sparisce si paga UN
+// tentativo e si ripiega sul catalogo, che e' esattamente la rete di sicurezza
+// per cui esiste.
+const MODEL_GEMINI = 'gemini-2.5-flash';
+
 const NON_TESTUALI = /embedding|aqa|imagen|veo|tts|native-audio|live-|image-generation/i;
 
 function punteggioGemini(name) {
@@ -263,53 +277,69 @@ function testoGemini(data) {
   return testo || null;
 }
 
+// Un tentativo solo, su un modello solo. Torna null quando quel modello non
+// esiste piu' e ha senso passare al prossimo; in ogni altro caso torna l'esito
+// definitivo, che sia una risposta o un errore su cui cambiare modello non
+// aiuterebbe.
+async function unTentativoGemini(richiesta, modello, cacheKey, deadline) {
+  const res = await richiestaHttp({
+    hostname: GEMINI_HOST,
+    path: `/v1beta/models/${encodeURIComponent(modello)}:generateContent`,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_KEY }
+  }, JSON.stringify(corpoGemini(richiesta)), deadline).catch(e => {
+    if (e && e.code === 'AI_TIMEOUT') throw e;
+    return { status: 0, body: String(e && e.message || e) };
+  });
+
+  // Modello inesistente o ritirato: si prova il prossimo. Vale anche qui la
+  // lezione di Groq - il ritiro non arriva sempre come 404.
+  if (res.status === 404 || modelloSparito(res)) return null;
+  if (res.status === 429) return { ok: false, motivo: 'quota giornaliera esaurita' };
+  if (res.status >= 400 || res.status === 0) {
+    console.error(`Gemini ${res.status} su ${modello}: ${(res.body || '').slice(0, 300)}`);
+    return { ok: false, motivo: `HTTP ${res.status}` };
+  }
+
+  let data;
+  try { data = JSON.parse(res.body); } catch { return { ok: false, motivo: 'risposta non JSON' }; }
+  const text = testoGemini(data);
+  if (!text) {
+    // Succede quando il filtro di sicurezza blocca la risposta: e' un caso
+    // reale su foto di persone, e cambiare modello non lo risolve.
+    const stop = data.candidates && data.candidates[0] && data.candidates[0].finishReason;
+    console.error(`Gemini ha risposto vuoto su ${modello} (finishReason: ${stop})`);
+    return { ok: false, motivo: `risposta vuota (${stop || 'ignoto'})` };
+  }
+  S.cacheSet(cacheKey, modello);
+  return { ok: true, text, model: modello, provider: 'gemini' };
+}
+
 async function tentaGemini(richiesta, kind, deadline) {
-  const candidati = [];
-  if (GEMINI_MODEL) candidati.push(GEMINI_MODEL);
   const cacheKey = `gemini:model:${kind}`;
   const noto = resolvedModel(cacheKey);
   if (noto === false) return { ok: false, motivo: 'nessun modello (in cache)' };
-  if (noto) candidati.push(noto);
-  for (const id of await listaGemini(deadline)) candidati.push(id);
 
   const provati = [];
-  for (const modello of candidati.slice(0, MAX_MODEL_ATTEMPTS)) {
-    if (provati.includes(modello)) continue;
-    if (deadline - Date.now() < MIN_ATTEMPT_MS) break;
-    provati.push(modello);
-
-    const res = await richiestaHttp({
-      hostname: GEMINI_HOST,
-      path: `/v1beta/models/${encodeURIComponent(modello)}:generateContent`,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_KEY }
-    }, JSON.stringify(corpoGemini(richiesta)), deadline).catch(e => {
-      if (e && e.code === 'AI_TIMEOUT') throw e;
-      return { status: 0, body: String(e && e.message || e) };
-    });
-
-    // Modello inesistente o ritirato: si prova il prossimo. Vale anche qui la
-    // lezione di Groq - il ritiro non arriva sempre come 404.
-    if (res.status === 404 || modelloSparito(res)) continue;
-    if (res.status === 429) return { ok: false, motivo: 'quota giornaliera esaurita' };
-    if (res.status >= 400 || res.status === 0) {
-      console.error(`Gemini ${res.status} su ${modello}: ${(res.body || '').slice(0, 300)}`);
-      return { ok: false, motivo: `HTTP ${res.status}` };
+  const prova = async (lista) => {
+    for (const modello of lista) {
+      if (!modello || provati.includes(modello)) continue;
+      if (provati.length >= MAX_MODEL_ATTEMPTS) break;
+      if (deadline - Date.now() < MIN_ATTEMPT_MS) break;
+      provati.push(modello);
+      const esito = await unTentativoGemini(richiesta, modello, cacheKey, deadline);
+      if (esito) return esito;
     }
+    return null;
+  };
 
-    let data;
-    try { data = JSON.parse(res.body); } catch { return { ok: false, motivo: 'risposta non JSON' }; }
-    const text = testoGemini(data);
-    if (!text) {
-      // Succede quando il filtro di sicurezza blocca la risposta: e' un caso
-      // reale su foto di persone, e cambiare modello non lo risolve.
-      const stop = data.candidates && data.candidates[0] && data.candidates[0].finishReason;
-      console.error(`Gemini ha risposto vuoto su ${modello} (finishReason: ${stop})`);
-      return { ok: false, motivo: `risposta vuota (${stop || 'ignoto'})` };
-    }
-    S.cacheSet(cacheKey, modello);
-    return { ok: true, text, model: modello, provider: 'gemini' };
-  }
+  // Prima quello che sappiamo gia' senza chiedere niente a nessuno: l'env, il
+  // modello che ha funzionato poco fa, il default.
+  let esito = await prova([GEMINI_MODEL, noto, MODEL_GEMINI]);
+  // Il catalogo si paga solo se sono spariti tutti - cioe' quasi mai, e non
+  // sulla richiesta di chi sta aspettando l'analisi delle sue foto.
+  if (!esito) esito = await prova(await listaGemini(deadline));
+  if (esito) return esito;
 
   if (provati.length) S.cacheSet(cacheKey, false);
   console.error(`Nessun modello Gemini utilizzabile per "${kind}". Provati: ${provati.join(', ') || 'nessuno'}`);
