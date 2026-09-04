@@ -153,7 +153,11 @@ const NEGOZIO = (titolo, prezzo) => ({
   check('il piano riceve l\'identita\' scansionata', /Carhartt/.test(primo('piano').prompt));
 
   check('il prezzo consigliato finisce a schermo', corpo.includes('42€'), corpo.slice(0, 300));
-  check('il veloce e il paziente pure', corpo.includes('34€') && corpo.includes('52€'));
+  // Il modello dice 34 e 52; la banda di sei annunci fra 36.25 e 48.75 porta
+  // un'incertezza di ~2.6€, e il range che si mostra si apre di quella.
+  check('il veloce e il paziente si aprono dell\'incertezza della banda',
+    corpo.includes('31€') && corpo.includes('55€'), (corpo.match(/veloce[^·]*·[^\n]*/) || [])[0]);
+  check('e la pagina scrive di quanto', /±2\.6€/.test(corpo), (corpo.match(/±[\d.]+€/) || [])[0]);
   check('la banda dei prezzi si disegna', await page.evaluate(() => !!document.querySelector('#rSxBody .sxIqr') && !!document.querySelector('#rSxBody .sxMark')));
   check('la banda si legge anche senza vederla', /da 30 a 55 euro/.test(await page.evaluate(() => document.querySelector('#rSxBody .sxBand').getAttribute('aria-label'))));
   check('la lettura del mercato finisce a schermo', corpo.includes('Gli annunci dell\'usato stanno fra 30'));
@@ -283,6 +287,106 @@ const NEGOZIO = (titolo, prezzo) => ({
   await page.click('#btnSx');
   await attendiRapporto();
   check('molti annunci vicini fra loro = fiducia alta', /Fiducia alta/.test(await page.textContent('#rSxBody')), (await page.textContent('#rSxBody')).match(/Fiducia \w+[^.]*/)[0]);
+
+  console.log('\n-- sotto la soglia non esce un numero solo, esce la banda --');
+  reset();
+  risultatiPer = () => [USATO('Felpa Carhartt A', 10), USATO('Felpa Carhartt B', 20), USATO('Felpa Carhartt C', 30),
+                        USATO('Felpa Carhartt D', 60), USATO('Felpa Carhartt E', 90), USATO('Felpa Carhartt F', 120)];
+  await page.click('#btnSx');
+  await attendiRapporto();
+  const incerto = await page.textContent('#rSxBody');
+  check('col mercato sparso non stampa una cifra sola',
+    /–/.test(await page.textContent('#rSxBody .pn')) && !/^\d+€$/.test(await page.textContent('#rSxBody .pn')),
+    await page.textContent('#rSxBody .pn'));
+  check('e dice perche\' non la dice', /Non dico un prezzo solo/.test(incerto), incerto.slice(0, 600));
+  check('la banda resta, con dentro dove sta meta\' del mercato', /metà del mercato sta fra/.test(incerto));
+  check('e nello storico non finisce un prezzo che non ha detto',
+    await page.evaluate(() => loadHistory().every(x => x.prezzoSuggerito === undefined || typeof x.prezzoSuggerito === 'number')));
+
+  console.log('\n-- un annuncio vecchio non vale come uno di ieri --');
+  reset();
+  const VECCHIO = (t, p) => Object.assign(USATO(t, p), { eta: { testo: '10 mesi fa', giorni: 300 } });
+  const RECENTE = (t, p) => Object.assign(USATO(t, p), { eta: { testo: '5 giorni fa', giorni: 5 } });
+  risultatiPer = () => [
+    RECENTE('Felpa Carhartt recente A', 40), RECENTE('Felpa Carhartt recente B', 41), RECENTE('Felpa Carhartt recente C', 42),
+    VECCHIO('Felpa Carhartt vecchia A', 60), VECCHIO('Felpa Carhartt vecchia B', 61), VECCHIO('Felpa Carhartt vecchia C', 62)
+  ];
+  await page.click('#btnSx');
+  await attendiRapporto();
+  const conVecchi = await page.textContent('#rSxBody');
+  // Senza pesi la mediana di 40,41,42,60,61,62 sarebbe 51: gli invenduti da
+  // dieci mesi la tiravano su da soli.
+  check('la mediana pende verso gli annunci ancora caldi', /41\.81€/.test(conVecchi), (conVecchi.match(/Mediana[^€]*€/) || [])[0]);
+  check('e la pagina dice quanti pesano meno perche\' vecchi',
+    /3 sono annunci più vecchi di tre mesi/.test(conVecchi), (conVecchi.match(/Di \d+ annunci[^.]*\./) || [])[0]);
+  check('il verdetto vede l\'eta\' di ogni riga', /10 mesi fa/.test(primo('verdetto').prompt));
+
+  console.log('\n-- la condizione: nella stessa mediana non ci va di tutto --');
+  reset();
+  risultatiPer = () => [
+    USATO('Felpa Carhartt ottime condizioni A', 40), USATO('Felpa Carhartt ottime condizioni B', 41),
+    USATO('Felpa Carhartt ottime condizioni C', 42),
+    USATO('Felpa Carhartt nuovo con cartellino A', 60), USATO('Felpa Carhartt nuovo con cartellino B', 61),
+    USATO('Felpa Carhartt nuovo con cartellino C', 62)
+  ];
+  await page.click('#btnSx');
+  await attendiRapporto();
+  const conCondizioni = await page.textContent('#rSxBody');
+  check('un "nuovo col cartellino" non pesa come il capo in ottimo stato',
+    /41\.81€/.test(conCondizioni), (conCondizioni.match(/Mediana[^€]*€/) || [])[0]);
+  check('e dice quanti hanno davvero la stessa condizione',
+    /3 hanno la stessa condizione del tuo/.test(conCondizioni), (conCondizioni.match(/Di \d+ annunci[^.]*\./) || [])[0]);
+  check('il verdetto legge la condizione riga per riga', /condizione: nuovo con cartellino/.test(primo('verdetto').prompt));
+
+  console.log('\n-- venduto e chiesto non sono lo stesso prezzo --');
+  reset();
+  risultatiPer = () => [
+    USATO('Felpa Carhartt A', 40), USATO('Felpa Carhartt B', 42), USATO('Felpa Carhartt C', 44),
+    USATO('Felpa Carhartt D', 46), USATO('Felpa Carhartt E', 48)
+  ];
+  await page.click('#btnSx');
+  await attendiRapporto();
+  check('se nessuno e\' un venduto lo dice, e dice da che parte pende la banda',
+    /Nessuno di questi è un prezzo di venduto/.test(await page.textContent('#rSxBody')));
+  reset();
+  const VENDUTO = (t, p) => Object.assign(USATO(t, p, 'eBay'), { titolo: t + ' venduto', link: 'https://www.ebay.it/itm/1' });
+  risultatiPer = () => [
+    USATO('Felpa Carhartt A', 40), USATO('Felpa Carhartt B', 42), USATO('Felpa Carhartt C', 44),
+    USATO('Felpa Carhartt D', 46), VENDUTO('Felpa Carhartt E', 30)
+  ];
+  await page.click('#btnSx');
+  await attendiRapporto();
+  const conVenduto = await page.textContent('#rSxBody');
+  check('un prezzo di venduto viene contato, e detto', /e un prezzo di venduto/.test(conVenduto), (conVenduto.match(/Di \d+ annunci[^.]*\./) || [])[0]);
+  check('il verdetto lo vede marcato', /\[venduto\]/.test(primo('verdetto').prompt), (primo('verdetto').prompt.match(/\d+\. \[[^\]]+\]\s*\[venduto\][^\n]*/) || [])[0]);
+  check('e fra le ricerche di riserva ce n\'e una che punta al venduto',
+    await page.evaluate(() => sxRiserva({ marca: { v: 'Carhartt', f: 'foto' }, tipo: { v: 'felpa', f: 'foto' } }, []).some(p => /venduto/.test(p.q))));
+
+  console.log('\n-- gli esiti veri arrivano fino alla stima --');
+  reset();
+  await page.evaluate(() => {
+    localStorage.clear();
+    upsertHistoryItem('cal_1', { nome: 'A', prezzoSuggerito: 40, esito: { venduto: true, prezzo: 34, giorni: 10 } });
+    upsertHistoryItem('cal_2', { nome: 'B', prezzoSuggerito: 50, esito: { venduto: true, prezzo: 40, giorni: 12 } });
+    upsertHistoryItem('cal_3', { nome: 'C', prezzoSuggerito: 20, esito: { venduto: true, prezzo: 18, giorni: 20 } });
+  });
+  risultatiPer = () => [
+    USATO('Felpa Carhartt A', 40), USATO('Felpa Carhartt B', 42), USATO('Felpa Carhartt C', 44),
+    USATO('Felpa Carhartt D', 46), USATO('Felpa Carhartt E', 48)
+  ];
+  await page.click('#btnSx');
+  await attendiRapporto();
+  const conEsiti = await page.textContent('#rSxBody');
+  check('il rapporto dice come sono andati davvero i suoi capi', /3 capi venduti sono andati il 15% sotto/.test(conEsiti), (conEsiti.match(/📉[^.]*\./) || [])[0]);
+  check('e cosa vorrebbe dire su questo', /andrebbe a \d+€/.test(conEsiti), (conEsiti.match(/andrebbe a \d+€/) || [])[0]);
+  await page.evaluate(() => { document.getElementById('pNome').value = ''; document.getElementById('pMarca').value = ''; });
+  await page.click('#rSx .cbtn:nth-child(2)');
+  await page.click('#btnP');
+  await page.waitForSelector('#rPre:not([style*="display: none"])', { timeout: 40000 });
+  check('e la stima prezzo li riceve come vendite concluse',
+    /ESITI VERI di chi vende/.test(aiPost[aiPost.length - 1].prompt), aiPost[aiPost.length - 1].prompt.slice(-400));
+  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => sw('scanner'));
 
   console.log('\n-- testo del modello e di SerpApi: sempre escapato --');
   reset();

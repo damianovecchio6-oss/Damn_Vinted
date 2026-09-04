@@ -132,17 +132,75 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
   });
   check('una foto valida invece si vede', await page.evaluate(() => document.querySelectorAll('#historyList img').length) === 1);
 
+  // L'esito vero: il prezzo suggerito e' una previsione, e questa e' l'unica
+  // riga dell'app che la mette a confronto con com'e' andata davvero.
+  console.log('\n-- l\'esito: venduto? a quanto? in quanto tempo? --');
+  await page.evaluate(() => {
+    localStorage.clear();
+    upsertHistoryItem('id_e1', { nome: 'Felpa', prezzoSuggerito: 40 });
+    renderHistory();
+  });
+  check('a un capo col prezzo suggerito viene chiesto com\'e andata',
+    (await page.textContent('#historyList .hEs')).includes('Venduto?'), await page.textContent('#historyList .hEs'));
+  check('il modulo parte chiuso', await page.evaluate(() => document.getElementById('es_id_e1').hidden));
+  await page.click('#historyList [data-az="esitoChiedi"]');
+  check('"si" apre i due campi: a quanto, e in quanto tempo',
+    await page.evaluate(() => !document.getElementById('es_id_e1').hidden
+      && !!document.getElementById('esP_id_e1') && !!document.getElementById('esG_id_e1')));
+  await page.fill('#esP_id_e1', '34');
+  await page.fill('#esG_id_e1', '9');
+  await page.click('#historyList [data-az="esitoSalva"]');
+  const salvato = await page.evaluate(() => (loadHistory().find(x => x.id === 'id_e1') || {}).esito);
+  check('l\'esito finisce nello storico', salvato && salvato.venduto === true && salvato.prezzo === 34 && salvato.giorni === 9, salvato);
+  check('e si rilegge nella voce, con lo scarto dal suggerito',
+    /Venduto a 34€ in 9 giorni/.test(await page.textContent('#historyList .hEs'))
+    && /15% sotto/.test(await page.textContent('#historyList .hEs')), await page.textContent('#historyList .hEs'));
+
+  await page.evaluate(() => {
+    localStorage.clear();
+    upsertHistoryItem('id_n', { nome: 'Jeans', prezzoSuggerito: 30 });
+    renderHistory();
+  });
+  await page.click('#historyList [data-az="esitoNonVenduto"]');
+  check('"non ancora" si segna senza chiedere altro',
+    await page.evaluate(() => { const e = (loadHistory().find(x => x.id === 'id_n') || {}).esito; return !!e && e.venduto === false; }));
+  check('e resta la strada per correggersi dopo',
+    (await page.textContent('#historyList .hEs')).includes('è venduto'), await page.textContent('#historyList .hEs'));
+
+  // Sotto i tre capi venduti non si dice niente: due esiti non sono una media,
+  // sono due episodi.
+  await page.evaluate(() => {
+    localStorage.clear();
+    upsertHistoryItem('id_c1', { nome: 'A', prezzoSuggerito: 40, esito: { venduto: true, prezzo: 34, giorni: 10 } });
+    upsertHistoryItem('id_c2', { nome: 'B', prezzoSuggerito: 50, esito: { venduto: true, prezzo: 40, giorni: 12 } });
+    renderHistory();
+  });
+  check('con due soli esiti non tira ancora nessuna media',
+    await page.evaluate(() => document.getElementById('calibra').style.display === 'none'));
+  await page.evaluate(() => {
+    upsertHistoryItem('id_c3', { nome: 'C', prezzoSuggerito: 20, esito: { venduto: true, prezzo: 18, giorni: 20 } });
+    renderHistory();
+  });
+  const calib = await page.textContent('#calibra');
+  check('dal terzo in poi dice come vendono davvero i suoi capi', /3 capi venduti/.test(calib), calib);
+  check('col divario dal suggerito', /15% sotto/.test(calib), calib);
+  check('e col tempo che ci mettono', /12 giorni/.test(calib), calib);
+  check('e non e\' un numero inventato: viene dagli esiti segnati',
+    await page.evaluate(() => { const c = calibrazioneStorico(); return c.n === 3 && c.scarto === -15 && c.giorni === 12; }),
+    await page.evaluate(() => calibrazioneStorico()));
+
   // Lo storico sta solo qui dentro: se l'export perde un campo, quel campo e'
   // perso davvero il giorno che il browser cancella i dati del sito.
   console.log('\n-- export dello storico --');
   const CAMPI = ['id', 'createdAt', 'updatedAt', 'nome', 'marca', 'taglia', 'condizione', 'titolo',
-                 'descrizione', 'hashtag', 'prezzoSuggerito', 'rangeMin', 'rangeMax', 'consiglio', 'foto'];
+                 'descrizione', 'hashtag', 'prezzoSuggerito', 'rangeMin', 'rangeMax', 'consiglio', 'foto', 'esito'];
   await page.evaluate(() => {
     localStorage.clear();
     upsertHistoryItem('id_pieno', {
       nome: 'Felpa', marca: 'Nike', taglia: 'M', condizione: 'Buono',
       titolo: 'Felpa Nike taglia M', descrizione: 'Descrizione lunga', hashtag: '#nike #felpa',
       prezzoSuggerito: 22, rangeMin: 18, rangeMax: 28, consiglio: 'vendi ora',
+      esito: { venduto: true, prezzo: 20, giorni: 11 },
       foto: 'data:image/jpeg;base64,/9j/4AAQSkZJRg=='
     });
     upsertHistoryItem('id_scarno', { nome: 'Jeans' });
