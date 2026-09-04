@@ -322,6 +322,109 @@ async function apri(browser, opzioni) {
     return vuoto.style.display !== 'none' ? !!vuoto.querySelector('use[href="#ico-sole-luna"]') : true;
   }));
 
+  console.log('\n-- un giro in corso non si perde per sbaglio --');
+  // Lo scanner e l'agente durano decine di secondi: qui la risposta si tiene
+  // ferma finche' non la lasciamo andare, cosi' "mentre lavora" e' uno stato
+  // vero e non una finestra di mezzo secondo da prendere al volo.
+  let sblocca = null;
+  const lento = await browser.newPage({ viewport: { width: 430, height: 900 } });
+  lento.on('pageerror', e => errors.push(String(e)));
+  await lento.route('**/.netlify/functions/claude', async route => {
+    if (route.request().method() === 'GET') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 't.t', expiresIn: 900000 }) });
+    }
+    await new Promise(r => { sblocca = r; });
+    return route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ text: JSON.stringify({ prezzoSuggerito: 30, rangeMin: 20, rangeMax: 40, percentuale: 55, motivazione: 'ok', fattori: ['uno'], consiglio: 'vendi' }), model: 'm', provider: 'p' })
+    });
+  });
+  await lento.goto('http://127.0.0.1:8895/', { waitUntil: 'load' });
+
+  // Le domande le raccogliamo e rispondiamo noi: di default si annulla, cioe'
+  // il caso che conta - chi ha toccato per sbaglio e vuole restare dov'era.
+  const domande = [];
+  let rispondoSi = false;
+  lento.on('dialog', async d => { domande.push(d.message()); await (rispondoSi ? d.accept() : d.dismiss()); });
+
+  // La guardia non si legge da una variabile: si prova a uscire davvero. Un
+  // beforeunload annullato e' esattamente cio' che il browser vede prima di
+  // decidere se mostrare il suo dialogo.
+  const chiedePerUscire = () => lento.evaluate(() => !window.dispatchEvent(new Event('beforeunload', { cancelable: true })));
+  const apertaOra = () => lento.evaluate(() => document.querySelector('.tp.on').id);
+  const disco = () => lento.evaluate(() => document.getElementById('dScelta').textContent.trim());
+
+  check('a pagina ferma uscire non chiede niente', await chiedePerUscire() === false);
+  await lento.evaluate(() => sw('prezzo'));
+  await lento.fill('#pNome', 'Giacca');
+  await lento.click('#btnP');
+  await lento.waitForSelector('#btnP .bspin', { timeout: 5000 });
+
+  check('mentre un giro lavora, uscire dalla pagina chiede conferma', await chiedePerUscire() === true);
+
+  const cambiata = await lento.evaluate(() => sw('storico'));
+  check('cambiare scheda mentre lavora chiede conferma', domande.length === 1, domande);
+  check('e la domanda dice cosa si sta perdendo, non "sei sicuro?"',
+    /stima del prezzo/.test(domande[0] || '') && !/sei sicuro/i.test(domande[0] || ''), domande[0]);
+  check('annullando si resta dove si era', cambiata === false && await apertaOra() === 'tab-prezzo', await apertaOra());
+
+  // Lo scatto della ghiera sposta la selezione PRIMA di sapere se la scheda si
+  // apre: annullando, il disco non deve restare a nome di una funzione che non
+  // e' aperta.
+  await lento.evaluate(() => { document.getElementById('soleApp').dispatchEvent(new WheelEvent('wheel', { deltaY: 120, bubbles: true, cancelable: true })); });
+  check('anche uno scatto di ghiera chiede conferma', domande.length === 2, domande.length);
+  check('e annullando la ghiera torna indietro con la scheda',
+    await apertaOra() === 'tab-prezzo' && await disco() === 'PREZZO',
+    { aperta: await apertaOra(), disco: await disco() });
+
+  await lento.evaluate(() => document.querySelector('.raggio[data-scheda="storico"]').focus());
+  await lento.keyboard.press('Enter');
+  check('e lo stesso vale aprendo un raggio da tastiera',
+    domande.length === 3 && await apertaOra() === 'tab-prezzo' && await disco() === 'PREZZO',
+    { domande: domande.length, aperta: await apertaOra(), disco: await disco() });
+
+  rispondoSi = true;
+  check('confermando invece la scheda cambia davvero',
+    await lento.evaluate(() => sw('storico')) === true && await apertaOra() === 'tab-storico', await apertaOra());
+
+  // Chi torna sulla scheda dove il giro sta scrivendo non lo sta perdendo di
+  // vista: chiederglielo lo direbbe al contrario.
+  rispondoSi = false;
+  const primaDelRitorno = domande.length;
+  check('tornare a guardare il giro che lavora non chiede niente',
+    await lento.evaluate(() => sw('prezzo')) === true && domande.length === primaDelRitorno,
+    { aperta: await apertaOra(), domande: domande.length - primaDelRitorno });
+
+  // Un colpo di pollice fra due movimenti vale piu' scatti in fila: la
+  // conferma va chiesta per il gesto, non per ogni scatto che il gesto contiene.
+  const perno = await lento.evaluate(() => {
+    const r = document.getElementById('soleApp').getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2, raggio: r.width * 0.36 };
+  });
+  const suLaCorona = g => [perno.x + perno.raggio * Math.cos(g * Math.PI / 180), perno.y + perno.raggio * Math.sin(g * Math.PI / 180)];
+  const primaDelColpo = domande.length;
+  await lento.mouse.move(...suLaCorona(0));
+  await lento.mouse.down();
+  await lento.mouse.move(...suLaCorona(160));
+  await lento.mouse.up();
+  check('un colpo di ghiera che vale tre scatti chiede una volta sola',
+    domande.length - primaDelColpo === 1, domande.length - primaDelColpo);
+  check('e detto no, il resto del gesto si butta',
+    await apertaOra() === 'tab-prezzo' && await disco() === 'PREZZO',
+    { aperta: await apertaOra(), disco: await disco() });
+
+  // Il giro finisce: da qui in poi la pagina e' inerte, e una guardia che
+  // scattasse comunque insegnerebbe alla gente a ignorarla.
+  rispondoSi = false;
+  if (sblocca) sblocca();
+  await lento.waitForFunction(() => !document.getElementById('btnP').disabled, null, { timeout: 15000 });
+  check('a giro finito nessuna guardia resta appesa', await chiedePerUscire() === false);
+  const primaDiCambiare = domande.length;
+  check('e cambiare scheda torna immediato',
+    await lento.evaluate(() => sw('foto')) === true && await apertaOra() === 'tab-foto' && domande.length === primaDiCambiare,
+    { aperta: await apertaOra(), domande: domande.length - primaDiCambiare });
+  await lento.close();
+
   console.log('\n-- errori JS accumulati --');
   check('nessun errore JS in tutta la sessione', errors.length === 0, errors);
 

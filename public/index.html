@@ -719,9 +719,15 @@ function inCima(){
   window.scrollTo({top:0,behavior:menoMovimento()?'auto':'smooth'});
 }
 
+// Torna true se la scheda e' cambiata davvero: chi ha gia' spostato la ghiera
+// per arrivare qui deve sapere se rimetterla a posto.
 function sw(n, opzioni){
   const pannello=document.getElementById('tab-'+n);
-  if(!pannello) return;
+  if(!pannello) return false;
+  // Tutta la navigazione passa da qui - i raggi, la ghiera, i bottoni "usa per
+  // la stima" - quindi qui si chiede, una volta sola. Metterlo su ogni strada
+  // vuol dire dimenticarsene una, e sara' proprio quella che usa la gente.
+  if(n!==schedaCorrente && !viaLibera(n)) return false;
   // La scheda entra dal lato da cui l'hai chiamata: seguire il movimento costa
   // meno che ritrovare da capo dove sei finito.
   const daDestra=SCHEDE.indexOf(n) > SCHEDE.indexOf(schedaCorrente);
@@ -744,11 +750,12 @@ function sw(n, opzioni){
   if(n==='ricerca') prefillRicerca();
   if(n==='scanner') syncUploadUI();
 
-  if(opzioni && opzioni.senzaScorrimento) return;
+  if(opzioni && opzioni.senzaScorrimento) return true;
   // Una scorsa vera annulla quella rimandata: se sei arrivato qui da un
   // bottone mentre un giro si stava assestando, non deve scorrere due volte.
   clearTimeout(scorriDopoIlGiro);
   inCima();
+  return true;
 }
 
 
@@ -824,6 +831,7 @@ function mostraSelezione(){
 // della ghiera, l'unica cosa che rende il giro una cosa che si sente e non
 // solo si guarda.
 function scatta(verso){
+  const prima = selezione;
   selezione = (selezione + verso + RAGGI.length) % RAGGI.length;
   mostraSelezione();
   tocco(6);
@@ -833,20 +841,32 @@ function scatta(verso){
   // menu da confermare, e' la manopola con cui passi da una funzione
   // all'altra senza tornare indietro ogni volta.
   if(soleParcheggiato()){
-    sw(RAGGI[selezione].dataset.scheda, { senzaScorrimento:true });
+    // Da parcheggiato lo scatto E' il cambio scheda: se il cambio viene
+    // rifiutato - un giro in corso e l'utente che risponde di no - la ghiera
+    // deve tornare sullo scatto di prima, o il disco annuncerebbe una funzione
+    // mentre sotto ne resta aperta un'altra.
+    if(!sw(RAGGI[selezione].dataset.scheda, { senzaScorrimento:true })){
+      selezione = prima;
+      mostraSelezione();
+      return false;
+    }
     inCimaQuandoTiFermi();
   }
+  return true;
 }
 
 function apriRaggio(raggio){
   const scheda = raggio.dataset.scheda;
   if(!scheda) return;
+  const prima = selezione;
   selezione = RAGGI.indexOf(raggio);
   mostraSelezione();
   raggio.classList.add('scelto');
   tocco(10);
   setTimeout(()=>raggio.classList.remove('scelto'), 520);
-  sw(scheda);
+  // Come per lo scatto: il raggio si accende prima di sapere se la scheda si
+  // apre davvero, quindi se il cambio viene rifiutato va rispento.
+  if(!sw(scheda)){ selezione = prima; mostraSelezione(); }
 }
 
 RAGGI.forEach(raggio=>{
@@ -909,8 +929,14 @@ if(soleApp){
     while(Math.abs(giro.residuo) >= GRADI_PER_SCATTO){
       const verso = giro.residuo > 0 ? 1 : -1;
       giro.residuo -= verso * GRADI_PER_SCATTO;
-      scatta(verso);
+      const fatto = scatta(verso);
       giroConScatti = true;
+      // Un colpo di pollice fra due movimenti puo' valere tre o quattro scatti
+      // in fila: se il primo si becca un "no" alla conferma, gli altri
+      // alzerebbero altre tre finestre uguali per un gesto solo, che e'
+      // esattamente il modo di insegnare a rispondere senza leggere. Detto no
+      // una volta, il resto del gesto si butta.
+      if(!fatto){ giro.residuo = 0; break; }
     }
   }
 
@@ -1228,12 +1254,65 @@ function busy(key, btnIds){
   running[key]=true;
   btnIds.forEach(id=>{ const b=document.getElementById(id); if(b) b.disabled=true; });
   attesaBottone(btnIds[0], true);
+  aggiornaGuardia();
   return true;
 }
 function idle(key, btnIds){
   running[key]=false;
   btnIds.forEach(id=>{ const b=document.getElementById(id); if(b) b.disabled=false; });
   attesaBottone(btnIds[0], false);
+  aggiornaGuardia();
+}
+
+// Chi sta lavorando lo sa gia' running: questi sono soltanto i nomi per dirlo
+// a voce. Una domanda che chiede "sei sicuro?" non fa decidere nessuno, perche'
+// non dice cosa c'e' in ballo; una che dice "sta lavorando la scansione" si'.
+const NOME_GIRO={
+  foto:"l'analisi delle foto",
+  lens:'la ricerca visiva',
+  annuncio:"la scrittura dell'annuncio",
+  prezzo:'la stima del prezzo',
+  ricerca:"la ricerca dell'agente",
+  scanner:'la scansione'
+};
+// E dove scrive ciascuno. Serve a non chiedere niente a chi sta TORNANDO a
+// guardare il giro che lavora: quello e' il contrario di perderlo di vista.
+// La ricerca visiva vive nella scheda delle foto, gli altri hanno la scheda
+// che porta il loro nome.
+const SCHEDA_GIRO={ foto:'foto', lens:'foto', annuncio:'annuncio', prezzo:'prezzo', ricerca:'ricerca', scanner:'scanner' };
+function giriInCorso(scheda){
+  return Object.keys(running).filter(k=>running[k] && SCHEDA_GIRO[k]!==scheda).map(k=>NOME_GIRO[k]||k);
+}
+
+// Lo scanner e l'agente sono pipeline da decine di secondi, e non c'e' niente
+// che le tenga: una ricarica a meta' - il telefono che rinfresca la scheda
+// rimasta in secondo piano, il pollice che prende il tasto sbagliato - buttava
+// via tutto quello che era stato scoperto senza dire una parola, mentre le
+// richieste gia' partite continuavano a consumare quota.
+// Il dialogo del browser non si puo' scrivere, ma si puo' decidere QUANDO
+// esiste: appeso sempre, chiederebbe conferma anche a pagina ferma, e chi lo
+// vede tre volte a vuoto impara a premere "esci" senza leggere - proprio alla
+// quarta, quella che contava. Quindi lo si appende solo finche' running ha
+// almeno una chiave accesa, e lo si stacca appena l'ultima si spegne.
+let guardiaAppesa=false;
+function guardiaUscita(e){ e.preventDefault(); e.returnValue=''; return ''; }
+function aggiornaGuardia(){
+  const serve=giriInCorso().length>0;
+  if(serve===guardiaAppesa) return;
+  guardiaAppesa=serve;
+  if(serve) window.addEventListener('beforeunload', guardiaUscita);
+  else window.removeEventListener('beforeunload', guardiaUscita);
+}
+
+// Cambiare scheda non ferma la richiesta gia' partita: la porta via dagli
+// occhi. Il diario dello scanner continua a scriversi in un pannello che non
+// stai piu' guardando, e la ricarica che quasi sempre segue lo cancella. Basta
+// uno scatto di ghiera di troppo col pollice per finire li'. Quindi si chiede
+// prima, e si dice cosa c'e' sul fuoco.
+function viaLibera(n){
+  const giri=giriInCorso(n);
+  if(!giri.length) return true;
+  return confirm('Sta lavorando '+giri.join(' e ')+'. Se cambi scheda il giro va avanti da solo ma smetti di vederlo, e se la pagina si ricarica perdi tutto quello che ha trovato. Cambiare comunque?');
 }
 
 // Disabilitati lo diventano tutti: quello che sta lavorando si riconosce dallo
@@ -1620,7 +1699,10 @@ function usaLensPerPrezzo(){
   if(!lastLens) return;
   const nome=lastLens.ipotesi||(lastLens.risultati[0]&&lastLens.risultati[0].titolo)||'';
   if(nome && !v('pNome')) document.getElementById('pNome').value=nome.slice(0,80);
-  sw('prezzo');
+  // Il messaggio racconta un posto dove l'utente adesso e': se ha rifiutato di
+  // andarci - c'e' un giro in corso - la scritta direbbe una cosa fatta in una
+  // scheda che non sta guardando. Vale per tutti i "usa per..." qui sotto.
+  if(!sw('prezzo')) return;
   toast('💶 Dati di mercato agganciati alla stima');
 }
 
@@ -1662,7 +1744,11 @@ function toAnnuncio(){
     if(!document.getElementById('pPrezzo').value) document.getElementById('pPrezzo').value = mid;
   }
 
-  sw('annuncio');
+  // Se la scheda non si apre - un giro in corso, e l'utente che ha detto di
+  // restare - non parte neanche l'annuncio: altrimenti si ritroverebbe una
+  // seconda richiesta a lavorare in un pannello che ha appena rifiutato di
+  // aprire, e la guardia dell'uscita accesa da una cosa che non ha chiesto.
+  if(!sw('annuncio')) return;
   toast('// GENERO ANNUNCIO...');
   setTimeout(function(){ genAnnuncio(); }, 600);
 }
@@ -2279,7 +2365,7 @@ function usaRicercaPerPrezzo(){
   if(c.nome && !v('pNome')) document.getElementById('pNome').value=c.nome;
   if(c.marca && !v('pMarca')) document.getElementById('pMarca').value=c.marca;
   applyCondizione('pCond', c.condizione);
-  sw('prezzo');
+  if(!sw('prezzo')) return;
   toast('💶 Ricerca agganciata alla stima');
 }
 
@@ -2301,7 +2387,7 @@ function prefillRicerca(){
 
 function toRicerca(nome){
   if(nome && !v('sNome')) document.getElementById('sNome').value=String(nome).slice(0,80);
-  sw('ricerca');
+  if(!sw('ricerca')) return;
   toast('🤖 Controlla i dati e avvia la ricerca');
 }
 
@@ -2983,7 +3069,7 @@ function scannerPerAnnuncio(){
   set('aMat', sxVal(id.materiale));
   document.getElementById('aNote').value=[sxVal(id.difetti), sxVal(id.tuo)].filter(Boolean).join('. ').slice(0,300);
   applyCondizione('aCond', sxVal(id.condizione));
-  sw('annuncio');
+  if(!sw('annuncio')) return;
   toast('✍️ Dati passati all\'annuncio');
 }
 
@@ -2994,7 +3080,7 @@ function scannerPerPrezzo(){
   if(sxVal(id.marca) && !v('pMarca')) document.getElementById('pMarca').value=sxVal(id.marca).slice(0,80);
   if(sxVal(id.tipo) && !v('pCat')) document.getElementById('pCat').value=sxVal(id.tipo).slice(0,80);
   applyCondizione('pCond', sxVal(id.condizione));
-  sw('prezzo');
+  if(!sw('prezzo')) return;
   toast('💶 Scansione agganciata alla stima');
 }
 
