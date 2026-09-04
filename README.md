@@ -38,7 +38,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-441 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+534 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -298,6 +298,44 @@ foto, non dice nessun prezzo - lo inventerebbe - e lo spiega.
 
 Il risultato alimenta l'annuncio e la stima prezzo, con lo stesso vincolo
 dell'agente: solo se la scheda di la' parla dello stesso capo.
+
+## Lo storico, e come portarselo via
+
+Annunci scritti, prezzi stimati e rapporti dell'agente finiscono tutti nella
+scheda **Storico**, che vive nel `localStorage` di questo browser sotto
+`vintedAiHistory`. Non e' un archivio: basta un "cancella dati del sito" o un
+telefono cambiato e non ne resta niente da nessuna parte.
+
+Per questo c'e' **Esporta lo storico**: scarica un JSON con il numero di
+formato, la data di esportazione e le voci intere, miniature comprese - e'
+dalla foto che si riconosce di quale capo si trattava.
+
+```json
+{ "formato": 1, "esportatoIl": "2026-09-04T05:29:01.895Z", "voci": [ ... ] }
+```
+
+Il nome del file porta data **e ora** (`storico-alba-2026-09-04_05-29-01.json`):
+con la sola data due esportazioni dello stesso giorno finivano sullo stesso
+nome, e nei download restava solo l'ultima. L'ora e' quella locale, la stessa
+che la pagina mostra sotto ogni voce. Con lo storico vuoto non scarica un file
+vuoto: lo dice e basta. L'import non c'e'.
+
+## Non perdere un giro lungo
+
+Lo scanner e l'agente sono pipeline da decine di secondi. Prima niente le
+proteggeva: una ricarica a meta', o il pollice che scivolava su un altro raggio
+del sole, portava via tutto quello che era stato scoperto senza una parola,
+mentre le richieste gia' partite continuavano a consumare quota.
+
+Ora, **e solo mentre qualcosa sta davvero lavorando**, chiudere la pagina chiede
+conferma, e cambiare funzione dice che cosa sta lavorando invece di un generico
+"sei sicuro?". Se il cambio viene rifiutato la ghiera torna dov'era, o il disco
+annuncerebbe una funzione mentre sotto ne resta aperta un'altra.
+
+Che la guardia sia legata al lavoro vero e non appesa sempre non e' un
+dettaglio: una che scatta a vuoto insegna a rispondere senza leggere, proprio
+la volta che contava. Tornare sulla scheda mentre il giro scrive non e'
+perderlo di vista, ed e' l'unico caso in cui non si chiede niente.
 
 ## Deploy su Netlify
 
