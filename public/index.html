@@ -535,6 +535,51 @@ body.guidaAperta{overflow:hidden}
 .aiutoBtn:hover,.aiutoBtn:focus-visible{color:var(--t);border-color:rgba(232,200,74,.45)}
 .aiutoBtn:focus-visible{outline:2px solid var(--t);outline-offset:2px}
 
+/* ===== LA MASCOT =====
+   Disegnata a mano, e resta un disegno a mano: il PNG e' solo la sagoma, il
+   colore lo mette il CSS con una maschera - cosi' e' lo stesso oro del sole e
+   non una tinta appiccicata addosso che poi si scolla dal tema.
+
+   Due pose quasi uguali che si alternano sono il "boil" dei cartoni disegnati
+   a mano: il tratto vibra e la mascot sembra respirare, con due file e nessun
+   fotogramma in mezzo. L'occhiolino passa ogni tanto, non di continuo: una
+   mascot che ammicca senza sosta smette di essere viva e diventa un banner. */
+.mascotte{
+  position:fixed;left:14px;bottom:calc(16px + var(--sb));z-index:50;
+  width:clamp(74px,21vw,104px);aspect-ratio:1;
+  pointer-events:none;                  /* si guarda, non si preme */
+  opacity:0;visibility:hidden;
+  transform:translateY(10px);
+  transition:opacity .45s var(--sp),transform .45s var(--sp),visibility 0s linear .45s;
+}
+/* Vive in home: dentro una funzione lo spazio e' del contenuto e del sole
+   parcheggiato, e un pupazzo fermo in un angolo diventa un ingombro. */
+body.home .mascotte{opacity:1;visibility:visible;transform:none;transition-delay:0s,0s,0s}
+/* Il colore sta solo sui fotogrammi: darlo anche al contenitore vorrebbe dire
+   un quadrato d'oro pieno, perche' lui la maschera non ce l'ha. */
+.mascotte span{position:absolute;inset:0}
+.mFrame{
+  background:var(--t);
+  filter:drop-shadow(0 6px 18px rgba(232,200,74,.28));
+  -webkit-mask:var(--posa) center/contain no-repeat;
+          mask:var(--posa) center/contain no-repeat;
+}
+.mA{--posa:url(img/mascotte-a.webp)}
+.mB{--posa:url(img/mascotte-b.webp);opacity:0}
+.mOcchiolino{--posa:url(img/mascotte-occhiolino.webp);opacity:0}
+/* steps(1): sono due disegni che si danno il cambio, non una dissolvenza. */
+.mA{animation:boilA .46s steps(1) infinite}
+.mB{animation:boilB .46s steps(1) infinite}
+@keyframes boilA{0%,49%{opacity:1}50%,100%{opacity:0}}
+@keyframes boilB{0%,49%{opacity:0}50%,100%{opacity:1}}
+/* Durante l'occhiolino le altre due spariscono: sovrapposte, gli occhi aperti
+   si vedrebbero attraverso quello chiuso. */
+.mBoil{position:absolute;inset:0;animation:boilVia 8.4s infinite}
+.mOcchiolino{animation:occhiolino 8.4s infinite}
+@keyframes boilVia{0%,88%{opacity:1}89%,95%{opacity:0}96%,100%{opacity:1}}
+@keyframes occhiolino{0%,88%{opacity:0}89%,95%{opacity:1}96%,100%{opacity:0}}
+/* Ferma per chi ha chiesto meno movimento: resta la posa a occhi aperti. */
+
 /* storico */
 .hItem{
   background:var(--card);
@@ -585,6 +630,13 @@ body.guidaAperta{overflow:hidden}
 </svg>
 
 <button class="aiutoBtn" data-az="apriGuida" aria-label="Come funziona ALBA">?</button>
+
+<!-- La mascot: decorazione, non comando. aria-hidden perche' a chi ascolta la
+     pagina non aggiunge niente, e senza tocchi perche' non fa niente. -->
+<div class="mascotte" aria-hidden="true">
+  <span class="mBoil"><span class="mFrame mA"></span><span class="mFrame mB"></span></span>
+  <span class="mFrame mOcchiolino"></span>
+</div>
 
 <div id="soleApp">
   <div class="soleWrap">

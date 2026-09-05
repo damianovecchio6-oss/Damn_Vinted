@@ -323,6 +323,52 @@ async function apri(browser, opzioni) {
     return vuoto.style.display !== 'none' ? !!vuoto.querySelector('use[href="#ico-sole-luna"]') : true;
   }));
 
+  console.log('\n-- la mascot --');
+  await page.evaluate(() => sw('sole'));
+  // Entra ed esce con una dissolvenza: si guarda quando si e' posata, non a
+  // meta' del movimento.
+  const mascotVisibile = () => page.evaluate(() => {
+    const s = getComputedStyle(document.querySelector('.mascotte'));
+    return s.visibility === 'visible' && Number(s.opacity) > .9;
+  });
+  const mascotFerma = (visibile) => page.waitForFunction(v => {
+    const s = getComputedStyle(document.querySelector('.mascotte'));
+    return v ? (s.visibility === 'visible' && Number(s.opacity) > .9)
+             : (s.visibility === 'hidden' || Number(s.opacity) < .1);
+  }, visibile, { timeout: 3000 });
+  await mascotFerma(true);
+  check('sta in home, accanto al sole', await mascotVisibile());
+  check('e disegnata a mano ma colorata dal tema', await page.evaluate(() =>
+    getComputedStyle(document.querySelector('.mFrame')).backgroundColor) === 'rgb(232, 200, 74)',
+    await page.evaluate(() => getComputedStyle(document.querySelector('.mFrame')).backgroundColor));
+  check('tre pose, dalla stessa cartella del sito', await page.evaluate(() =>
+    ['mA', 'mB', 'mOcchiolino'].every(c => /url\("?[^")]*img\/mascotte-[a-z]+\.webp"?\)/.test(
+      getComputedStyle(document.querySelector('.' + c)).getPropertyValue('--posa')))),
+    await page.evaluate(() => getComputedStyle(document.querySelector('.mA')).getPropertyValue('--posa')));
+  check('il contenitore non e un quadrato d\'oro: il colore sta sui fotogrammi', await page.evaluate(() => {
+    const b = getComputedStyle(document.querySelector('.mBoil')).backgroundColor;
+    return b === 'rgba(0, 0, 0, 0)' || b === 'transparent';
+  }), await page.evaluate(() => getComputedStyle(document.querySelector('.mBoil')).backgroundColor));
+  check('non ruba tocchi al sole', await page.evaluate(() =>
+    getComputedStyle(document.querySelector('.mascotte')).pointerEvents) === 'none');
+  check('e non la legge chi usa uno screen reader', await page.evaluate(() =>
+    document.querySelector('.mascotte').getAttribute('aria-hidden')) === 'true');
+  await page.evaluate(() => sw('prezzo'));
+  await mascotFerma(false);
+  check('dentro una funzione si toglie di mezzo', !(await mascotVisibile()));
+  await page.evaluate(() => sw('sole'));
+  await mascotFerma(true);
+  check('e torna appena si torna al sole', await mascotVisibile());
+  // Chi ha chiesto meno movimento non vuole un pupazzo che vibra: resta ferma
+  // sulla posa a occhi aperti, che e' quella di partenza.
+  const fermaLei = await apri(browser, { reducedMotion: 'reduce' });
+  check('con meno movimento non vibra', await fermaLei.evaluate(() =>
+    parseFloat(getComputedStyle(document.querySelector('.mA')).animationDuration) < 0.001),
+    await fermaLei.evaluate(() => getComputedStyle(document.querySelector('.mA')).animationDuration));
+  check('ma si vede lo stesso', await fermaLei.evaluate(() =>
+    getComputedStyle(document.querySelector('.mA')).opacity) === '1');
+  await fermaLei.close();
+
   console.log('\n-- un giro in corso non si perde per sbaglio --');
   // Lo scanner e l'agente durano decine di secondi: qui la risposta si tiene
   // ferma finche' non la lasciamo andare, cosi' "mentre lavora" e' uno stato
