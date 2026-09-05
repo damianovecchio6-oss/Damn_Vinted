@@ -1711,7 +1711,7 @@ function renderRicerca(senzaRapporto){
         ? `<div class="tip" style="border-color:var(--re);color:var(--re)">⚠️ Il riassunto dell'AI non e' arrivato (${esc(senzaRapporto)}). Gli annunci trovati e i loro prezzi sono qui sotto: mediana e range li calcola la pagina, non il modello.</div>`
         : '')
     + `<div class="agm">${valori.map(x=>`<div class="agv"><div class="agvn">${esc(x.n)}</div><div class="agvl">${esc(x.l)}</div></div>`).join('')}</div>`
-    + (d.riassunto?`<p style="font-size:14px;line-height:1.7;color:#fff;margin-bottom:12px">${esc(d.riassunto)}</p>`:'')
+    + (d.riassunto?`<p style="font-size:16px;line-height:1.6;color:var(--tx);letter-spacing:-.014em;margin-bottom:12px">${esc(d.riassunto)}</p>`:'')
     + `<div class="hSub" style="margin-bottom:6px">Fiducia ${esc(fiducia.livello)}: ${esc(fiducia.perche)}.</div>`
     + (u?`<div class="hSub" style="margin-bottom:10px">${esc(sxComposizione(u))}</div>`:'')
     + (cal&&prezzo!==null?`<div class="tip">📉 Il prezzo tiene conto di come sono andati davvero i tuoi ultimi ${cal.n} capi venduti: ${esc(scartoInParole(cal.scarto))} il suggerito${tarato.spostato?`, quindi da ${tarato.prima}€ a ${tarato.valore}€`:''}.</div>`:'')
@@ -2618,7 +2618,7 @@ function sxDisegna(){
       + esc(s.erroreRicerca ? s.erroreRicerca.message : 'Riprova col nome del modello, o aggiungi la foto dell\'etichetta.')+`</div>`;
   }
 
-  if(d.lettura) html+=`<p style="font-size:14px;line-height:1.7;color:#fff;margin:14px 0 12px">${esc(d.lettura)}</p>`;
+  if(d.lettura) html+=`<p style="font-size:16px;line-height:1.6;color:var(--tx);letter-spacing:-.014em;margin:14px 0 12px">${esc(d.lettura)}</p>`;
   const perche=Array.isArray(d.perche)?d.perche:[];
   if(perche.length){
     html+=`<ul style="list-style:none;margin-bottom:6px">${perche.map((o,i)=>`<li class="fli" style="--i:${i}"><span class="fdot"></span>${esc(o)}</li>`).join('')}</ul>`;
@@ -2986,7 +2986,7 @@ function renderHistory(voci){
     return `
     <div class="hItem">
       <div class="hTop">
-        ${foto ? `<img src="${foto}" alt="" style="width:52px;height:52px;border-radius:8px;object-fit:cover;border:1px solid var(--bd);flex-shrink:0"/>` : ''}
+        ${foto ? `<img src="${foto}" alt="" style="width:56px;height:56px;border-radius:14px;object-fit:cover;border:1px solid var(--bd);flex-shrink:0"/>` : ''}
         <div style="flex:1">
           <div class="hName">${esc(item.nome)||'Capo senza nome'}${item.marca?' · '+esc(item.marca):''}</div>
           <div class="hSub">${esc(item.condizione)||''}${item.taglia?' · Taglia '+esc(item.taglia):''}</div>
@@ -2997,11 +2997,11 @@ function renderHistory(voci){
       ${item.descrizione ? `<div class="hDesc">${esc(item.descrizione)}</div>` : ''}
       ${item.hashtag ? `<div class="hDesc" style="color:var(--t)">${esc(item.hashtag)}</div>` : ''}
       ${typeof item.prezzoSuggerito==='number'
-        ? `<div class="hPrice">${item.prezzoSuggerito}€ <span style="font-size:12px;color:var(--mu);font-family:'Rajdhani',sans-serif">(range ${item.rangeMin}€–${item.rangeMax}€)</span></div>`
+        ? `<div class="hPrice">${item.prezzoSuggerito}€ <span style="font-size:13px;font-weight:400;color:var(--mu);font-family:var(--fb);letter-spacing:-.01em">(range ${item.rangeMin}€–${item.rangeMax}€)</span></div>`
         : (typeof item.rangeMin==='number'
           // Il capo su cui non ce la siamo sentita di dire un numero: la banda
           // resta, ed e' l'unica cosa che si puo' confrontare con l'esito.
-          ? `<div class="hPrice">${item.rangeMin}–${item.rangeMax}€ <span style="font-size:12px;color:var(--mu);font-family:'Rajdhani',sans-serif">(banda, nessun numero singolo)</span></div>`
+          ? `<div class="hPrice">${item.rangeMin}–${item.rangeMax}€ <span style="font-size:13px;font-weight:400;color:var(--mu);font-family:var(--fb);letter-spacing:-.01em">(banda, nessun numero singolo)</span></div>`
           : '')}
       ${item.consiglio ? `<div class="hSub" style="margin-top:6px">💡 ${esc(item.consiglio)}</div>` : ''}
       ${esitoHtml(item)}
