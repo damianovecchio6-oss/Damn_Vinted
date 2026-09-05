@@ -41,7 +41,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-538 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+626 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -281,15 +281,62 @@ quanto **si vende**, il secondo quanto **costa nuovo**. Lo scanner:
   restano in elenco, marcati, ma fuori dalla mediana;
 - scarta gli estremi con la regola dei quartili, cosi' un lotto stock da 600€
   in mezzo a sei felpe da 40 non sposta niente - e dice quali ha scartato;
+- **pesa quello che resta** (sotto);
 - calcola il quartile centrale, cioe' **dove sta meta' del mercato**, e da li'
   tira fuori due numeri invece di uno: il prezzo per vendere in pochi giorni e
   quello per cui vale la pena aspettare.
 
-La fiducia la calcola il codice dai dati - quanti annunci, quanto sono vicini
-fra loro - e non la dichiara il modello: a un modello a cui si chiede quanto e'
-sicuro risponde quasi sempre "media". E se il numero che propone cade fuori dai
-prezzi davvero trovati, viene riportato dentro la banda **e la pagina lo
-scrive**: un numero corretto di nascosto e' peggio di uno sbagliato in chiaro.
+### Non tutte le prove valgono uguale
+
+Una mediana di annunci vivi non e' una mediana di vendite: sono **richieste**.
+Un capo a 45€ fermo da tre mesi e' anzi la prova che a 45€ non si e' venduto, e
+siccome gli invenduti restano online mentre i venduti spariscono, una banda
+fatta solo di annunci vivi pende sistematicamente **verso l'alto**. E' l'errore
+che non si vede, perche' il numero che ne esce sembra ragionevole lo stesso.
+
+Non si puo' togliere del tutto - il venduto su Vinted non e' pubblico e da
+Google non si raccoglie - ma si puo' smettere di contare ogni riga come se
+valesse le altre. Ogni prova entra nella mediana con un peso, e il peso lo
+fanno tre cose:
+
+- **quanto e' vecchia.** Google la data la da' quando ce l'ha, in italiano
+  ("3 giorni fa", "8 set 2025"): oltre un mese e mezzo il peso cala, oltre
+  l'anno vale un terzo.
+- **in che condizione e' il capo di cui parla.** Fra un "nuovo col cartellino"
+  e un "soddisfacente" su Vinted ci passa spesso il doppio del prezzo, e la
+  condizione e' quasi sempre scritta nel titolo o nello snippet. Si confronta
+  con la condizione del capo scansionato: stessa condizione peso pieno, due
+  gradini di distanza meno di meta'.
+- **se e' un prezzo chiesto o un prezzo fatto.** Un venduto vale piu' di una
+  richiesta, e una delle ricerche di riserva va a cercarlo apposta dove esiste
+  (su eBay i venduti sono indicizzati).
+
+I quartili sono quindi **pesati**, con una formula che a pesi tutti uguali da'
+esattamente i numeri di prima: se della data e della condizione non si sa
+niente - e capita - i conti restano quelli di una mediana semplice. Il peso
+sposta qualcosa solo quando c'e' davvero qualcosa da sapere. Sotto il prezzo la
+pagina scrive com'e' fatta la banda: quanti sono venduti, quanti hanno la
+stessa condizione, quanti sono piu' vecchi di tre mesi e pesano meno.
+
+### La fiducia non e' un'etichetta di fianco al numero
+
+La fiducia la calcola il codice dai dati e non la dichiara il modello: a un
+modello a cui si chiede quanto e' sicuro risponde quasi sempre "media". Ma
+calcolarla bene non basta se poi il prezzo resta comunque preciso: con tre
+annunci sparsi "27€" **sembra una misura**, e non lo e'.
+
+Quindi la fiducia entra dentro il numero, in due modi. Il range si allarga di
+quanto e' incerta la banda (meta' del quartile centrale diviso la radice delle
+prove che contano davvero), e sotto la soglia **il numero singolo non si dice
+proprio**: al suo posto resta la banda, con scritto perche'. A volte non e' la
+risposta che si voleva. E' la risposta che si ha.
+
+"Le prove che contano davvero" e' un conto a parte: dieci annunci di cui otto
+vecchi e di un'altra condizione non sono dieci prove, e la fiducia lo sa.
+
+E se il numero che il modello propone cade fuori dai prezzi davvero trovati,
+viene riportato dentro la banda **e la pagina lo scrive**: un numero corretto
+di nascosto e' peggio di uno sbagliato in chiaro.
 
 Sotto il rapporto resta la lista numerata di tutto quello che ha letto, ogni
 riga col suo link e col suo cartellino - annuncio usato, prezzo del nuovo,
@@ -308,6 +355,22 @@ Annunci scritti, prezzi stimati e rapporti dell'agente finiscono tutti nella
 scheda **Storico**, che vive nel `localStorage` di questo browser sotto
 `vintedAiHistory`. Non e' un archivio: basta un "cancella dati del sito" o un
 telefono cambiato e non ne resta niente da nessuna parte.
+
+### Com'e' andata davvero
+
+Il prezzo suggerito e' una previsione, e finche' nessuno dice se ha venduto
+resta una previsione che non si e' mai misurata con niente. Ogni voce dello
+storico che porta un prezzo suggerito fa quindi una domanda sola: **venduto? a
+quanto? in quanto tempo?** Si risponde in due campi, o si dice "non ancora" e
+si torna a dirlo dopo.
+
+Dal terzo capo venduto in poi lo storico scrive una riga che nessun modello
+puo' sapere, perche' e' successa a chi sta usando l'app: *i tuoi capi vanno via
+in media il 15% sotto il prezzo suggerito, in 11 giorni*. Quella riga poi torna
+in due posti - nel rapporto dello scanner, che dice cosa vorrebbe dire su
+questo capo, e nel prompt della stima prezzo, dove entra come **l'unico dato di
+vendite concluse** che l'app abbia mai. I dati arrivano lenti e solo da chi
+risponde: e' il prezzo da pagare per l'unico riferimento vero che ci sara'.
 
 Per questo c'e' **Esporta lo storico**: scarica un JSON con il numero di
 formato, la data di esportazione e le voci intere, miniature comprese - e'

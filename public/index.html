@@ -390,6 +390,16 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
 .hDesc{font-size:13px;color:var(--mu);line-height:1.5;margin-bottom:6px}
 .hPrice{font-family:'Orbitron',sans-serif;font-size:18px;font-weight:900;color:var(--t)}
 .hDate{font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-top:8px}
+
+/* L'esito vero: se il capo ha venduto, a quanto e in quanto tempo. E' la sola
+   verifica che il prezzo suggerito possa mai avere, e sta dentro la voce
+   perche' e' li' che si torna a guardarla. */
+.hEs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--mu);margin-top:10px;padding-top:10px;border-top:1px solid var(--bd)}
+.hb{background:transparent;border:1px solid var(--bd);color:var(--t);border-radius:20px;padding:3px 10px;font-size:11px;font-family:inherit;cursor:pointer}
+.hb:hover,.hb:focus-visible{border-color:var(--t)}
+.hEsF{display:flex;flex-wrap:wrap;gap:6px;align-items:center;flex-basis:100%}
+.hEsIn{width:auto;flex:1 1 110px;padding:6px 9px;font-size:12px}
+.calib{margin-top:12px;padding:10px 12px;background:var(--bg2);border:1px solid var(--bd);border-radius:8px;font-size:12px;color:#fff;line-height:1.5}
 </style>
 </head>
 <body>
@@ -646,6 +656,9 @@ textarea.fc{resize:vertical;min-height:84px;line-height:1.5}
       <div style="font-size:12px;color:var(--mu);margin-bottom:14px">Salvato solo su questo dispositivo — non è sincronizzato altrove.</div>
       <button class="btn" id="btnExportStorico" style="margin-bottom:8px" data-az="esportaStorico">⬇ Esporta lo storico</button>
       <button class="btn" style="background:transparent;border:1px solid var(--re);color:var(--re)" data-az="clearHistoryConfirm">🗑️ Cancella tutto lo storico</button>
+      <!-- Come sono andati davvero i capi gia' venduti: si riempie da solo
+           quando ci sono abbastanza esiti segnati, e resta via finche' no. -->
+      <div id="calibra" class="calib" style="display:none"></div>
     </div>
     <div id="historyList"></div>
     <div id="historyEmpty" class="card" style="display:none;text-align:center;color:var(--mu)">

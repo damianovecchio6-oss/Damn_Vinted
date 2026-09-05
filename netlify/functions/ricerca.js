@@ -139,7 +139,8 @@ function normalizza(data, query, tipo) {
       fonte: fonteDi(r),
       link: typeof r.link === 'string' && /^https?:\/\//.test(r.link) ? r.link : '',
       snippet,
-      prezzo: prezzoDi(r) || prezzoDaTesto(`${snippet} ${titolo}`)
+      prezzo: prezzoDi(r) || prezzoDaTesto(`${snippet} ${titolo}`),
+      eta: etaDi(r)
     });
     if (risultati.length >= MAX_RISULTATI) break;
   }
@@ -161,6 +162,40 @@ function normalizza(data, query, tipo) {
     prezzi: S.statistichePrezzi(risultati.map(r => r.prezzo && r.prezzo.valuta === '€' ? r.prezzo.valore : null)),
     correlate
   };
+}
+
+// Quanto e' vecchio l'annuncio. Non e' un dettaglio da vetrina: un annuncio
+// ancora online dopo tre mesi e' la prova che a quel prezzo NON si e' venduto,
+// mentre uno di ieri e' una richiesta ancora tutta da verificare. Chi legge i
+// prezzi puo' pesarli solo se sa quando sono stati chiesti.
+// Google la data la da' quando ce l'ha, e con hl=it la scrive in italiano: o
+// relativa ("3 giorni fa", "ieri") o per esteso ("8 set 2025").
+function etaDi(r) {
+  const testo = String((r && r.date) || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  if (!testo) return null;
+  const giorni = giorniDa(testo);
+  return giorni === null ? { testo, giorni: null } : { testo, giorni };
+}
+
+const MESI = { gen: 0, feb: 1, mar: 2, apr: 3, mag: 4, giu: 5, lug: 6, ago: 7, set: 8, ott: 9, nov: 10, dic: 11 };
+const UNITA = { minut: 1 / 1440, or: 1 / 24, giorn: 1, settiman: 7, mes: 30, ann: 365 };
+
+function giorniDa(testo) {
+  if (/\bieri\b/i.test(testo)) return 1;
+  if (/\boggi\b/i.test(testo)) return 0;
+  const rel = /(\d+)\s*(minut|or|giorn|settiman|mes|ann)/i.exec(testo);
+  if (rel && /\bfa\b/i.test(testo)) {
+    const g = Math.round(Number(rel[1]) * UNITA[rel[2].toLowerCase()]);
+    return isFinite(g) && g >= 0 && g < 4000 ? g : null;
+  }
+  const ass = /(\d{1,2})\s+([a-zà-ù]{3})[a-zà-ù.]*\s+(\d{4})/i.exec(testo);
+  if (ass) {
+    const mese = MESI[ass[2].toLowerCase()];
+    if (mese === undefined) return null;
+    const g = Math.round((Date.now() - Date.UTC(Number(ass[3]), mese, Number(ass[1]))) / 86400000);
+    return g >= 0 && g < 4000 ? g : null;
+  }
+  return null;
 }
 
 function fonteDi(r) {

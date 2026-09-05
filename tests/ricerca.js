@@ -120,6 +120,31 @@ const nuovaQuery = (testo) => `${testo} ${++contatore}`;
   check('lo snippet viene tenuto, accorciato', String(primo.snippet || '').startsWith('Felpa in ottime condizioni'), primo.snippet);
   check('ricerche correlate riportate, al massimo 4', d.correlate.length === 4 && d.correlate[0] === 'felpa carhartt vinted', d.correlate);
 
+  // Un annuncio ancora online dopo mesi e' la prova che a quel prezzo NON si e'
+  // venduto: la data e' l'unica cosa che permette di pesarlo per quello che e'.
+  console.log('\n-- quanto e vecchio l\'annuncio --');
+  reset();
+  risposta = { status: 200, body: JSON.stringify({ organic_results: [
+    { title: 'Ieri', link: 'https://vinted.it/1', snippet: '20 €', date: 'ieri' },
+    { title: 'Relativa', link: 'https://vinted.it/2', snippet: '20 €', date: '3 giorni fa' },
+    { title: 'A settimane', link: 'https://vinted.it/3', snippet: '20 €', date: '2 settimane fa' },
+    { title: 'A mesi', link: 'https://vinted.it/4', snippet: '20 €', date: '5 mesi fa' },
+    { title: 'Per esteso', link: 'https://vinted.it/5', snippet: '20 €', date: '8 set 2025' },
+    { title: 'Illeggibile', link: 'https://vinted.it/6', snippet: '20 €', date: 'chissà quando' },
+    { title: 'Senza data', link: 'https://vinted.it/7', snippet: '20 €' }
+  ] }) };
+  const dDate = JSON.parse((await post('3.1.1.10', { query: nuovaQuery('felpa datata') })).body);
+  const eta = t => (dDate.risultati.find(x => x.titolo === t) || {}).eta;
+  check('"ieri" e un giorno', (eta('Ieri') || {}).giorni === 1, eta('Ieri'));
+  check('"3 giorni fa" sono tre giorni', (eta('Relativa') || {}).giorni === 3, eta('Relativa'));
+  check('le settimane diventano giorni', (eta('A settimane') || {}).giorni === 14, eta('A settimane'));
+  check('e i mesi anche', (eta('A mesi') || {}).giorni === 150, eta('A mesi'));
+  check('una data per esteso diventa giorni veri',
+    typeof (eta('Per esteso') || {}).giorni === 'number' && eta('Per esteso').giorni > 0, eta('Per esteso'));
+  check('una data che non si capisce resta scritta, senza inventare giorni',
+    (eta('Illeggibile') || {}).giorni === null && eta('Illeggibile').testo === 'chissà quando', eta('Illeggibile'));
+  check('senza data non si finge di saperla', eta('Senza data') === null, eta('Senza data'));
+
   console.log('\n-- prezzi letti nello snippet --');
   const trovato = re => d.risultati.find(x => re.test(x.titolo)) || {};
   check('45,00 € letto come 45', (trovato(/^Felpa Carhartt usata$/).prezzo || {}).valore === 45, trovato(/^Felpa Carhartt usata$/).prezzo);
