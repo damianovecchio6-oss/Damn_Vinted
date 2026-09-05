@@ -14,6 +14,7 @@ const SUITE = [
   ['ricerca immagine', 'lens.js', 'multipart SerpApi, prezzi, errori'],
   ['ricerca online', 'ricerca.js', 'query, prezzi negli snippet, cache, errori'],
   ['interfaccia', 'ui.js', 'accessibilita, doppio invio, storico'],
+  ['la guida', 'guida.js', 'due finestre alla prima visita, e mai piu'],
   ['analisi foto', 'photo.js', 'codifica adattiva, miniatura, passaggio annuncio'],
   ['etichetta e Lens', 'nuove.js', 'lettura dedicata, merge, identificazione prodotto'],
   ['agente di ricerca', 'agente.js', 'piano, ricerche, raffinamento, rapporto'],

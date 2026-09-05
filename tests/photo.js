@@ -22,6 +22,7 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
     });
   });
 
+  await L.senzaGuida(page);
   await page.goto('http://127.0.0.1:8898/', { waitUntil: 'load' });
   // La pagina ora si apre sul sole: le prove che seguono partono da dentro una
   // funzione, come se ci fossi arrivato toccando il suo raggio.

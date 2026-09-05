@@ -67,7 +67,7 @@ body{
   background-attachment:fixed;
 }
 
-.shell{max-width:680px;margin:0 auto;padding:22px 18px calc(88px + var(--sb)) 18px}
+.shell{max-width:680px;margin:0 auto;padding:calc(56px + env(safe-area-inset-top,0px)) 18px calc(88px + var(--sb)) 18px}
 
 /* card */
 /* Vetro: un velo di bianco, il fondo sfocato che passa da dietro, un capello
@@ -455,6 +455,86 @@ select.fc{background-image:linear-gradient(45deg,transparent 50%,var(--mu) 50%),
   .spin{animation-duration:.9s!important;animation-iteration-count:infinite!important}
 }
 
+/* ===== LA GUIDA =====
+   Due finestre, la prima volta. Sono un foglio di vetro sopra la pagina, con
+   il fondo sfocato dietro: e' il modo di iOS di dire "questo prima di tutto
+   il resto", e a differenza di un cartello in cima non si puo' scorrere via
+   senza averlo letto. */
+.guida{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;padding:20px}
+/* Senza questa riga il display:flex qui sopra vincerebbe sull'attributo hidden,
+   e la guida resterebbe aperta per sempre. */
+.guida[hidden]{display:none}
+.guidaSfondo{position:absolute;inset:0;background:rgba(0,0,0,.6);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);animation:gFondo .35s var(--sp) both}
+.guidaBox{
+  position:relative;width:100%;max-width:392px;max-height:92dvh;overflow-y:auto;
+  background:rgba(26,26,30,.9);
+  -webkit-backdrop-filter:blur(34px) saturate(180%);backdrop-filter:blur(34px) saturate(180%);
+  border:1px solid var(--bd);border-radius:30px;
+  padding:26px 24px 22px;text-align:center;
+  box-shadow:0 30px 74px rgba(0,0,0,.62),0 1px 0 rgba(255,255,255,.07) inset;
+  animation:gEntra .5s var(--sp) both;
+}
+@keyframes gFondo{from{opacity:0}to{opacity:1}}
+@keyframes gEntra{from{opacity:0;transform:translateY(26px) scale(.955)}to{opacity:1;transform:none}}
+/* La finestra prende il fuoco all'apertura per far partire da qui la lettura,
+   ma non e' lei il bersaglio del prossimo tasto: il contorno resta ai bottoni. */
+.guidaBox:focus{outline:none}
+.guidaX{position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:50%;border:1px solid var(--bd2);background:rgba(255,255,255,.07);color:var(--mu);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;transition:transform .3s var(--sp),color .25s var(--sp)}
+.guidaX:active{transform:scale(.9)}
+.guidaX:focus-visible{outline:2px solid var(--t);outline-offset:2px}
+
+/* Il disegno dice in un colpo cosa fanno le parole: il giro intorno al sole,
+   e il sole parcheggiato sotto la scheda. */
+.gArte{height:126px;display:flex;align-items:center;justify-content:center;margin-bottom:16px}
+.gArte svg{height:100%;width:auto;overflow:visible}
+.gSole{color:var(--t);filter:drop-shadow(0 6px 20px rgba(232,200,74,.35))}
+.gGiro{fill:none;stroke:var(--t);stroke-width:2.5;stroke-linecap:round;stroke-dasharray:5 8;opacity:.75}
+.gPunta{fill:var(--t)}
+.gDito{fill:none;stroke:var(--t);stroke-width:2.5;opacity:.75}
+.gCard{fill:rgba(255,255,255,.06);stroke:var(--bd);stroke-width:1.5}
+.gRiga{fill:rgba(255,255,255,.16)}
+
+.gN{font-size:12px;font-weight:600;color:var(--t);letter-spacing:.03em;margin-bottom:8px;opacity:.9}
+.gT{font-family:var(--fd);font-size:25px;font-weight:600;letter-spacing:-.032em;margin-bottom:11px;color:var(--tx)}
+/* Titolo e passo al centro, il discorso a sinistra: oltre le tre righe il
+   testo centrato costringe l'occhio a ricercare l'inizio a ogni riga. */
+.gP{font-size:16px;line-height:1.55;color:#c8c8d0;letter-spacing:-.014em;text-align:left}
+.gNota{font-size:13px;color:var(--mu);text-align:left;margin-top:10px;letter-spacing:-.01em}
+.gP strong{color:var(--tx);font-weight:600}
+.gL{list-style:none;text-align:left;margin-top:16px}
+.gL li{display:flex;gap:11px;align-items:baseline;font-size:15px;color:#c8c8d0;padding:8px 0;border-bottom:1px solid var(--bd2);letter-spacing:-.012em;line-height:1.4}
+.gL li:last-child{border:none}
+.gL strong{color:var(--tx);font-weight:600}
+
+/* Il segnaposto dei passi: quello aperto e' una barretta, gli altri punti. */
+.gPunti{display:flex;gap:6px;justify-content:center;margin:20px 0 16px}
+.gPunti span{width:7px;height:7px;border-radius:99px;background:rgba(255,255,255,.2);transition:width .4s var(--sp),background .3s var(--sp)}
+.gPunti span.on{width:22px;background:var(--t)}
+
+.gAz{display:flex;gap:10px;align-items:stretch}
+.gAz .btn{margin-top:0;flex:1 1 auto}
+.gAz .cbtn{flex:0 0 auto;border-radius:var(--r2);padding:16px 20px;font-size:15px}
+
+/* Mentre la guida e' aperta la pagina sotto non si scorre: il dito che scorre
+   il fondo di una finestra modale e' il modo piu' rapido di perdere il segno. */
+body.guidaAperta{overflow:hidden}
+
+/* Il "?" che la riapre. Sta fuori dal sole apposta: dentro, ogni tocco - anche
+   sul vuoto - apre la funzione scelta, e questo bottone ne verrebbe mangiato. */
+.aiutoBtn{
+  position:fixed;top:calc(12px + env(safe-area-inset-top,0px));right:14px;z-index:70;
+  width:34px;height:34px;border-radius:50%;
+  border:1px solid var(--bd);background:rgba(255,255,255,.07);
+  -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);
+  color:var(--mu);font-family:var(--fd);font-size:15px;font-weight:600;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  -webkit-tap-highlight-color:transparent;
+  transition:transform .3s var(--sp),color .25s var(--sp),border-color .25s var(--sp);
+}
+.aiutoBtn:active{transform:scale(.9)}
+.aiutoBtn:hover,.aiutoBtn:focus-visible{color:var(--t);border-color:rgba(232,200,74,.45)}
+.aiutoBtn:focus-visible{outline:2px solid var(--t);outline-offset:2px}
+
 /* storico */
 .hItem{
   background:var(--card);
@@ -486,13 +566,15 @@ select.fc{background-image:linear-gradient(45deg,transparent 50%,var(--mu) 50%),
 <body>
 <!-- I due disegni del foglio, ridisegnati al pulito: raggi irregolari come a
      matita. Stanno qui come <symbol> e non come <img> perche' cosi' prendono
-     il colore dal CSS (currentColor) e non costano una richiesta in piu'. -->
+     il colore dal CSS (currentColor) e non costano una richiesta in piu'.
+     Il fill="currentColor" e' quello che rende vera la frase qui sopra: senza,
+     l'SVG disegna in nero - e un sole nero su fondo nero non c'e'. -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
-  <symbol id="ico-sole" viewBox="0 0 100 100">
+  <symbol id="ico-sole" viewBox="0 0 100 100" fill="currentColor">
     <circle cx="50" cy="50" r="30"/>
     <path d="M44.3 20.6 L50.0 4.0 L55.7 20.6 Z M68.9 26.7 L81.2 21.9 L75.2 33.7 Z M79.5 44.8 L97.0 51.6 L79.1 57.3 Z M73.6 68.5 L78.5 79.5 L67.6 74.3 Z M55.2 79.5 L50.0 95.0 L44.8 79.5 Z M33.2 74.9 L20.1 80.9 L25.7 67.6 Z M20.8 56.7 L2.0 51.7 L20.4 45.3 Z M24.8 33.7 L18.8 21.9 L31.1 26.7 Z"/>
   </symbol>
-  <symbol id="ico-sole-luna" viewBox="0 0 100 100">
+  <symbol id="ico-sole-luna" viewBox="0 0 100 100" fill="currentColor">
     <mask id="mascheraLuna">
       <rect width="100" height="100" fill="#fff"/>
       <circle cx="66" cy="40" r="26" fill="#000"/>
@@ -501,6 +583,8 @@ select.fc{background-image:linear-gradient(45deg,transparent 50%,var(--mu) 50%),
     <path d="M44.3 20.6 L50.0 4.0 L55.7 20.6 Z M68.9 26.7 L81.2 21.9 L75.2 33.7 Z M79.5 44.8 L97.0 51.6 L79.1 57.3 Z M73.6 68.5 L78.5 79.5 L67.6 74.3 Z M55.2 79.5 L50.0 95.0 L44.8 79.5 Z M33.2 74.9 L20.1 80.9 L25.7 67.6 Z M20.8 56.7 L2.0 51.7 L20.4 45.3 Z M24.8 33.7 L18.8 21.9 L31.1 26.7 Z"/>
   </symbol>
 </svg>
+
+<button class="aiutoBtn" data-az="apriGuida" aria-label="Come funziona ALBA">?</button>
 
 <div id="soleApp">
   <div class="soleWrap">
@@ -795,6 +879,61 @@ select.fc{background-image:linear-gradient(45deg,transparent 50%,var(--mu) 50%),
 </div>
 
 <div id="toast" role="status" aria-live="polite"></div>
+
+<!-- LA GUIDA: due finestre, e solo la prima volta. Il sole non e' una barra di
+     schede - si gira e si preme - e una cosa che non hai mai visto altrove va
+     detta una volta, non lasciata indovinare. Chi la salta non la rivede piu',
+     e chi la rivuole ha il "?" in alto. -->
+<div id="guida" class="guida" hidden>
+  <div class="guidaSfondo" data-az="chiudiGuida"></div>
+  <div class="guidaBox" id="guidaBox" role="dialog" aria-modal="true" aria-labelledby="gT1" tabindex="-1">
+    <button class="guidaX" data-az="chiudiGuida" aria-label="Chiudi la guida">✕</button>
+
+    <section class="gPasso" id="gPasso1">
+      <div class="gArte">
+        <svg viewBox="0 0 140 120" aria-hidden="true">
+          <use href="#ico-sole" x="35" y="15" width="70" height="70" class="gSole"/>
+          <path class="gGiro" d="M22 60 A48 48 0 0 1 118 60"/>
+          <path class="gPunta" d="M118 60 L112 50 L124 50 Z"/>
+          <circle class="gDito" cx="70" cy="96" r="7"/>
+        </svg>
+      </div>
+      <div class="gN">Passo 1 di 2</div>
+      <h2 class="gT" id="gT1">Il sole è la ghiera</h2>
+      <p class="gP">Gira intorno al sole con il dito, o con la rotella: il disco al centro dice sempre dove sei. Quando è la funzione giusta, <strong>premi al centro</strong> e si apre.</p>
+      <p class="gNota">Da tastiera: frecce per girare, Invio per aprire.</p>
+    </section>
+
+    <section class="gPasso" id="gPasso2" hidden>
+      <div class="gArte">
+        <svg viewBox="0 0 140 120" aria-hidden="true">
+          <rect class="gCard" x="24" y="10" width="92" height="66" rx="14"/>
+          <rect class="gRiga" x="36" y="26" width="52" height="6" rx="3"/>
+          <rect class="gRiga" x="36" y="40" width="68" height="6" rx="3"/>
+          <rect class="gRiga" x="36" y="54" width="40" height="6" rx="3"/>
+          <use href="#ico-sole" x="49" y="72" width="42" height="42" class="gSole"/>
+        </svg>
+      </div>
+      <div class="gN">Passo 2 di 2</div>
+      <h2 class="gT" id="gT2">Sei raggi, sei funzioni</h2>
+      <p class="gP">Aperta una funzione, il sole si parcheggia in basso: da lì giri per passare alla successiva, e lo tocchi per tornare al centro.</p>
+      <ul class="gL">
+        <li><span>📸</span><span><strong>Analizza</strong> le foto del capo</span></li>
+        <li><span>✍️</span><span><strong>Annuncio</strong>: titolo, descrizione, hashtag</span></li>
+        <li><span>💶</span><span><strong>Prezzo</strong>: la stima di mercato</span></li>
+        <li><span>🤖</span><span><strong>Ricerca</strong>: l'agente cerca online i prezzi veri</span></li>
+        <li><span>🗂️</span><span><strong>Storico</strong>: resta su questo dispositivo, non altrove</span></li>
+        <li><span>🔬</span><span><strong>Scanner</strong>: fa da solo tutto il giro, dalle foto al prezzo</span></li>
+      </ul>
+    </section>
+
+    <div class="gPunti" aria-hidden="true"><span class="on" id="gPunto1"></span><span id="gPunto2"></span></div>
+    <div class="gAz">
+      <button class="cbtn gIndietro" id="gIndietro" data-az="guidaIndietro">Salta</button>
+      <button class="btn gAvanti" id="gAvanti" data-az="guidaAvanti">Avanti</button>
+    </div>
+  </div>
+</div>
 
 <!-- Lo script sta in un file suo, non qui dentro: e' quello che permette a
      public/_headers di dire script-src 'self' senza 'unsafe-inline'. Il path

@@ -41,6 +41,7 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(lensBody) });
   });
 
+  await L.senzaGuida(page);
   await page.goto('http://127.0.0.1:8897/', { waitUntil: 'load' });
   // La pagina ora si apre sul sole: le prove che seguono partono da dentro una
   // funzione, come se ci fossi arrivato toccando il suo raggio.

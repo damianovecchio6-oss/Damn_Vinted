@@ -57,6 +57,7 @@ const RISULTATO = (titolo, prezzo, fonte) => ({
     });
   });
 
+  await L.senzaGuida(page);
   await page.goto('http://127.0.0.1:8896/', { waitUntil: 'load' });
   // La pagina ora si apre sul sole: le prove che seguono partono da dentro una
   // funzione, come se ci fossi arrivato toccando il suo raggio.

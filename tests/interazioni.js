@@ -18,6 +18,7 @@ async function apri(browser, opzioni) {
       body: JSON.stringify({ text: JSON.stringify({ prezzoSuggerito: 30, rangeMin: 20, rangeMax: 40, percentuale: 55, motivazione: 'ok', fattori: ['uno', 'due', 'tre'], consiglio: 'vendi' }), model: 'm', provider: 'p' })
     });
   });
+  await L.senzaGuida(page);
   await page.goto('http://127.0.0.1:8895/', { waitUntil: 'load' });
   return page;
 }
@@ -339,6 +340,7 @@ async function apri(browser, opzioni) {
       body: JSON.stringify({ text: JSON.stringify({ prezzoSuggerito: 30, rangeMin: 20, rangeMax: 40, percentuale: 55, motivazione: 'ok', fattori: ['uno'], consiglio: 'vendi' }), model: 'm', provider: 'p' })
     });
   });
+  await L.senzaGuida(lento);
   await lento.goto('http://127.0.0.1:8895/', { waitUntil: 'load' });
 
   // Le domande le raccogliamo e rispondiamo noi: di default si annulla, cioe'

@@ -16,6 +16,7 @@ const { check, fine } = L.contatore();
   const page = await browser.newPage();
   const errori = [];
   page.on('pageerror', e => errori.push(String(e)));
+  await L.senzaGuida(page);
   await page.goto('http://127.0.0.1:8892/', { waitUntil: 'load' });
 
   const q = (valori, pesi, quantile) => page.evaluate(([v, p, qq]) =>

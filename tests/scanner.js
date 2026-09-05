@@ -96,6 +96,7 @@ const NEGOZIO = (titolo, prezzo) => ({
     });
   });
 
+  await L.senzaGuida(page);
   await page.goto('http://127.0.0.1:8893/', { waitUntil: 'load' });
   const reset = () => { aiPost = []; ricPost = []; lensPost = []; };
   const attendiFine = () => page.waitForFunction(() => !document.getElementById('btnSx').disabled, null, { timeout: 40000 });

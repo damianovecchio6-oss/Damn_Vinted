@@ -15,6 +15,7 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
   const page = await ctx.newPage();
   const errori = [];
   page.on('pageerror', e => errori.push(String(e)));
+  await L.senzaGuida(page);
   await page.goto('http://127.0.0.1:8894/', { waitUntil: 'load' });
   const cdp = await ctx.newCDPSession(page);
 

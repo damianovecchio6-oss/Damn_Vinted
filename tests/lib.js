@@ -61,6 +61,16 @@ function serviSito(porta) {
   return new Promise(r => server.listen(porta, () => r(server)));
 }
 
+// La guida si apre da sola alla prima visita, e da sola coprirebbe la pagina
+// all'inizio di ogni suite: qui si dice al browser che l'utente l'ha gia'
+// vista, prima ancora che la pagina parta. Va chiamata prima della goto. Chi
+// la guida la sta provando davvero - tests/guida.js - questa non la chiama.
+function senzaGuida(pagina) {
+  return pagina.addInitScript(() => {
+    try { localStorage.setItem('albaGuidaVista', '1'); } catch (e) {}
+  });
+}
+
 function funzione(nome) {
   return path.join(FUNCTIONS, nome);
 }
@@ -79,4 +89,4 @@ function contatore() {
   return stato;
 }
 
-module.exports = { RADICE, SITO, FUNCTIONS, chromium, serviSito, funzione, contatore };
+module.exports = { RADICE, SITO, FUNCTIONS, chromium, serviSito, senzaGuida, funzione, contatore };

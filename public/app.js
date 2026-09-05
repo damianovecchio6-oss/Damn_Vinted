@@ -3023,6 +3023,91 @@ function renderCalibrazione(voci){
     + (cal.giorni !== null ? `, in ${plurale(cal.giorni, 'giorno', 'giorni')}` : '') + '.';
 }
 
+// ===== LA GUIDA =====
+// Il sole non e' una barra di schede: si gira e si preme al centro. Chi apre
+// l'app per la prima volta non ha modo di saperlo guardando, quindi glielo si
+// dice - due finestre, una volta sola, e da li' in poi mai piu'. Il segno che
+// e' stata vista sta nel localStorage come lo storico: e' un fatto di questo
+// dispositivo, non dell'utente.
+const GUIDA_KEY = 'albaGuidaVista';
+const GUIDA_PASSI = 2;
+let guidaPasso = 1, guidaFuocoPrima = null;
+
+function guidaGiaVista(){
+  // Se il localStorage e' negato - navigazione privata, permessi stretti - la
+  // guida non ha dove segnarsi, e una finestra che torna a ogni caricamento e'
+  // peggio di una che non si e' vista. In quel caso si sta zitti.
+  try{ return localStorage.getItem(GUIDA_KEY) === '1'; }catch(e){ return true; }
+}
+function segnaGuidaVista(){
+  try{ localStorage.setItem(GUIDA_KEY, '1'); }catch(e){}
+}
+
+function guidaMostra(n){
+  guidaPasso = Math.min(Math.max(n, 1), GUIDA_PASSI);
+  for(let i=1; i<=GUIDA_PASSI; i++){
+    document.getElementById('gPasso'+i).hidden = (i !== guidaPasso);
+    document.getElementById('gPunto'+i).classList.toggle('on', i === guidaPasso);
+  }
+  // Il titolo che la finestra annuncia deve essere quello che si vede: con
+  // aria-labelledby fermo sul primo, al secondo passo chi ascolta sentirebbe
+  // il nome di una schermata che non c'e' piu'.
+  document.getElementById('guidaBox').setAttribute('aria-labelledby', 'gT'+guidaPasso);
+  const ultimo = guidaPasso === GUIDA_PASSI;
+  document.getElementById('gAvanti').textContent = ultimo ? 'Ho capito' : 'Avanti';
+  document.getElementById('gIndietro').textContent = guidaPasso === 1 ? 'Salta' : 'Indietro';
+}
+
+function apriGuida(){
+  const g = document.getElementById('guida');
+  if(!g) return;
+  guidaFuocoPrima = document.activeElement;
+  g.hidden = false;
+  document.body.classList.add('guidaAperta');
+  guidaMostra(1);
+  // Il fuoco va sulla finestra, non sul bottone: cosi' chi legge da tastiera
+  // parte dal titolo invece che dalla fine, e chi apre col dito non si trova
+  // il contorno del fuoco acceso su un bottone che non ha premuto.
+  document.getElementById('guidaBox').focus();
+}
+
+function chiudiGuida(){
+  const g = document.getElementById('guida');
+  if(!g || g.hidden) return;
+  segnaGuidaVista();
+  g.hidden = true;
+  document.body.classList.remove('guidaAperta');
+  // Il fuoco torna da dove veniva: chi naviga da tastiera, chiusa la finestra,
+  // si ritroverebbe altrimenti in cima alla pagina.
+  if(guidaFuocoPrima && guidaFuocoPrima.focus) guidaFuocoPrima.focus();
+  guidaFuocoPrima = null;
+}
+
+function guidaAvanti(){
+  if(guidaPasso < GUIDA_PASSI) guidaMostra(guidaPasso + 1);
+  else chiudiGuida();
+}
+function guidaIndietro(){
+  if(guidaPasso > 1) guidaMostra(guidaPasso - 1);
+  else chiudiGuida();   // dal primo passo il tasto dice "Salta"
+}
+
+// Esc chiude, e il Tab resta dentro: una finestra modale che lascia scappare
+// il fuoco sui bottoni sotto non e' modale per chi usa la tastiera.
+document.addEventListener('keydown', e=>{
+  const g = document.getElementById('guida');
+  if(!g || g.hidden) return;
+  if(e.key === 'Escape'){ e.preventDefault(); chiudiGuida(); return; }
+  if(e.key !== 'Tab') return;
+  const dentro = Array.from(g.querySelectorAll('button')).filter(b=>!b.closest('[hidden]'));
+  if(!dentro.length) return;
+  const primo = dentro[0], ultimo = dentro[dentro.length-1];
+  if(e.shiftKey && document.activeElement === primo){ e.preventDefault(); ultimo.focus(); }
+  else if(!e.shiftKey && document.activeElement === ultimo){ e.preventDefault(); primo.focus(); }
+});
+
+if(!guidaGiaVista()) apriGuida();
+
 // La pagina si apre sul sole: la classe la mette sw(), ma al primo giro sw()
 // non e' ancora passata di qui.
 document.body.classList.add('home');
@@ -3074,6 +3159,10 @@ const AZIONI = {
   esitoRiapri:         (el, arg) => esitoSegna(arg, null),
   clearHistoryConfirm: () => clearHistoryConfirm(),
   avviaScanner:        () => avviaScanner(),
+  apriGuida:           () => apriGuida(),
+  chiudiGuida:         () => chiudiGuida(),
+  guidaAvanti:         () => guidaAvanti(),
+  guidaIndietro:       () => guidaIndietro(),
   scannerPerAnnuncio:  () => scannerPerAnnuncio(),
   scannerPerPrezzo:    () => scannerPerPrezzo(),
   // Queste tre volevano this: chi copia deve sapere quale bottone dire "fatto".
