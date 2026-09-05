@@ -6,6 +6,18 @@ const https = require('https');
 
 const GROQ_KEY = process.env.GROQ_API_KEY || process.env.GROQ_KEY;
 
+// Il codice di accesso. Non c'e' quasi mai: senza ALBA_PIN il sito e' aperto
+// come e' sempre stato, e questa parte non esiste. Quando c'e', serve a dire
+// chi puo' usare le chiavi AI di chi paga - non a proteggere dei dati, che sul
+// server non ce ne sono: lo storico vive nel telefono di chi lo scrive.
+//
+// Si controlla in un punto solo, quando si rilascia il token di sessione. Da
+// li' in poi comandano il token (firmato, legato all'IP, 15 minuti) e il rate
+// limit, che erano gia' li'. Chiederlo a ogni richiesta avrebbe voluto dire
+// tenere il codice in giro per la pagina a ogni analisi, per la stessa
+// garanzia.
+const PIN = (process.env.ALBA_PIN || '').trim();
+
 // Allowlist per le chiamate CROSS-ORIGIN, cioe' da un dominio diverso da quello
 // che serve la function. Le chiamate della nostra pagina passano gia' dal
 // controllo same-site (vedi isSameSite) e non hanno bisogno di stare qui.
@@ -87,7 +99,7 @@ function isAllowed(origin, headers) {
 function corsFor(origin, headers) {
   const out = {
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Session-Token',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Session-Token, X-Alba-Pin',
     'Vary': 'Origin'
   };
   if (isAllowed(origin, headers)) out['Access-Control-Allow-Origin'] = origin;
@@ -120,7 +132,25 @@ function rateLimited(ip) {
 // allo stesso modo, quindi un token emesso da una vale anche per le altre.
 function sessionSecret() {
   if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
-  return crypto.createHash('sha256').update(`${GROQ_KEY || ''}|vinted-session-v1`).digest('hex');
+  // Il PIN entra nel segreto: cambiarlo scade all'istante i token gia' in
+  // giro, invece di lasciare quindici minuti di accesso a chi lo aveva. E'
+  // tutto il motivo per cui sta qui dentro.
+  return crypto.createHash('sha256').update(`${GROQ_KEY || ''}|${PIN}|vinted-session-v1`).digest('hex');
+}
+
+function pinRichiesto() {
+  return !!PIN;
+}
+
+// Confronto a tempo costante su due impronte: sono sempre lunghe uguali, cosa
+// che timingSafeEqual pretende, e non si perde tempo a misurare la lunghezza
+// del codice giusto - che e' gia' un'informazione.
+function pinGiusto(valore) {
+  if (!PIN) return true;
+  if (typeof valore !== 'string' || !valore) return false;
+  const a = crypto.createHash('sha256').update(valore).digest();
+  const b = crypto.createHash('sha256').update(PIN).digest();
+  return crypto.timingSafeEqual(a, b);
 }
 
 function b64url(value) {
@@ -232,6 +262,12 @@ function checkRequest(event, opts) {
   if (options.richiediToken && !verifyToken(headers['x-session-token'], ip)) {
     return { risposta: json(401, cors, { error: 'Sessione scaduta, ricarico e riprovo.' }) };
   }
+  // Il "codice" nella risposta non e' decorazione: e' come la pagina distingue
+  // "serve il codice" da "la sessione e' scaduta", che si somigliano - sono
+  // due 401 - e vogliono due cose diverse dall'utente.
+  if (options.richiediPin && !pinGiusto(headers['x-alba-pin'])) {
+    return { risposta: json(401, cors, { error: 'Serve il codice di accesso.', codice: 'pin' }) };
+  }
   return { cors, ip, headers };
 }
 
@@ -307,6 +343,7 @@ function statistichePrezzi(valoriGrezzi) {
 module.exports = {
   GROQ_KEY, SESSION_TTL_MS,
   normalizeOrigin, isSameSite, isAllowed, corsFor, clientIp, rateLimited,
+  pinRichiesto, pinGiusto,
   issueToken, verifyToken, lowerKeys, json, inviaHttp, statistichePrezzi,
   cacheGet, cacheSet, cachePeek, checkRequest
 };

@@ -45,7 +45,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-774 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+799 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -100,6 +100,10 @@ senza di loro il sito continua a funzionare come prima.
 | `GROQ_API_KEY` | Scrittura annuncio, stima prezzo, e analisi foto se manca Gemini | Si' |
 | `GEMINI_API_KEY` | Analisi foto: legge il testo delle etichette molto meglio | No |
 | `SERPAPI_KEY` | Bottone "Identifica prodotto", agente di ricerca e scanner | No |
+| `ALBA_PIN` | Chiude il sito dietro un codice: senza, chi ha l'indirizzo entra | No |
+
+Su Vercel stanno in **Settings > Environment Variables**, e vale la stessa
+regola del riquadro: contano dal deploy dopo.
 
 ### GEMINI_API_KEY — analisi foto piu' accurata
 
@@ -368,6 +372,33 @@ foto, non dice nessun prezzo - lo inventerebbe - e lo spiega.
 
 Il risultato alimenta l'annuncio e la stima prezzo, con lo stesso vincolo
 dell'agente: solo se la scheda di la' parla dello stesso capo.
+
+### ALBA_PIN — chi puo' usare le tue chiavi
+
+Il sito e' pubblico per costruzione: e' una pagina statica, e chi ha
+l'indirizzo la apre. Quello che c'e' da proteggere non sono i dati - lo
+storico vive nel telefono di chi lo scrive, sul server non c'e' niente - ma le
+**chiavi AI di chi paga**: chi apre il sito puo' consumare la tua quota Groq e
+le tue 250 ricerche SerpApi del mese.
+
+Con `ALBA_PIN` impostato, la function non rilascia il token di sessione a chi
+non porta quel codice. La pagina lo chiede la prima volta su quel dispositivo,
+se lo ricorda nel `localStorage` come fa con lo storico, e non lo chiede piu'.
+Senza la variabile non cambia niente: nessuna finestra, nessun codice, il sito
+com'era.
+
+Tre cose per cui e' fatto cosi'. Il codice si controlla **una volta sola**,
+quando si rilascia il token: da li' in poi comandano il token - firmato,
+legato all'IP, quindici minuti - e il rate limit, che c'erano gia'. Chiederlo
+a ogni richiesta avrebbe voluto dire tenerlo in giro per la pagina a ogni
+analisi, per la stessa garanzia. Il confronto e' a tempo costante su due
+impronte, non un `===` fra stringhe. E il codice entra nel segreto che firma i
+token: **cambiarlo scade all'istante** quelli gia' in giro, invece di lasciare
+un quarto d'ora di accesso a chi lo aveva.
+
+Quello che questo codice **non** e': non e' autenticazione, e non protegge da
+chi il codice ce l'ha. E' la serratura di casa, non una cassaforte - tiene
+fuori chi passa, non chi ha le chiavi.
 
 ## Lo storico, e come portarselo via
 

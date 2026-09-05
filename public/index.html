@@ -495,6 +495,23 @@ select.fc{background-image:linear-gradient(45deg,transparent 50%,var(--mu) 50%),
 /* La finestra prende il fuoco all'apertura per far partire da qui la lettura,
    ma non e' lei il bersaglio del prossimo tasto: il contorno resta ai bottoni. */
 .guidaBox:focus{outline:none}
+
+/* IL CODICE DI ACCESSO
+   Stessa finestra della guida - stesso vetro, stessa entrata - perche' e' la
+   stessa cosa: un foglio davanti a tutto il resto. Compare solo se il sito ha
+   un codice impostato, e solo la prima volta su questo dispositivo. */
+.pinBox{max-width:340px}
+.pinT{font-family:var(--fd);font-size:21px;font-weight:600;letter-spacing:-.02em;margin-bottom:8px}
+.pinS{font-size:14.5px;color:var(--mu);line-height:1.5;margin-bottom:18px}
+.pinIn{
+  width:100%;text-align:center;font-family:var(--fd);font-size:22px;letter-spacing:.28em;
+  padding:14px 12px;border-radius:var(--r2);background:rgba(255,255,255,.06);
+  border:1px solid var(--bd);color:var(--tx);
+}
+.pinIn:focus{outline:none;border-color:rgba(232,200,74,.55)}
+/* Il messaggio di errore occupa il suo posto sempre, anche vuoto: senza, la
+   finestra sobbalzava di una riga al primo codice sbagliato. */
+.pinE{min-height:20px;margin-top:10px;font-size:13.5px;color:var(--re)}
 .guidaX{position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:50%;border:1px solid var(--bd2);background:rgba(255,255,255,.07);color:var(--mu);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;transition:transform .3s var(--sp),color .25s var(--sp)}
 .guidaX:active{transform:scale(.9)}
 .guidaX:focus-visible{outline:2px solid var(--t);outline-offset:2px}
@@ -1130,6 +1147,21 @@ body:not(.home) .mPasseggio{animation:none;transform:translateX(16px);pointer-ev
       <button class="cbtn gIndietro" id="gIndietro" data-az="guidaIndietro">Salta</button>
       <button class="btn gAvanti" id="gAvanti" data-az="guidaAvanti">Avanti</button>
     </div>
+  </div>
+</div>
+
+<!-- Il codice di accesso. Non si vede mai se il sito non ne ha uno: la pagina
+     lo scopre dalla prima risposta della function, non da un'impostazione
+     scritta qui, cosi' accendere e spegnere il codice non richiede un deploy
+     del sito ma solo la variabile d'ambiente. -->
+<div id="pin" class="guida" hidden>
+  <div class="guidaSfondo"></div>
+  <div class="guidaBox pinBox" id="pinBoxEl" role="dialog" aria-modal="true" aria-labelledby="pinT">
+    <div class="pinT" id="pinT">Codice di accesso</div>
+    <p class="pinS">Questa copia di ALBA e' privata: serve il codice per usarla. Te lo ricorda questo dispositivo, non lo chiede piu'.</p>
+    <input class="pinIn" id="pinIn" type="password" inputmode="numeric" autocomplete="current-password" aria-labelledby="pinT" aria-describedby="pinE"/>
+    <div class="pinE" id="pinE" role="alert"></div>
+    <button class="btn" data-az="pinConferma" style="margin-top:14px">Entra</button>
   </div>
 </div>
 

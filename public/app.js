@@ -421,23 +421,131 @@ function timeoutSignal(ms){
 // in memoria e lo rinnoviamo da soli: l'utente non deve accorgersene mai.
 let sessionToken=null, sessionTokenExp=0, tokenInFlight=null;
 
+// Quante volte si puo' sbagliare il codice prima che la pagina smetta di
+// chiederlo. Non e' una difesa - quella e' il rate limit della function, che
+// conta le richieste per IP - serve a non tenere aperta una finestra che
+// riappare all'infinito a chi il codice non ce l'ha.
+const PIN_TENTATIVI = 4;
+
 function fetchSessionToken(){
   // Due richieste in parallelo (analisi + prezzo) devono chiedere un token solo.
   if(tokenInFlight) return tokenInFlight;
-  tokenInFlight=fetch(AI_URL,{method:'GET',signal:timeoutSignal(10000)})
-    .catch(()=>{ throw new Error('Connessione fallita. Controlla la rete e riprova.'); })
-    .then(r=>r.ok?r.json():null)
-    .then(d=>{
-      if(!d||!d.token) throw new Error('Sessione non disponibile. Ricarica la pagina.');
-      sessionToken=d.token;
-      // Rinnoviamo un minuto prima della scadenza vera: meglio un token in
-      // piu' che una richiesta respinta a meta' analisi.
-      sessionTokenExp=Date.now()+Math.max(0,(d.expiresIn||900000)-60000);
-      return sessionToken;
-    })
-    .finally(()=>{ tokenInFlight=null; });
+  tokenInFlight=(async()=>{
+    for(let giro=0; giro<PIN_TENTATIVI; giro++){
+      let r;
+      try{
+        r=await fetch(AI_URL,{ method:'GET', headers:pinHeader(), signal:timeoutSignal(10000) });
+      }catch(e){
+        throw new Error('Connessione fallita. Controlla la rete e riprova.');
+      }
+      const d=await r.json().catch(()=>null);
+
+      if(r.ok && d && d.token){
+        sessionToken=d.token;
+        // Rinnoviamo un minuto prima della scadenza vera: meglio un token in
+        // piu' che una richiesta respinta a meta' analisi.
+        sessionTokenExp=Date.now()+Math.max(0,(d.expiresIn||900000)-60000);
+        chiudiPin();
+        return sessionToken;
+      }
+
+      // 401 con codice 'pin' e' l'unica risposta che si cura chiedendo
+      // qualcosa all'utente: tutte le altre sono guasti, e insistere non
+      // aiuterebbe nessuno.
+      if(r.status===401 && d && d.codice==='pin'){
+        // Il codice salvato non va piu' bene (o e' cambiato sul server): si
+        // butta, o al giro dopo si ritenterebbe con lo stesso.
+        scordaPin();
+        const scritto=await chiediPin(giro>0);
+        if(!scritto) throw new Error('Serve il codice di accesso per usare ALBA.');
+        salvaPin(scritto);
+        continue;
+      }
+      throw new Error('Sessione non disponibile. Ricarica la pagina.');
+    }
+    throw new Error('Codice di accesso non valido.');
+  })().finally(()=>{ tokenInFlight=null; });
   return tokenInFlight;
 }
+
+/* ===== IL CODICE DI ACCESSO =====
+   Quando il sito ha un ALBA_PIN, la function non rilascia il token senza. La
+   pagina non sa in anticipo se ce n'e' uno: lo scopre dalla prima risposta, e
+   solo allora chiede. Cosi' accendere il codice e' una variabile d'ambiente,
+   non un deploy del sito.
+
+   Il codice sta nel localStorage come lo storico: e' un fatto di questo
+   dispositivo. Se il localStorage e' negato - navigazione privata - resta in
+   memoria per la sessione, che e' meglio di chiederlo a ogni analisi. */
+const PIN_KEY='albaPin';
+let pinInMemoria='';
+
+function pinSalvato(){
+  try{ return localStorage.getItem(PIN_KEY) || pinInMemoria; }catch(e){ return pinInMemoria; }
+}
+function salvaPin(valore){
+  pinInMemoria=valore;
+  try{ localStorage.setItem(PIN_KEY, valore); }catch(e){}
+}
+function scordaPin(){
+  pinInMemoria='';
+  try{ localStorage.removeItem(PIN_KEY); }catch(e){}
+}
+function pinHeader(){
+  const p=pinSalvato();
+  return p ? { 'X-Alba-Pin': p } : {};
+}
+
+// La finestra e' una promessa: si risolve col codice scritto, o con null se
+// l'utente la chiude. Chi aspetta un token resta fermo finche' non risponde.
+let pinAttesa=null;
+
+function chiediPin(sbagliato){
+  const box=document.getElementById('pin');
+  if(!box) return Promise.resolve(null);
+  const campo=document.getElementById('pinIn');
+  const errore=document.getElementById('pinE');
+  if(errore) errore.textContent = sbagliato ? 'Codice non valido. Riprova.' : '';
+  if(campo) campo.value='';
+  box.hidden=false;
+  document.body.classList.add('guidaAperta');
+  if(campo) campo.focus();
+  return new Promise(risolvi=>{ pinAttesa=risolvi; });
+}
+
+function pinConferma(){
+  const campo=document.getElementById('pinIn');
+  const valore=campo ? campo.value.trim() : '';
+  if(!valore) return;
+  const risolvi=pinAttesa;
+  pinAttesa=null;
+  chiudiPin();
+  if(risolvi) risolvi(valore);
+}
+
+function chiudiPin(){
+  const box=document.getElementById('pin');
+  if(!box || box.hidden) return;
+  box.hidden=true;
+  document.body.classList.remove('guidaAperta');
+  const campo=document.getElementById('pinIn');
+  if(campo) campo.value='';
+}
+
+// Invio conferma, Esc rinuncia: una finestra che si chiude solo col bottone
+// e' una trappola per chi usa la tastiera.
+document.addEventListener('keydown', e=>{
+  const box=document.getElementById('pin');
+  if(!box || box.hidden) return;
+  if(e.key==='Enter'){ e.preventDefault(); pinConferma(); return; }
+  if(e.key==='Escape'){
+    e.preventDefault();
+    const risolvi=pinAttesa;
+    pinAttesa=null;
+    chiudiPin();
+    if(risolvi) risolvi(null);
+  }
+});
 
 function getSessionToken(force){
   if(!force && sessionToken && Date.now()<sessionTokenExp) return Promise.resolve(sessionToken);
@@ -3382,6 +3490,7 @@ const AZIONI = {
   toccaMascotte:       () => toccaMascotte(),
   apriGuida:           () => apriGuida(),
   installaApp:         () => installaApp(),
+  pinConferma:         () => pinConferma(),
   chiudiGuida:         () => chiudiGuida(),
   guidaAvanti:         () => guidaAvanti(),
   guidaIndietro:       () => guidaIndietro(),

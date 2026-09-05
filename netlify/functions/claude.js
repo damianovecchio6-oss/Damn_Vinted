@@ -63,7 +63,13 @@ function resolvedModel(key) {
 }
 
 exports.handler = async (event) => {
-  const g = S.checkRequest(event, { metodi: ['GET', 'POST'], richiediToken: event.httpMethod === 'POST' });
+  const g = S.checkRequest(event, {
+    metodi: ['GET', 'POST'],
+    richiediToken: event.httpMethod === 'POST',
+    // Il codice di accesso si chiede una volta, al token: le POST che seguono
+    // portano il token e non hanno bisogno di riportarselo dietro.
+    richiediPin: event.httpMethod === 'GET'
+  });
   if (g.risposta) return g.risposta;
   const cors = g.cors;
 
