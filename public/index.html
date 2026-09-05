@@ -604,6 +604,44 @@ body.home .mascotte{opacity:1;visibility:visible;transition-delay:0s,0s}
 @keyframes boilVia{0%,96.5%{opacity:1}97%,98.6%{opacity:0}99%,100%{opacity:1}}
 @keyframes occhiolino{0%,96.5%{opacity:0}97%,98.6%{opacity:1}99%,100%{opacity:0}}
 
+/* ===== L'ENTRATA =====
+   Non compare: si disegna. Sette fotogrammi impacchettati in una striscia
+   sola, che scorre a scatti dietro la stessa maschera delle pose - un file, e
+   l'oro del tema anche qui.
+
+   I conti della striscia, perche' sono la cosa che si sbaglia: la maschera e'
+   larga sette volte la casella, e una posizione in percentuale allinea quella
+   percentuale dell'immagine con quella della casella. Quindi 0% e' il primo
+   fotogramma e 100% e' il SETTIMO, non l'ottavo: i sette scatti cadono ogni
+   100/6 = 16.667%, e per farceli cadere la corsa deve arrivare a 116.667% con
+   sette passi. Con "0% -> 100% in steps(7)" si vedrebbero mezzi fotogrammi.
+
+   L'ultimo fotogramma e' la posa a riposo (mascotte-a): l'inchiostro si posa e
+   resta li', senza scatto nel passaggio di consegne. */
+.mIntro{
+  opacity:0;
+  background:var(--t);
+  filter:drop-shadow(0 6px 18px rgba(232,200,74,.28));
+  -webkit-mask:url(img/mascotte-intro.webp) 0% 50%/700% 100% no-repeat;
+          mask:url(img/mascotte-intro.webp) 0% 50%/700% 100% no-repeat;
+}
+/* 7 fotogrammi a 12 al secondo: la velocita' del disegnato a mano. */
+.mascotte.entra .mIntro{opacity:1;animation:disegna .583s steps(7) both}
+/* animation:none non e' di troppo: l'opacita' di questi due la muove
+   un'animazione, e un valore animato batte quello scritto qui sotto. Senza,
+   il disegno in corso si vedrebbe sopra la mascot gia' finita. */
+.mascotte.entra .mBoil,
+.mascotte.entra .mOcchiolino{animation:none;opacity:0}
+@keyframes disegna{
+  from{-webkit-mask-position:0% 50%;mask-position:0% 50%}
+  to{-webkit-mask-position:116.667% 50%;mask-position:116.667% 50%}
+}
+/* Da pagina a pagina si affaccia e se ne va: si disegna nell'angolo, resta il
+   tempo di essere vista e si dissolve, senza rubare il posto al contenuto ne'
+   i tocchi ai bottoni. Ferma, pero': il passeggio e' roba della home. */
+body:not(.home) .mascotte.entra{opacity:1;visibility:visible;transition-delay:0s,0s}
+body:not(.home) .mPasseggio{animation:none;transform:translateX(16px);pointer-events:none}
+
 /* Toccata: si ferma di colpo, fa un salto e strizza l'occhio. E' l'unico
    momento in cui l'occhiolino e' una risposta invece che un tic. */
 .mascotte.reagisce .mPasseggio,
@@ -622,6 +660,15 @@ body.home .mascotte{opacity:1;visibility:visible;transition-delay:0s,0s}
    passeggio e' proprio la cosa che quel sistema chiede di non fare. Toccarla
    pero' risponde lo stesso - l'occhiolino li' e' un cambio di disegno, non un
    movimento. */
+@media(prefers-reduced-motion:reduce){
+  /* Un'animazione azzerata mostrerebbe il primo fotogramma - due tratti - e
+     poi sparirebbe: meglio niente entrata e la mascot gia' finita. */
+  .mascotte.entra .mIntro{display:none}
+  .mascotte.entra .mBoil{opacity:1}
+  /* E da pagina a pagina non si affaccia affatto: comparire e sparire e'
+     esattamente il movimento che e' stato chiesto di non fare. */
+  body:not(.home) .mascotte.entra{opacity:0;visibility:hidden}
+}
 
 /* storico */
 .hItem{
@@ -681,6 +728,7 @@ body.home .mascotte{opacity:1;visibility:visible;transition-delay:0s,0s}
     <div class="mVerso"><div class="mSalto">
       <span class="mBoil"><span class="mFrame mA"></span><span class="mFrame mB"></span></span>
       <span class="mFrame mOcchiolino"></span>
+      <span class="mIntro"></span>
     </div></div>
   </div>
 </div>

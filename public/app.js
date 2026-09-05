@@ -58,6 +58,10 @@ function sw(n, opzioni){
   // il nome di una funzione che non e' quella aperta.
   sincronizzaGhiera(n);
 
+  // La mascot si ridisegna a ogni cambio di scheda: e' l'entrata da una pagina
+  // all'altra. Aspetta che il giro si fermi, o sfarfallerebbe a ogni scatto.
+  entrataQuandoTiFermi();
+
   if(n==='storico') renderHistory();
   if(n==='ricerca') prefillRicerca();
   if(n==='scanner') syncUploadUI();
@@ -3023,6 +3027,29 @@ function renderCalibrazione(voci){
     + (cal.giorni !== null ? `, in ${plurale(cal.giorni, 'giorno', 'giorni')}` : '') + '.';
 }
 
+// L'entrata: la mascot si disegna da sola. Succede al primo caricamento e a
+// ogni cambio di scheda - da pagina a pagina si affaccia nell'angolo e si
+// dissolve - ma MAI a raffica: girando la ghiera parcheggiata la scheda cambia
+// a ogni scatto, e un'entrata per scatto sarebbe uno sfarfallio. Come per lo
+// scorrimento, si aspetta che il giro si fermi.
+let entrataAttesa = null, entrataFine = null;
+function entrata(){
+  const m = document.querySelector('.mascotte');
+  if(!m) return;
+  // Tolta e rimessa nello stesso giro il browser non se ne accorge: leggere una
+  // misura in mezzo lo costringe a fare i conti, ed e' cosi' che l'animazione
+  // riparte da capo invece di continuare quella di prima.
+  m.classList.remove('entra');
+  void m.offsetWidth;
+  m.classList.add('entra');
+  clearTimeout(entrataFine);
+  entrataFine = setTimeout(()=>m.classList.remove('entra'), 620);
+}
+function entrataQuandoTiFermi(){
+  clearTimeout(entrataAttesa);
+  entrataAttesa = setTimeout(entrata, 260);
+}
+
 // La mascot risponde a chi la tocca: si ferma, salta e strizza l'occhio, poi
 // riprende la sua strada. Il movimento e' tutto nel CSS - qui si accende e si
 // spegne una classe - e il tempo e' quello del salto: rimetterla in cammino
@@ -3121,6 +3148,10 @@ document.addEventListener('keydown', e=>{
 });
 
 if(!guidaGiaVista()) apriGuida();
+
+// Al primo caricamento sw() non e' ancora passata di qui: la prima entrata va
+// chiesta a mano, o la mascot comparirebbe gia' fatta.
+entrataQuandoTiFermi();
 
 // La pagina si apre sul sole: la classe la mette sw(), ma al primo giro sw()
 // non e' ancora passata di qui.

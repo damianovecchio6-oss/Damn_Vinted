@@ -17,6 +17,12 @@
 //    i bordi sfumati restano sfumati. Va detto con --rosa, perche' su un file
 //    gia' trasparente lo stesso conto darebbe una sagoma piena.
 //
+// Dallo stesso riquadro esce anche l'ENTRATA: i fotogrammi di arte/mascotte/
+// intro/ - la mascot che si disegna da sola - impacchettati in una striscia
+// sola. Un file invece di sette, e nessun fotogramma che arriva a meta'
+// animazione perche' la rete e' lenta. La striscia scorre a scatti sotto la
+// stessa maschera delle pose, quindi l'entrata e' oro come tutto il resto.
+//
 // Uso:  node scripts/mascotte.js
 // Serve sharp: npm i --no-save sharp
 
@@ -31,9 +37,15 @@ const LATO = 448;        // resa massima ~104px, per schermi a 4x
 const MARGINE = 1.06;    // un filo d'aria intorno al disegno
 
 // [file di partenza, nome in public/img, il fondo e' rosa?]
+//
+// La posa a riposo E' l'ultimo fotogramma dell'entrata, non un disegno a parte:
+// sono due disegni diversi dello stesso capo - il tratto a mano non si ripete
+// mai uguale - e finire l'entrata su uno per poi mostrarne un altro si vede
+// come uno scatto. Cosi' invece l'inchiostro si posa e resta dov'e'.
+const INTRO = 'intro';
 const POSE = [
-  ['aperti.png',               'mascotte-a',          false],
-  ['aperti-2-fondo-rosa.png',  'mascotte-b',          true],
+  [path.join(INTRO, '07.png'), 'mascotte-a',          false],
+  ['aperti.png',               'mascotte-b',          false],
   ['occhiolino.png',           'mascotte-occhiolino', false]
 ];
 
@@ -78,8 +90,13 @@ function contorno({ raw, width, height }) {
 }
 
 (async () => {
+  // I fotogrammi dell'entrata, in ordine di nome: 01, 02, 03...
+  const fotogrammi = fs.readdirSync(path.join(ARTE, INTRO))
+    .filter(f => /\.png$/i.test(f)).sort()
+    .map(f => path.join(INTRO, f));
+
   const pose = [];
-  for (const [file, nome, rosa] of POSE) {
+  for (const [file, nome, rosa] of POSE.concat(fotogrammi.map(f => [f, null, false]))) {
     const percorso = path.join(ARTE, file);
     if (!fs.existsSync(percorso)) throw new Error('manca ' + percorso);
     const a = await alpha(percorso, rosa);
@@ -97,14 +114,30 @@ function contorno({ raw, width, height }) {
   const cx = Math.round((u.x0 + u.x1) / 2), cy = Math.round((u.y0 + u.y1) / 2);
   const taglio = { left: cx - (lato >> 1), top: cy - (lato >> 1), width: lato, height: lato };
 
+  const ritaglia = p => sharp(p.raw, { raw: { width: p.width, height: p.height, channels: 4 } })
+    .extract(taglio).resize(LATO, LATO).png().toBuffer();
+
   fs.mkdirSync(USCITA, { recursive: true });
-  for (const p of pose) {
-    const base = sharp(p.raw, { raw: { width: p.width, height: p.height, channels: 4 } })
-      .extract(taglio)
-      .resize(LATO, LATO);
-    await base.clone().webp({ quality: 86, effort: 6 }).toFile(path.join(USCITA, p.nome + '.webp'));
-    await base.clone().png({ compressionLevel: 9 }).toFile(path.join(USCITA, p.nome + '.png'));
+  for (const p of pose.filter(p => p.nome)) {
+    const q = sharp(await ritaglia(p));
+    await q.clone().webp({ quality: 86, effort: 6 }).toFile(path.join(USCITA, p.nome + '.webp'));
+    await q.clone().png({ compressionLevel: 9 }).toFile(path.join(USCITA, p.nome + '.png'));
     console.log(p.nome, '->', LATO + 'px');
   }
+
+  // La striscia: i fotogrammi affiancati, nell'ordine, su una tela sola.
+  const intro = pose.filter(p => !p.nome);
+  if (intro.length) {
+    const pezzi = [];
+    for (let i = 0; i < intro.length; i++) {
+      pezzi.push({ input: await ritaglia(intro[i]), left: i * LATO, top: 0 });
+    }
+    await sharp({ create: { width: LATO * intro.length, height: LATO, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+      .composite(pezzi)
+      .webp({ quality: 86, effort: 6 })
+      .toFile(path.join(USCITA, 'mascotte-intro.webp'));
+    console.log('mascotte-intro ->', intro.length, 'fotogrammi da', LATO + 'px');
+  }
+
   console.log('riquadro comune', taglio);
 })().catch(e => { console.error(e.message || e); process.exit(1); });

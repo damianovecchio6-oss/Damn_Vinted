@@ -364,6 +364,41 @@ async function apri(browser, opzioni) {
     parseFloat(getComputedStyle(document.querySelector('.mOcchiolino')).animationDuration) >= 24),
     await page.evaluate(() => getComputedStyle(document.querySelector('.mOcchiolino')).animationDuration));
 
+  console.log('\n-- si disegna da sola, entrando --');
+  const entra = () => page.evaluate(() => document.querySelector('.mascotte').classList.contains('entra'));
+  check('l\'entrata e una striscia sola, non sette file', await page.evaluate(() => {
+    const s = getComputedStyle(document.querySelector('.mIntro'));
+    return /mascotte-intro\.webp/.test(s.maskImage || s.webkitMaskImage);
+  }), await page.evaluate(() => getComputedStyle(document.querySelector('.mIntro')).maskImage));
+  check('larga sette fotogrammi', await page.evaluate(() => {
+    const s = getComputedStyle(document.querySelector('.mIntro'));
+    return (s.maskSize || s.webkitMaskSize).startsWith('700%');
+  }), await page.evaluate(() => getComputedStyle(document.querySelector('.mIntro')).maskSize));
+  // Girando la ghiera parcheggiata la scheda cambia a ogni scatto: un'entrata
+  // per scatto sarebbe uno sfarfallio, quindi si aspetta che il giro finisca.
+  // Si parte da ferma: un'entrata gia' in corso da prima direbbe "e' partita"
+  // senza che questo giro c'entri niente.
+  await page.waitForFunction(() => !document.querySelector('.mascotte').classList.contains('entra'), null, { timeout: 3000 });
+  await page.evaluate(() => { sw('foto'); sw('prezzo'); sw('storico'); });
+  check('non parte a ogni scatto del giro', !(await entra()));
+  await page.waitForFunction(() => document.querySelector('.mascotte').classList.contains('entra'), null, { timeout: 2000 });
+  check('parte quando il giro si ferma', await entra());
+  check('e mentre si disegna la mascot finita non si vede sotto', await page.evaluate(() => {
+    const b = getComputedStyle(document.querySelector('.mBoil'));
+    return b.opacity === '0' && b.animationName === 'none';
+  }), await page.evaluate(() => getComputedStyle(document.querySelector('.mBoil')).opacity));
+  check('da pagina a pagina si affaccia anche fuori dalla home', await page.evaluate(() => {
+    const s = getComputedStyle(document.querySelector('.mascotte'));
+    return document.body.classList.contains('home') === false && s.visibility === 'visible';
+  }));
+  check('ma li non ruba tocchi al contenuto', await page.evaluate(() =>
+    getComputedStyle(document.querySelector('.mPasseggio')).pointerEvents) === 'none');
+  await page.waitForFunction(() => !document.querySelector('.mascotte').classList.contains('entra'), null, { timeout: 2000 });
+  await mascotFerma(false);
+  check('poi si dissolve e lascia la pagina al contenuto', !(await mascotVisibile()));
+  await page.evaluate(() => sw('sole'));
+  await mascotFerma(true);
+
   console.log('\n-- e risponde a chi la tocca --');
   await page.evaluate(() => { window.__vibrazioni = []; navigator.vibrate = ms => { window.__vibrazioni.push(ms); return true; }; });
   await page.click('.mPasseggio');
@@ -403,6 +438,17 @@ async function apri(browser, opzioni) {
     await fermaLei.evaluate(() => getComputedStyle(document.querySelector('.mA')).animationDuration));
   check('e nemmeno passeggia', await fermaLei.evaluate(() =>
     parseFloat(getComputedStyle(document.querySelector('.mPasseggio')).animationDuration) < 0.001));
+  // Un'entrata azzerata mostrerebbe il primo fotogramma - due tratti - e poi
+  // sparirebbe: meglio la mascot gia' finita, e nessuna comparsa fra le pagine.
+  await fermaLei.evaluate(() => entrata());
+  check('e non si disegna: appare gia fatta', await fermaLei.evaluate(() =>
+    getComputedStyle(document.querySelector('.mIntro')).display) === 'none');
+  check('con la mascot finita bene in vista', await fermaLei.evaluate(() =>
+    getComputedStyle(document.querySelector('.mBoil')).opacity) === '1');
+  await fermaLei.evaluate(() => sw('prezzo'));
+  await fermaLei.waitForTimeout(400);
+  check('e fra una pagina e l\'altra non si affaccia affatto', await fermaLei.evaluate(() =>
+    getComputedStyle(document.querySelector('.mascotte')).visibility) === 'hidden');
   check('ma si vede lo stesso', await fermaLei.evaluate(() =>
     getComputedStyle(document.querySelector('.mA')).opacity) === '1');
   await fermaLei.close();
