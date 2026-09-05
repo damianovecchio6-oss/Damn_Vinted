@@ -1,7 +1,6 @@
 const L = require('./lib');
 const { chromium } = require('playwright-core');
-let pass = 0, fail = 0;
-const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else { fail++; console.log(`  FAIL ${n}${e !== undefined ? ' -> ' + JSON.stringify(e) : ''}`); } };
+const { check, fine } = L.contatore();
 
 // I conti sui prezzi, chiamati direttamente invece che attraverso un giro
 // intero dello scanner. Non e' una doppia copia di scanner.js: li' si guarda
@@ -151,6 +150,5 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
 
   await browser.close();
   server.close();
-  console.log(`\n${pass} passati, ${fail} falliti`);
-  process.exit(fail ? 1 : 0);
+  fine();
 })().catch(e => { console.error(e); process.exit(1); });

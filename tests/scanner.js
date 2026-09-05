@@ -381,7 +381,13 @@ const NEGOZIO = (titolo, prezzo) => ({
   await attendiRapporto();
   const conEsiti = await page.textContent('#rSxBody');
   check('il rapporto dice come sono andati davvero i suoi capi', /3 capi venduti sono andati il 15% sotto/.test(conEsiti), (conEsiti.match(/📉[^.]*\./) || [])[0]);
-  check('e cosa vorrebbe dire su questo', /andrebbe a \d+€/.test(conEsiti), (conEsiti.match(/andrebbe a \d+€/) || [])[0]);
+  // E lo scarto non resta un consiglio da applicare a occhio: sposta il numero
+  // che si legge in cima, e la pagina scrive di quanto.
+  check('e lo scarto sposta davvero il prezzo, dicendolo',
+    /tiene già conto dello scarto: era \d+€, l'ho portato a \d+€/.test(conEsiti),
+    (conEsiti.match(/tiene già conto[^.]*\./) || [])[0]);
+  check('il prezzo in cima e quello corretto, non quello del modello',
+    await page.textContent('#rSxBody .pn') === '40€', await page.textContent('#rSxBody .pn'));
   await page.evaluate(() => { document.getElementById('pNome').value = ''; document.getElementById('pMarca').value = ''; });
   await page.click('#rSx .cbtn:nth-child(2)');
   await page.click('#btnP');

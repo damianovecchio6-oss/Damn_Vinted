@@ -224,7 +224,11 @@ const RISULTATO = (titolo, prezzo, fonte) => ({
   await page.evaluate(() => sw('storico'));
   const storico = await page.textContent('#historyList');
   check('la voce c\'e\', col nome del capo', /Felpa hoodie/.test(storico), storico.slice(0, 200));
-  check('col prezzo che ha concluso l\'agente', /42€/.test(storico), storico.slice(0, 300));
+  // La voce porta quello che si e' concluso su quel capo: un prezzo quando si
+  // e' potuto dirlo, la banda quando la fiducia non bastava. La scheda Prezzo
+  // scrive sulla stessa voce, quindi qui vale l'ultima delle due.
+  check('con quello che si e concluso: un prezzo, o la banda quando un numero solo non si poteva dire',
+    /\d+€ \(range/.test(storico) || /nessun numero singolo/.test(storico), storico.slice(0, 300));
 
   console.log('\n-- lo storico non perde quello che sa gia --');
   reset();

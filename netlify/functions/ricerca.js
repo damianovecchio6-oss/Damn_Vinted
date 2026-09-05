@@ -172,7 +172,14 @@ function normalizza(data, query, tipo) {
 // relativa ("3 giorni fa", "ieri") o per esteso ("8 set 2025").
 function etaDi(r) {
   const testo = String((r && r.date) || '').replace(/\s+/g, ' ').trim().slice(0, 40);
-  return testo ? { testo, giorni: giorniDa(testo) } : null;
+  if (!testo) return null;
+  const giorni = giorniDa(testo);
+  // Oltre ai giorni va anche il momento in cui li abbiamo contati: i giorni da
+  // soli invecchiano male, perche' restano quelli del fetch anche quando chi
+  // li legge lo fa molto dopo. Con la data, il client puo' rifare il conto.
+  return giorni === null
+    ? { testo, giorni: null, il: null }
+    : { testo, giorni, il: new Date(Date.now() - giorni * 86400000).toISOString().slice(0, 10) };
 }
 
 const MESI = { gen: 0, feb: 1, mar: 2, apr: 3, mag: 4, giu: 5, lug: 6, ago: 7, set: 8, ott: 9, nov: 10, dic: 11 };

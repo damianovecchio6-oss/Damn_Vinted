@@ -41,7 +41,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-626 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+628 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -226,7 +226,8 @@ racconta passo per passo mentre lo fa.
    correlate che ha suggerito Google. Un solo giro in piu': ogni ricerca costa
    quota.
 4. **Scrive il rapporto** — prezzo consigliato, range, mediana degli annunci,
-   fiducia dichiarata, osservazioni che citano i risultati per numero. Sotto
+   fiducia (calcolata dal codice, non dichiarata dal modello), osservazioni
+   che citano i risultati per numero. Sotto
    resta la stessa lista numerata che ha letto il modello: il "(3)" del
    rapporto e la terza riga sono lo stesso annuncio, con il suo link. Le sue
    conclusioni si controllano una per una.
@@ -270,10 +271,9 @@ cambia strategia invece di ripetere la stessa query con altre parole. Si ferma
 quando il quadro sta in piedi - non dopo un numero fisso di ricerche - ma il
 tetto resta: quattro giri, sei ricerche in tutto, perche' ognuna costa quota.
 
-**3. Capisce i prezzi**, ed e' qui la differenza vera con l'agente della scheda
-Ricerca, che di tutti i prezzi trovati fa una mediana sola. Un annuncio Vinted
-a 30€ e una scheda Zalando a 89€ non sono lo stesso numero: il primo dice a
-quanto **si vende**, il secondo quanto **costa nuovo**. Lo scanner:
+**3. Capisce i prezzi.** Un annuncio Vinted a 30€ e una scheda Zalando a 89€
+non sono lo stesso numero: il primo dice a quanto **si vende**, il secondo
+quanto **costa nuovo**. Lo scanner:
 
 - separa gli annunci dell'usato dai listini dei negozi, guardando il dominio
   prima del testo (su vinted.it si vende usato qualunque cosa dica il titolo);
@@ -338,6 +338,22 @@ E se il numero che il modello propone cade fuori dai prezzi davvero trovati,
 viene riportato dentro la banda **e la pagina lo scrive**: un numero corretto
 di nascosto e' peggio di uno sbagliato in chiaro.
 
+### Un modello di prezzo solo, due schede
+
+Questi conti non sono dello scanner: sono del prodotto. La scheda **Ricerca**
+leggeva i prezzi a modo suo - una mediana semplice di tutto quello che aveva un
+numero, negozi e fuori tema compresi - e siccome tutte e due scrivono
+`prezzoSuggerito` sulla **stessa voce di storico**, la calibrazione finiva per
+fare la mediana di scarti misurati con due metri diversi. Ora la scheda Ricerca
+passa dalle stesse funzioni: usato separato dal nuovo, fuori tema marcati,
+estremi scartati, prove pesate, fiducia calcolata dal codice, e niente numero
+singolo sotto la soglia.
+
+Con una differenza che conta: li' l'identita' del capo non viene da una
+scansione, sono due campi scritti a mano. Se **nessun** risultato nomina la
+marca o il tipo, il filtro di pertinenza taglierebbe via tutto - e allora la
+mediana si fa su tutto quello che si e' trovato, **con scritto che e' larga**.
+
 Sotto il rapporto resta la lista numerata di tutto quello che ha letto, ogni
 riga col suo link e col suo cartellino - annuncio usato, prezzo del nuovo,
 parla di un altro capo, prezzo fuori scala. Il "(3)" del rapporto e la terza
@@ -366,11 +382,25 @@ si torna a dirlo dopo.
 
 Dal terzo capo venduto in poi lo storico scrive una riga che nessun modello
 puo' sapere, perche' e' successa a chi sta usando l'app: *i tuoi capi vanno via
-in media il 15% sotto il prezzo suggerito, in 11 giorni*. Quella riga poi torna
-in due posti - nel rapporto dello scanner, che dice cosa vorrebbe dire su
-questo capo, e nel prompt della stima prezzo, dove entra come **l'unico dato di
-vendite concluse** che l'app abbia mai. I dati arrivano lenti e solo da chi
+in media il 15% sotto il prezzo suggerito, in 11 giorni*.
+
+E quella riga **sposta il numero**, non lo commenta soltanto: il prezzo che
+scanner e Ricerca mostrano e' gia' corretto di quello scarto, con scritto
+accanto di quanto e da cosa - *era 43€, l'ho portato a 39€* - perche' la regola
+di questa pagina resta che un numero corretto di nascosto e' peggio di uno
+sbagliato in chiaro. Entra anche nel prompt della stima prezzo, come **l'unico
+dato di vendite concluse** che l'app abbia mai.
+
+Due cose per cui non scappa via. La correzione ha un tetto del 25%, cosi' tre
+esiti storti non spostano tutto. E l'anello si chiude: la vendita dopo viene
+misurata sul prezzo **gia' corretto**, quindi lo scarto tende a zero invece di
+riportare lo stesso sconto all'infinito. I dati arrivano lenti e solo da chi
 risponde: e' il prezzo da pagare per l'unico riferimento vero che ci sara'.
+
+Anche il capo su cui la fiducia era troppo bassa per dire una cifra entra nel
+giro: nello storico resta la sua banda, la domanda arriva lo stesso, e in
+percentuale non si dice niente perche' non c'e' un suggerito da confrontare.
+Erano proprio i capi con piu' da insegnare, e prima non venivano mai chiesti.
 
 Per questo c'e' **Esporta lo storico**: scarica un JSON con il numero di
 formato, la data di esportazione e le voci intere, miniature comprese - e'
