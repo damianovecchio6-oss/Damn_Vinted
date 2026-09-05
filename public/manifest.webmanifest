@@ -1,0 +1,24 @@
+{
+  "name": "ALBA — assistente per vendere",
+  "short_name": "ALBA",
+  "description": "Analizza le foto di un capo, cerca quanto vale davvero, scrive l'annuncio e stima il prezzo.",
+  "lang": "it",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#08080a",
+  "theme_color": "#08080a",
+  "categories": ["shopping", "utilities", "productivity"],
+  "icons": [
+    { "src": "/img/icona-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/img/icona-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/img/icona-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Scanner", "short_name": "Scanner", "url": "/?vai=scanner", "icons": [{ "src": "/img/icona-192.png", "sizes": "192x192" }] },
+    { "name": "Analizza la foto", "short_name": "Foto", "url": "/?vai=foto", "icons": [{ "src": "/img/icona-192.png", "sizes": "192x192" }] }
+  ]
+}

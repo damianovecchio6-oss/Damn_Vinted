@@ -12,7 +12,9 @@ Function.
 public/index.html             il markup e lo stile dell'interfaccia
 public/app.js                 tutto lo script della pagina, fuori da index.html
 public/_headers               header di sicurezza (CSP, ecc.)
-public/img/                   i disegni: il sole e la versione sole+luna
+public/img/                   i disegni: il sole, il sole+luna, le icone dell'app
+public/manifest.webmanifest   nome, icone e schermo intero: l'app installabile
+public/sw.js                  service worker: il guscio resta anche senza rete
 netlify/functions/claude.js   proxy verso i modelli AI (Groq / Gemini)
 netlify/functions/lens.js     ricerca per immagine (Google Lens via SerpApi)
 netlify/functions/ricerca.js  ricerca testuale online, lo strumento dell'agente
@@ -21,6 +23,7 @@ tests/                        suite di test, nessun framework
 .claude/                      skill e agenti: collaudo e riparazione
 .github/workflows/            i test a ogni push
 scripts/verifica-deploy.js    controlla un sito gia' deployato: function e chiavi
+scripts/icone.js              ridisegna le icone dell'app dal sole del marchio
 ```
 
 Le suite girano col mouse, tranne una: `tests/tocco.js` manda tocchi veri a un
@@ -41,7 +44,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-628 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+730 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -458,6 +461,49 @@ A tenerlo fermo c'e' un controllo in `tests/ui.js` che legge i file invece
 della pagina, di proposito: la CSP vera non passa dal server dei test, quindi
 una violazione la suite non la vedrebbe. Il controllo guarda la causa - codice
 inline nel sorgente - non il sintomo.
+
+## L'app
+
+ALBA si installa in home e da li' si apre a schermo intero, con la sua icona e
+senza la barra dell'indirizzo. Non e' un wrapper ne' un altro progetto: e' lo
+stesso sito, con tre pezzi in piu'.
+
+**Il manifest** (`public/manifest.webmanifest`) e' la carta d'identita': nome,
+icone, `display: standalone` (senza, il telefono riapre il browser travestito),
+e il fondo nero della pagina come `background_color`, cosi' tra l'icona e il
+primo pixel non lampeggia il bianco. Tenendo premuta l'icona compaiono due
+scorciatoie, Scanner e Foto: aprono direttamente quella funzione passando da
+`?vai=`.
+
+**Il service worker** (`public/sw.js`) tiene da parte il guscio - pagina,
+script, disegni - e lo serve anche senza rete: ALBA si apre in metro. Quello
+che non tiene mai da parte sono le function: risposte AI, prezzi e token sono
+roba di adesso, e servirli dalla cache vorrebbe dire mostrare la stima di ieri
+per la foto di oggi. Vive solo su https e su localhost, quindi la pagina aperta
+da disco resta esattamente com'era.
+
+Quando cambia il guscio va alzato `VERSIONE` in cima a `sw.js`: e' l'unica cosa
+che dice al browser di buttare via la copia vecchia. Le pagine gia' aperte si
+ricaricano una volta sola, da sole.
+
+**L'icona in cima a destra** compare solo dove il browser offre davvero
+l'installazione (Android, Chrome desktop). Su iPhone quel bottone non esiste
+per nessun sito: si installa da Safari, *Condividi > Aggiungi a Home*.
+
+Le icone si rifanno da sole, dal sole del marchio:
+
+```
+node scripts/icone.js
+```
+
+Le rigenera in `public/img/` (192, 512, una maskable per il ritaglio di Android
+e la 180 di iOS). I PNG stanno nel repo gia' fatti: lo script serve solo quando
+cambia il disegno.
+
+Cosa manca per un'app da store: un negozio non accetta un URL, vuole un
+pacchetto firmato. Da qui la strada corta e' Trusted Web Activity per il Play
+Store (`bubblewrap`, che parte proprio da questo manifest) e un wrapper per
+iOS; nessuno dei due tocca il codice del sito.
 
 ## Deploy su Netlify
 

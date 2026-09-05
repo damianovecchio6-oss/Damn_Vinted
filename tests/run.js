@@ -21,7 +21,8 @@ const SUITE = [
   ['scanner', 'scanner.js', 'identita e fonti, usato vs nuovo, giri, banda dei prezzi'],
   ['i conti sui prezzi', 'prezzi.js', 'quantile pesato, peso delle prove, casi limite, calibrazione'],
   ['micro-interazioni', 'interazioni.js', 'ghiera, attesa, focus, vibrazione, motion'],
-  ['dito sul telefono', 'tocco.js', 'tocchi veri: ghiera, tasto centrale, parcheggio']
+  ['dito sul telefono', 'tocco.js', 'tocchi veri: ghiera, tasto centrale, parcheggio'],
+  ['app installabile', 'app.js', 'manifest, icone, service worker, offline']
 ];
 
 let totale = 0, falliti = 0, suiteKo = [];

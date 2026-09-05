@@ -43,7 +43,10 @@ function chromium() {
 
 function serviSito(porta) {
   const server = http.createServer((req, res) => {
-    const richiesto = req.url === '/' ? '/index.html' : req.url.split('?')[0];
+    // La query si toglie prima di decidere se e' la radice: con "/?vai=foto"
+    // il confronto con '/' fallisce, e si finiva a leggere la cartella.
+    const percorso = req.url.split('?')[0];
+    const richiesto = percorso === '/' ? '/index.html' : percorso;
     const completo = path.join(SITO, richiesto);
     if (!completo.startsWith(SITO) || !fs.existsSync(completo)) { res.writeHead(404); return res.end('no'); }
     // Il tipo giusto per i .js non e' pignoleria: servito come text/plain, uno
@@ -54,6 +57,13 @@ function serviSito(porta) {
       : richiesto.endsWith('.js') ? 'text/javascript'
       : richiesto.endsWith('.css') ? 'text/css'
       : richiesto.endsWith('.svg') ? 'image/svg+xml'
+      // Il manifest servito come text/plain lo fa scartare dal browser, e la
+      // suite dell'app non vedrebbe l'installabilita' che invece in produzione
+      // c'e'. Le immagini per lo stesso motivo: il guscio del service worker
+      // le mette in cache, e vanno servite come in produzione.
+      : richiesto.endsWith('.webmanifest') ? 'application/manifest+json'
+      : richiesto.endsWith('.png') ? 'image/png'
+      : richiesto.endsWith('.webp') ? 'image/webp'
       : 'text/plain';
     res.writeHead(200, { 'Content-Type': tipo });
     res.end(fs.readFileSync(completo));

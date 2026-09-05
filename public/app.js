@@ -3180,6 +3180,75 @@ document.getElementById('historyList').addEventListener('click', e => {
 });
 
 
+// ===== L'APP =====
+// Tre cose separano una pagina da un'applicazione, e stanno tutte qui: il
+// service worker (il guscio resta anche senza rete), l'installazione in home,
+// e le scorciatoie dell'icona, che aprono direttamente una funzione.
+
+// Il service worker vive solo su https (o su localhost). Aperta da disco la
+// pagina deve continuare a funzionare com'e' sempre stata, senza errori in
+// console: il file:// qui si esclude da solo, perche' navigator.serviceWorker
+// non esiste in contesto non sicuro.
+let seiGiaControllato = navigator.serviceWorker && !!navigator.serviceWorker.controller;
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+  // Quando arriva una versione nuova del guscio, il worker nuovo prende il
+  // posto del vecchio mentre la pagina e' aperta: da quel momento lo script in
+  // memoria e i file serviti non sono piu' la stessa versione. Si ricarica una
+  // volta sola, e mai alla primissima installazione - li' non c'e' niente di
+  // vecchio da sostituire, e ricaricare sarebbe uno sfarfallio senza motivo.
+  let giaRicaricato = false;
+  navigator.serviceWorker.addEventListener('controllerchange', ()=>{
+    if(!seiGiaControllato || giaRicaricato) return;
+    giaRicaricato = true;
+    window.location.reload();
+  });
+}
+
+// L'installazione. Chrome non installa da solo: manda beforeinstallprompt e
+// aspetta che sia una mano dell'utente a chiederlo. L'evento va tenuto da
+// parte, perche' si puo' usare una volta sola e solo dentro a un tocco.
+let invitoInstalla = null;
+function mostraBottoneInstalla(si){
+  const b = document.getElementById('installBtn');
+  if(b) b.hidden = !si;
+}
+window.addEventListener('beforeinstallprompt', e=>{
+  // Senza questo Chrome mostra la sua barretta in fondo, che copre il sole
+  // parcheggiato: l'invito lo diamo noi, dove non da' fastidio.
+  e.preventDefault();
+  invitoInstalla = e;
+  mostraBottoneInstalla(true);
+});
+window.addEventListener('appinstalled', ()=>{
+  invitoInstalla = null;
+  mostraBottoneInstalla(false);
+});
+async function installaApp(){
+  if(!invitoInstalla) return;
+  const invito = invitoInstalla;
+  // Si azzera prima di aspettare la risposta: se rifiuti, quell'evento e'
+  // bruciato comunque, e un bottone che al secondo tocco non fa niente e'
+  // peggio di un bottone che non c'e'.
+  invitoInstalla = null;
+  mostraBottoneInstalla(false);
+  try{ invito.prompt(); await invito.userChoice; }catch(e){}
+}
+
+// Le scorciatoie del manifest (tieni premuta l'icona: "Scanner", "Foto") e
+// qualunque link condiviso aprono la pagina con ?vai=. Il nome va controllato
+// contro le schede vere, o un indirizzo scritto a mano potrebbe far cercare a
+// sw() un pannello che non esiste.
+(function apriDaIndirizzo(){
+  let dove = null;
+  try{ dove = new URLSearchParams(window.location.search).get('vai'); }catch(e){}
+  if(!dove || !SCHEDE.includes(dove) || dove === 'sole') return;
+  sw(dove, {senzaScorrimento:true});
+})();
+
+
 // ===== I BOTTONI =====
 // Un onclick nel markup e' codice inline esattamente come lo <script> che
 // stava qui: la stessa riga di CSP che vieta l'uno vieta l'altro, e toglierne
@@ -3222,6 +3291,7 @@ const AZIONI = {
   avviaScanner:        () => avviaScanner(),
   toccaMascotte:       () => toccaMascotte(),
   apriGuida:           () => apriGuida(),
+  installaApp:         () => installaApp(),
   chiudiGuida:         () => chiudiGuida(),
   guidaAvanti:         () => guidaAvanti(),
   guidaIndietro:       () => guidaIndietro(),

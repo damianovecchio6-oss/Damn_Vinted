@@ -15,3 +15,23 @@
 
 /index.html
   Cache-Control: no-cache
+
+# Il service worker decide cosa vedono tutti gli altri file: se lo si lascia
+# invecchiare in cache, un deploy nuovo puo' restare invisibile per giorni.
+# Va richiesto ogni volta (il 304 costa niente).
+/sw.js
+  Cache-Control: no-cache
+
+/manifest.webmanifest
+  Cache-Control: no-cache
+  Content-Type: application/manifest+json
+
+# Le icone dell'app invece non cambiano mai senza cambiare nome: un anno.
+/img/icona-192.png
+  Cache-Control: public, max-age=31536000, immutable
+/img/icona-512.png
+  Cache-Control: public, max-age=31536000, immutable
+/img/icona-maskable.png
+  Cache-Control: public, max-age=31536000, immutable
+/img/apple-touch-icon.png
+  Cache-Control: public, max-age=31536000, immutable
