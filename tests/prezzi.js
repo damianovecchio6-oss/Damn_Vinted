@@ -147,6 +147,68 @@ const { check, fine } = L.contatore();
   check('chi vende sopra il suggerito lo vede scritto sopra', sopra.scarto === 10, sopra);
   check('e senza i giorni non se li inventa', sopra.giorni === null, sopra.giorni);
 
+  console.log('\n-- la calibrazione stretta: i capi che somigliano a questo --');
+  // Uno storico dice due cose: come questa persona sbaglia in generale, e come
+  // sbaglia su questa famiglia di capi. Qui si guarda che la seconda vinca
+  // quando c'e', e che quando non c'e' si torni esattamente a prima.
+  const conStorico = (voci, quale, capo) => page.evaluate(([v, q, c]) => {
+    localStorage.clear();
+    v.forEach((x, i) => upsertHistoryItem('c' + i, x));
+    return q === 'famiglia' ? calibrazioneFamiglia(null, c) : esperienzaPerPrompt(c);
+  }, [voci, quale, capo || null]);
+
+  const CAPO = (marca, nome, suggerito, prezzo, giorni) =>
+    ({ nome, marca, condizione: 'Buono', prezzoSuggerito: suggerito, esito: { venduto: true, prezzo, giorni, il: Date.now() } });
+  // Tre Nike che vanno molto sotto, tre camicie che vanno appena sotto: le due
+  // famiglie hanno scarti diversi apposta, o non si vedrebbe quale ha vinto.
+  const MISTO = [
+    CAPO('Nike', 'Felpa tech', 40, 28, 9), CAPO('Nike', 'Felpa vintage', 50, 35, 11), CAPO('Nike', 'Giacca', 30, 21, 7),
+    CAPO('Zara', 'Camicia', 20, 19, 20), CAPO('Zara', 'Camicia lino', 30, 28, 22), CAPO('Zara', 'Blazer', 40, 38, 25)
+  ];
+
+  const fam = await conStorico(MISTO, 'famiglia', { nome: 'Felpa', marca: 'Nike' });
+  check('i capi della stessa marca fanno una calibrazione loro',
+    fam.famiglia && fam.famiglia.n === 3 && fam.famiglia.scarto === -30, fam.famiglia);
+  check('e non e\' quella di tutto lo storico', fam.tutti.scarto !== fam.famiglia.scarto, [fam.tutti.scarto, fam.famiglia.scarto]);
+  check('la famiglia dice anche di chi e\'', /Nike/.test(fam.famiglia.etichetta), fam.famiglia.etichetta);
+
+  const pochi = await conStorico(MISTO, 'famiglia', { nome: 'Scarponi', marca: 'Timberland' });
+  check('un capo senza simili nello storico ricade sul totale',
+    pochi.famiglia === null && pochi.tutti.n === 6, [pochi.famiglia, pochi.tutti && pochi.tutti.n]);
+
+  // Due soli capi della marca non fanno una famiglia: sotto CALIBRA_MIN si
+  // ricade sul totale, com'era prima. Una regola su due capi non e' una regola.
+  const duePerMarca = await conStorico(
+    [CAPO('Nike', 'Felpa', 40, 28, 9), CAPO('Nike', 'Giacca', 30, 21, 7),
+     CAPO('Zara', 'Camicia', 20, 19, 20), CAPO('Zara', 'Blazer', 40, 38, 25)],
+    'famiglia', { nome: 'Felpa', marca: 'Nike' });
+  check('due capi della stessa marca non fanno ancora una famiglia',
+    duePerMarca.famiglia === null, duePerMarca.famiglia);
+
+  console.log('\n-- gli esempi veri che finiscono nel prompt --');
+  const testo = await conStorico(MISTO, 'prompt', { nome: 'Felpa', marca: 'Nike' });
+  check('il prompt riceve la riga della famiglia', /capi di marca Nike \(3 venduti\)/.test(testo), testo);
+  check('e anche quella di tutto lo storico, che dice un\'altra cosa',
+    /tutto il suo storico \(6 venduti\)/.test(testo), testo);
+  check('gli esempi sono capi veri, col suggerito e l\'incassato',
+    /Nike Felpa tech, buono: suggerito 40€ -> venduto 28€ in 9 giorni/.test(testo), testo);
+  // Quattro righe al massimo: il prompt ha 8000 caratteri in tutto, e i dati
+  // di mercato valgono almeno quanto lo storico.
+  check('gli esempi sono al massimo quattro', (testo.match(/-> venduto/g) || []).length === 4,
+    (testo.match(/-> venduto/g) || []).length);
+  check('e i piu\' vicini al capo vengono per primi',
+    testo.indexOf('Nike Felpa tech') < testo.indexOf('Zara'), testo);
+  check('il blocco resta corto: sotto i 700 caratteri', testo.length < 700, testo.length);
+
+  const vuoto = await conStorico([], 'prompt', { nome: 'Felpa', marca: 'Nike' });
+  check('senza storico il prompt non annuncia dati che non ha', vuoto === '', vuoto);
+
+  // Un solo capo venduto non fa una media, ma resta un fatto vero: si mostra
+  // come esempio, dicendo che di media non ce n'e' ancora una.
+  const unoSolo = await conStorico([CAPO('Nike', 'Felpa tech', 40, 28, 9)], 'prompt', { nome: 'Felpa', marca: 'Nike' });
+  check('un solo esito diventa un esempio, non una regola',
+    /pochi esiti per una media/.test(unoSolo) && /venduto 28€/.test(unoSolo), unoSolo);
+
   check('nessun errore JS in tutta la sessione', errori.length === 0, errori);
 
   await browser.close();

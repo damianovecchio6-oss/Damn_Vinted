@@ -1177,13 +1177,9 @@ async function stimaPrezzo(){
 
     // Gli esiti veri di chi vende battono qualunque annuncio: sono vendite
     // concluse, e sono sue. Il resto sono prezzi chiesti da sconosciuti.
-    const cal=calibrazioneStorico();
-    if(cal){
-      mercato += `\n\nESITI VERI di chi vende, dal suo storico (${cal.n} capi venduti davvero):`
-        + `\n- i suoi capi vendono ${scartoInParole(cal.scarto)} il prezzo che gli era stato suggerito`
-        + (cal.giorni!==null?`, e ci mettono ${cal.giorni} giorni`:'')
-        + `\nE' l'unico dato di vendite CONCLUSE che hai: tienine conto nel prezzo, e scrivilo nella motivazione.`;
-    }
+    // Non piu' una media sola su tutto lo storico: la calibrazione stretta su
+    // questa famiglia di capi, piu' i capi veri gia' venduti che le somigliano.
+    mercato += esperienzaPerPrompt({ nome:v('pNome'), marca:v('pMarca') });
 
     // Il rapporto dell'agente pesa piu' dei listini di Lens: sono annunci
     // dell'usato, cioe' esattamente il mercato su cui si vende qui.
@@ -1686,7 +1682,7 @@ function renderRicerca(senzaRapporto){
   // Come nello scanner: sotto la soglia il numero singolo non si dice, perche'
   // sarebbe una precisione finta. Qui la banda c'e' comunque.
   const grezzo=num(d.prezzoConsigliato,null,0,100000);
-  const cal=calibrazioneStorico();
+  const cal=(x=>x.famiglia||x.tutti)(calibrazioneFamiglia(null, lastRicerca.capo||null));
   const tarato=calibra(fiducia.numero?sxDentroBanda(grezzo,u).valore:null, cal, u);
   const prezzo=tarato.valore;
   const rMin=calibra(num(d.rangeMin,null,0,100000), cal, u).valore;
@@ -1718,7 +1714,7 @@ function renderRicerca(senzaRapporto){
     + (d.riassunto?`<p style="font-size:16px;line-height:1.6;color:var(--tx);letter-spacing:-.014em;margin-bottom:12px">${esc(d.riassunto)}</p>`:'')
     + `<div class="hSub" style="margin-bottom:6px">Fiducia ${esc(fiducia.livello)}: ${esc(fiducia.perche)}.</div>`
     + (u?`<div class="hSub" style="margin-bottom:10px">${esc(sxComposizione(u))}</div>`:'')
-    + (cal&&prezzo!==null?`<div class="tip">📉 Il prezzo tiene conto di come sono andati davvero i tuoi ultimi ${cal.n} capi venduti: ${esc(scartoInParole(cal.scarto))} il suggerito${tarato.spostato?`, quindi da ${tarato.prima}€ a ${tarato.valore}€`:''}.</div>`:'')
+    + (cal&&prezzo!==null?`<div class="tip">📉 Il prezzo tiene conto di come sono andati davvero i tuoi ultimi ${cal.n} capi venduti${cal.etichetta?' '+esc(cal.etichetta):''}: ${esc(scartoInParole(cal.scarto))} il suggerito${tarato.spostato?`, quindi da ${tarato.prima}€ a ${tarato.valore}€`:''}.</div>`:'')
     + (lastRicerca.largo?`<div class="tip">⚠️ Nessun risultato nomina la marca o il tipo di capo: la mediana è su tutto quello che ho trovato, quindi vale meno del solito. Riprova col nome del modello.</div>`:'')
     + (!u&&p?`<div class="tip">⚠️ Nessuno di questi è un annuncio dell'usato: sono listini di negozio, cioè quanto costa il capo NUOVO. Su Vinted l'usato vale una frazione.</div>`:'')
     + (u&&!u.venduti?`<div class="hSub" style="margin-bottom:10px">Nessuno di questi è un prezzo di venduto: sono richieste di annunci ancora online, e la banda pende un po' verso l'alto.</div>`:'')
@@ -2561,7 +2557,11 @@ function sxDisegna(){
   };
   // Il prezzo che si mostra e' quello calibrato sugli esiti veri, quando ce ne
   // sono abbastanza. Sotto resta scritto da dove viene.
-  const cal=calibrazioneStorico();
+  // La calibrazione stretta quando c'e' (i suoi capi di questa marca, o simili
+  // a questo), quella su tutto lo storico quando i capi simili sono pochi:
+  // correggere un Carhartt con lo scarto medio di tutto il guardaroba e' un
+  // numero preciso costruito su un dato che non parla di questo capo.
+  const cal=(x=>x.famiglia||x.tutti)(calibrazioneFamiglia(null, { nome:sxNomeCapo(), marca:sxVal(s.identita.marca) }));
   const tarato=calibra(fiducia.numero?corretto.valore:null, cal, u);
   const prezzo=tarato.valore;
   const veloce=calibra(estremo(d.prezzoVeloce,-margine), cal, u).valore;
@@ -2610,7 +2610,7 @@ function sxDisegna(){
     // Come sono andati davvero i capi di chi sta usando l'app: e' l'unico dato
     // che nessun modello ha, e vale piu' di qualunque mediana di annunci.
     if(cal){
-      html+=`<div class="tip">📉 I tuoi ultimi ${cal.n} capi venduti sono andati ${scartoInParole(cal.scarto)}`
+      html+=`<div class="tip">📉 I tuoi ultimi ${cal.n} capi venduti${cal.etichetta?' '+esc(cal.etichetta):''} sono andati ${scartoInParole(cal.scarto)}`
         + ` il prezzo suggerito${cal.giorni!==null?`, in ${plurale(cal.giorni,'giorno','giorni')}`:''}.`
         + (tarato.spostato
           ? ` Quel prezzo qui sopra tiene già conto dello scarto: era ${tarato.prima}€, l'ho portato a ${tarato.valore}€.`
@@ -2924,6 +2924,96 @@ function calibrazioneStorico(voci){
     scarto: Math.round(medianaSemplice(venduti.map(scartoDi))),
     giorni: giorni.length ? Math.round(medianaSemplice(giorni)) : null
   };
+}
+
+// Quanti capi venduti finiscono nel prompt come esempi. Quattro righe sono
+// circa 300 caratteri: dentro gli 8000 che la function accetta, e abbastanza
+// perche' un modello ci veda un andamento invece di un aneddoto.
+const ESEMPI_MAX = 4;
+
+// Quanto una voce dello storico somiglia al capo che si sta stimando.
+// 2 = stessa marca, 1 = parole in comune nel nome, 0 = un altro capo.
+function affinita(voce, capo){
+  const pulisci = x => String(x || '').trim().toLowerCase();
+  if(pulisci(voce.marca) && pulisci(voce.marca) === pulisci(capo.marca)) return 2;
+  return stessoCapo(voce, capo) ? 1 : 0;
+}
+
+// Uno storico dice due cose diverse: come questa persona sbaglia in generale,
+// e come sbaglia su questa famiglia di capi. La seconda vale di piu' - un
+// Nike e una camicia di fast fashion non si scostano dal suggerito nello
+// stesso modo - ma esiste solo quando i capi simili sono abbastanza. Quando
+// non lo sono si ripiega sul totale, che e' quello che si faceva prima.
+function calibrazioneFamiglia(voci, capo){
+  const lista = voci || loadHistory();
+  const tutti = calibrazioneStorico(lista);
+  if(!capo) return { famiglia: null, tutti };
+
+  const venduti = lista.filter(x => scartoDi(x) !== null);
+  const marca = String(capo.marca || '').trim().toLowerCase();
+  const diMarca = marca ? venduti.filter(x => String(x.marca || '').trim().toLowerCase() === marca) : [];
+  const simili = venduti.filter(x => affinita(x, capo) > 0);
+
+  // La marca prima dei simili: "i tuoi Nike" e' un'affermazione piu' stretta
+  // di "i tuoi capi che somigliano a questo", e quando c'e' vince.
+  const scelto = diMarca.length >= CALIBRA_MIN ? { lista: diMarca, etichetta: 'di marca ' + String(capo.marca).slice(0, 30) }
+    : simili.length >= CALIBRA_MIN ? { lista: simili, etichetta: 'simili a questo' }
+    : null;
+  if(!scelto) return { famiglia: null, tutti };
+
+  const c = calibrazioneStorico(scelto.lista);
+  return { famiglia: c && Object.assign({ etichetta: scelto.etichetta }, c), tutti };
+}
+
+// I capi venduti davvero, i piu' vicini a questo per primi e a parita' i piu'
+// recenti. Una media dice "vendi il 15% sotto"; questi dicono quale capo, a
+// quanto e in quanti giorni - ed e' su casi cosi' che un modello ancora il
+// numero, invece che su un aggettivo.
+function esempiVenduti(voci, capo, quanti){
+  const venduti = (voci || loadHistory()).filter(x => scartoDi(x) !== null);
+  const punteggio = x => capo ? affinita(x, capo) : 0;
+  const quando = x => (x.esito && typeof x.esito.il === 'number') ? x.esito.il : (x.updatedAt || x.createdAt || 0);
+  return venduti.slice()
+    .sort((a, b) => punteggio(b) - punteggio(a) || quando(b) - quando(a))
+    .slice(0, quanti || ESEMPI_MAX);
+}
+
+function esempioInRiga(voce){
+  const nome = String([voce.marca, voce.nome].filter(Boolean).join(' ') || 'capo').slice(0, 50);
+  const cond = voce.condizione ? ', ' + String(voce.condizione).toLowerCase().slice(0, 22) : '';
+  const giorni = typeof voce.esito.giorni === 'number' ? ' in ' + plurale(voce.esito.giorni, 'giorno', 'giorni') : '';
+  return `- ${nome}${cond}: suggerito ${voce.prezzoSuggerito}€ -> venduto ${voce.esito.prezzo}€${giorni}`;
+}
+
+// Il pezzo di prompt che racconta l'esperienza di chi vende. Sta in una
+// funzione sola perche' lo usano in due - la stima e il verdetto dello
+// scanner - e due copie di questo testo si sarebbero scollate al primo
+// ritocco. Torna stringa vuota quando non c'e' niente da dire: un prompt che
+// annuncia dati e poi non ne porta e' peggio di uno che tace.
+function esperienzaPerPrompt(capo, voci){
+  const lista = voci || loadHistory();
+  const cal = calibrazioneFamiglia(lista, capo);
+  const esempi = esempiVenduti(lista, capo).map(esempioInRiga);
+  if(!cal.famiglia && !cal.tutti && !esempi.length) return '';
+
+  const righe = [];
+  if(cal.famiglia){
+    righe.push(`- sui suoi capi ${cal.famiglia.etichetta} (${cal.famiglia.n} venduti): vendono ${scartoInParole(cal.famiglia.scarto)} il prezzo suggerito`
+      + (cal.famiglia.giorni !== null ? `, in ${plurale(cal.famiglia.giorni, 'giorno', 'giorni')}` : ''));
+  }
+  // Il totale si aggiunge solo se dice qualcosa di diverso dalla famiglia:
+  // due righe con lo stesso numero sembrano due prove e sono una sola.
+  if(cal.tutti && (!cal.famiglia || cal.tutti.scarto !== cal.famiglia.scarto)){
+    righe.push(`- su tutto il suo storico (${cal.tutti.n} venduti): ${scartoInParole(cal.tutti.scarto)} il suggerito`
+      + (cal.tutti.giorni !== null ? `, in ${plurale(cal.tutti.giorni, 'giorno', 'giorni')}` : ''));
+  }
+  // Meno di CALIBRA_MIN vendite non fanno una regola, ma restano fatti veri:
+  // si mostrano come esempi, dicendo che sono pochi, invece di sparire.
+  if(!righe.length) righe.push(`- ancora pochi esiti per una media, ma i capi qui sotto sono venduti davvero`);
+
+  return `\n\nESITI VERI di chi vende, dal suo storico (vendite concluse, non annunci):\n${righe.join('\n')}`
+    + (esempi.length ? `\nI suoi capi venduti, i piu' vicini a questo:\n${esempi.join('\n')}` : '')
+    + `\nSono le uniche vendite CONCLUSE che hai: pesale piu' degli annunci ancora online, tienine conto nel prezzo e scrivilo.`;
 }
 
 function esitoChiedi(id){

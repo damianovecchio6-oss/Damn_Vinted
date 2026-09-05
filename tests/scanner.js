@@ -398,6 +398,33 @@ const NEGOZIO = (titolo, prezzo) => ({
   await page.evaluate(() => localStorage.clear());
   await page.evaluate(() => sw('scanner'));
 
+  console.log('\n-- e lo scarto e quello dei capi che somigliano a questo --');
+  // Lo stesso storico di prima piu' tre Carhartt che vanno molto piu' sotto:
+  // il capo scansionato e' un Carhartt, e la correzione deve seguire quelli,
+  // non la media di tutto il guardaroba. Sul mucchio sbagliato sarebbe un
+  // numero preciso costruito su capi che non c'entrano.
+  reset();
+  await page.evaluate(() => {
+    localStorage.clear();
+    upsertHistoryItem('mix_1', { nome: 'Camicia', marca: 'Zara', prezzoSuggerito: 40, esito: { venduto: true, prezzo: 38, giorni: 20 } });
+    upsertHistoryItem('mix_2', { nome: 'Blazer', marca: 'Zara', prezzoSuggerito: 30, esito: { venduto: true, prezzo: 29, giorni: 22 } });
+    upsertHistoryItem('car_1', { nome: 'Felpa', marca: 'Carhartt', prezzoSuggerito: 40, esito: { venduto: true, prezzo: 28, giorni: 9 } });
+    upsertHistoryItem('car_2', { nome: 'Giacca', marca: 'Carhartt', prezzoSuggerito: 50, esito: { venduto: true, prezzo: 35, giorni: 11 } });
+    upsertHistoryItem('car_3', { nome: 'Pantaloni', marca: 'Carhartt', prezzoSuggerito: 30, esito: { venduto: true, prezzo: 21, giorni: 7 } });
+  });
+  risultatiPer = () => [
+    USATO('Felpa Carhartt A', 40), USATO('Felpa Carhartt B', 42), USATO('Felpa Carhartt C', 44),
+    USATO('Felpa Carhartt D', 46), USATO('Felpa Carhartt E', 48)
+  ];
+  await page.click('#btnSx');
+  await attendiRapporto();
+  const perMarca = await page.textContent('#rSxBody');
+  check('il conto e fatto sui capi di quella marca, e lo dice',
+    /3 capi venduti di marca Carhartt sono andati il 30% sotto/.test(perMarca), (perMarca.match(/📉[^.]*\./) || [])[0]);
+  check('e non sulla media di tutto lo storico', !/5 capi venduti/.test(perMarca), (perMarca.match(/📉[^.]*\./) || [])[0]);
+  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => sw('scanner'));
+
   console.log('\n-- testo del modello e di SerpApi: sempre escapato --');
   reset();
   risultatiPer = () => [

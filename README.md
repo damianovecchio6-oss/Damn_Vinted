@@ -44,7 +44,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-730 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+745 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -387,12 +387,32 @@ Dal terzo capo venduto in poi lo storico scrive una riga che nessun modello
 puo' sapere, perche' e' successa a chi sta usando l'app: *i tuoi capi vanno via
 in media il 15% sotto il prezzo suggerito, in 11 giorni*.
 
+E non e' piu' una riga sola per tutto il guardaroba. Un Nike e una camicia di
+fast fashion non si scostano dal suggerito nello stesso modo, quindi la
+calibrazione si stringe su quello che somiglia al capo in mano: prima i capi
+**della stessa marca**, poi quelli col nome che si somiglia, e il totale resta
+solo come ripiego quando i simili sono meno di tre. Quando e' stretta la pagina
+lo dice - *i tuoi ultimi 3 capi venduti di marca Nike* - perche' su quale
+mucchio sia stato fatto il conto cambia quanto ci si puo' contare.
+
 E quella riga **sposta il numero**, non lo commenta soltanto: il prezzo che
 scanner e Ricerca mostrano e' gia' corretto di quello scarto, con scritto
 accanto di quanto e da cosa - *era 43€, l'ho portato a 39€* - perche' la regola
 di questa pagina resta che un numero corretto di nascosto e' peggio di uno
 sbagliato in chiaro. Entra anche nel prompt della stima prezzo, come **l'unico
-dato di vendite concluse** che l'app abbia mai.
+dato di vendite concluse** che l'app abbia mai - e li' non entra solo la
+media, entrano i **capi veri**: fino a quattro righe di storico, i piu' vicini
+per marca e nome, scritte come *Nike felpa tech, buono: suggerito 40€ ->
+venduto 28€ in 9 giorni*. Una media dice al modello un aggettivo, quelle righe
+gli danno dei casi su cui ancorare il numero, ed e' su casi del genere che
+sposta la stima davvero. Il blocco resta sotto i 700 caratteri: il prompt ne ha
+8000 in tutto, e i dati di mercato valgono almeno quanto lo storico.
+
+Nello scanner e nella Ricerca gli esiti **non** entrano nel prompt, e non e'
+una dimenticanza: li' lo scarto viene applicato dopo, aritmeticamente, e
+darglielo anche da leggere lo conterebbe due volte - il modello abbassa, e poi
+il codice abbassa di nuovo. Quello che cambia li' e' su quali capi lo scarto e'
+misurato.
 
 Due cose per cui non scappa via. La correzione ha un tetto del 25%, cosi' tre
 esiti storti non spostano tutto. E l'anello si chiude: la vendita dopo viene
