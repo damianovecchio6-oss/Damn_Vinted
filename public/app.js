@@ -3045,9 +3045,25 @@ function entrata(){
   clearTimeout(entrataFine);
   entrataFine = setTimeout(()=>m.classList.remove('entra'), 620);
 }
+// L'attesa prima di ridisegnare la mascot deve essere piu' LUNGA
+// dell'intervallo fra due scatti della ghiera, o durante un giro ne passa una
+// per scatto e la mascot lampeggia nell'angolo per tutto il tempo. E' successo
+// davvero: gli scatti cadono fra i 240 e i 360 millisecondi l'uno dall'altro, e
+// con un quarto di secondo di attesa un giro intero ne produceva cinque.
+//
+// Da 380 in su ogni scatto cancella l'attesa di quello prima e il giro ne
+// produce una sola, alla fine. Il secondo scatto in poi alza ancora l'attesa:
+// una raffica gia' cominciata e' un giro, e li' un margine piu' largo non si
+// paga - mentre giri la mascot non la stai guardando. Un tocco isolato invece
+// aspetta il minimo, giusto il tempo che la scheda finisca di entrare.
+const ATTESA = 380, ATTESA_GIRO = 620;
+let ultimoCambio = 0;
 function entrataQuandoTiFermi(){
+  const ora = Date.now();
+  const raffica = ora - ultimoCambio < 700;
+  ultimoCambio = ora;
   clearTimeout(entrataAttesa);
-  entrataAttesa = setTimeout(entrata, 260);
+  entrataAttesa = setTimeout(entrata, raffica ? ATTESA_GIRO : ATTESA);
 }
 
 // La mascot risponde a chi la tocca: si ferma, salta e strizza l'occhio, poi

@@ -158,6 +158,22 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
     await page.evaluate(() => Math.round(window.scrollY)));
   await page.evaluate(() => document.querySelectorAll('.riempitivoDiProva').forEach(d => d.remove()));
 
+  console.log('\n-- l\'entrata della mascot non lampeggia mentre giri --');
+  // Questo col mouse non si vede: gli scatti di un giro vero cadono a un terzo
+  // di secondo l'uno dall'altro, e con un'attesa piu' corta la mascot si
+  // ridisegnava nell'angolo a ogni scatto. Un giro intero = una entrata sola.
+  await page.evaluate(() => { window.__entrate = 0; const vera = window.entrata;
+    window.entrata = function(){ window.__entrate++; return vera.apply(this, arguments); }; });
+  await giroDelDito(0, 360, 10);
+  await page.waitForTimeout(1400);
+  const entrate = await page.evaluate(() => window.__entrate);
+  check('un giro intero ridisegna la mascot una volta sola', entrate === 1, entrate);
+  await page.evaluate(() => { window.__entrate = 0; });
+  await dito([await dove('.raggio[data-scheda="prezzo"] .presa')]);
+  await page.waitForTimeout(900);
+  check('e un tocco secco la ridisegna subito, senza aspettare il giro',
+    await page.evaluate(() => window.__entrate) === 1, await page.evaluate(() => window.__entrate));
+
   console.log('\n-- errori JS accumulati --');
   check('nessun errore JS in tutta la sessione', errori.length === 0, errori);
 
