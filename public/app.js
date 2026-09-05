@@ -1176,7 +1176,7 @@ async function stimaPrezzo(){
     const cal=calibrazioneStorico();
     if(cal){
       mercato += `\n\nESITI VERI di chi vende, dal suo storico (${cal.n} capi venduti davvero):`
-        + `\n- i suoi capi vendono ${cal.scarto<0?`il ${-cal.scarto}% sotto`:cal.scarto>0?`il ${cal.scarto}% sopra`:'esattamente a'} il prezzo che gli era stato suggerito`
+        + `\n- i suoi capi vendono ${scartoInParole(cal.scarto)} il prezzo che gli era stato suggerito`
         + (cal.giorni!==null?`, e ci mettono ${cal.giorni} giorni`:'')
         + `\nE' l'unico dato di vendite CONCLUSE che hai: tienine conto nel prezzo, e scrivilo nella motivazione.`;
     }
@@ -2160,27 +2160,32 @@ const SX_PESO_VENDUTO=1.6;
 const SX_ETA_VECCHIA=90;
 
 function sxPesoDi(prova, condizioneCapo){
-  const giorni=(prova.eta && typeof prova.eta.giorni==='number') ? prova.eta.giorni : null;
-  let peso=1;
-  if(giorni!==null){
-    const scaglione=SX_PESO_ETA.find(s=>giorni<=s[0]);
-    peso*= scaglione ? scaglione[1] : SX_PESO_ETA_OLTRE;
-  }
-  const sua=sxScalaCondizione(`${prova.titolo||''} ${prova.snippet||''}`);
-  const distanza=(sua!==null && condizioneCapo!==null) ? Math.abs(sua-condizioneCapo) : null;
-  peso*= distanza===null ? SX_PESO_COND_IGNOTA : SX_PESO_COND[Math.min(3,distanza)];
-  if(prova.venduto) peso*=SX_PESO_VENDUTO;
-  return { peso, giorni, condizione:sua, distanza };
+  const giorni=sxGiorni(prova);
+  const scaglione=giorni===null ? null : SX_PESO_ETA.find(s=>giorni<=s[0]);
+  const distanza=(prova.condScala!==null && condizioneCapo!==null) ? Math.abs(prova.condScala-condizioneCapo) : null;
+  return (giorni===null ? 1 : (scaglione ? scaglione[1] : SX_PESO_ETA_OLTRE))
+    * (distanza===null ? SX_PESO_COND_IGNOTA : SX_PESO_COND[Math.min(3,distanza)])
+    * (prova.venduto ? SX_PESO_VENDUTO : 1);
+}
+
+// L'eta' sta in un posto solo, quello in cui e' arrivata dalla function.
+function sxGiorni(prova){
+  return (prova.eta && typeof prova.eta.giorni==='number') ? prova.eta.giorni : null;
 }
 
 function sxValuta(prove, identita){
   const condCapo=sxScalaCondizione(sxVal(identita.condizione));
   for(const p of prove){
+    const testo=`${p.titolo||''} ${p.snippet||''}`;
     p.mercato=sxDoveSta(p);
     p.pertinente=sxPertinente(p, identita);
-    p.venduto=p.mercato==='usato' && SX_VENDUTO.test(`${p.titolo||''} ${p.snippet||''}`);
-    const q=sxPesoDi(p, condCapo);
-    p.peso=q.peso; p.giorni=q.giorni; p.condScala=q.condizione; p.condDist=q.distanza;
+    p.venduto=p.mercato==='usato' && SX_VENDUTO.test(testo);
+    p.condScala=sxScalaCondizione(testo);
+    p.stessaCond=p.condScala!==null && p.condScala===condCapo;
+    // Solo l'usato si pesa: un listino di negozio non ha ne' condizione ne'
+    // esito, e pesarlo per poi rimettere il peso a 1 piu' avanti vuol dire
+    // che il prossimo fattore che si aggiunge va ricordato in due posti.
+    p.peso=p.mercato==='usato' ? sxPesoDi(p, condCapo) : 1;
   }
 }
 
@@ -2191,8 +2196,7 @@ function sxDiTipo(prove, mercato){
 
 // I prezzi di un mercato, ognuno col peso della prova da cui viene.
 function sxCampioni(prove, mercato){
-  return sxDiTipo(prove, mercato)
-    .map(p=>({ valore:p.prezzo.valore, peso:(typeof p.peso==='number' && p.peso>0)?p.peso:0.01, prova:p }));
+  return sxDiTipo(prove, mercato).map(p=>({ valore:p.prezzo.valore, peso:p.peso, prova:p }));
 }
 
 // Quantile pesato, per interpolazione. Con pesi tutti uguali da' esattamente i
@@ -2208,7 +2212,6 @@ function sxCampioni(prove, mercato){
 // ma chi ci mette mano si aspetti questo e non la media pesata dei manuali.
 function sxQuantile(campioni, q){
   if(!campioni.length) return null;
-  if(campioni.length===1) return campioni[0].valore;
   const somma=campioni.reduce((t,c)=>t+c.peso,0);
   const primo=campioni[0].peso, ultimo=campioni[campioni.length-1].peso;
   const den=somma-primo/2-ultimo/2;
@@ -2248,7 +2251,6 @@ function sxStatistiche(campioni){
   if(!tenuti.length) return null;
   const somma=tenuti.reduce((t,c)=>t+c.peso,0);
   const quadrati=tenuti.reduce((t,c)=>t+c.peso*c.peso,0);
-  const conGiorni=tenuti.filter(c=>typeof c.prova.giorni==='number');
   return {
     n: tenuti.length,
     // Quante prove *contano* davvero. Dieci annunci di cui otto vecchi e di
@@ -2262,17 +2264,14 @@ function sxStatistiche(campioni){
     q3: sxQuantile(tenuti,0.75),
     scartati,
     venduti: tenuti.filter(c=>c.prova.venduto).length,
-    stessaCond: tenuti.filter(c=>c.prova.condDist===0).length,
-    datati: conGiorni.length,
-    vecchi: conGiorni.filter(c=>c.prova.giorni>SX_ETA_VECCHIA).length
+    stessaCond: tenuti.filter(c=>c.prova.stessaCond).length,
+    vecchi: tenuti.filter(c=>sxGiorni(c.prova)>SX_ETA_VECCHIA).length
   };
 }
 
 function sxMercato(prove){
   const usato=sxStatistiche(sxCampioni(prove,'usato'));
-  // I listini dei negozi pesano tutti uguale: una scheda prodotto e' una
-  // scheda prodotto, non ha ne' condizione ne' esito.
-  const nuovo=sxStatistiche(sxCampioni(prove,'nuovo').map(c=>Object.assign({},c,{peso:1})));
+  const nuovo=sxStatistiche(sxCampioni(prove,'nuovo'));
   const pertinenti=prove.filter(p=>p.pertinente).length;
   return {
     usato, nuovo,
@@ -2285,12 +2284,15 @@ function sxMercato(prove){
 
 // Com'e' fatta la banda, in una riga: e' la differenza fra "27€ su sei
 // annunci" e "27€ su sei annunci di cui nessuno nella tua condizione".
+const plurale=(n,uno,tanti)=>`${n} ${n===1?uno:tanti}`;
+
 function sxComposizione(u){
   if(!u) return '';
   const pezzi=[];
-  if(u.venduti) pezzi.push(`${u.venduti} ${u.venduti===1?'e un prezzo di venduto':'sono prezzi di venduto'}`);
-  if(u.stessaCond) pezzi.push(`${u.stessaCond} ${u.stessaCond===1?'ha':'hanno'} la stessa condizione del tuo`);
-  if(u.vecchi) pezzi.push(`${u.vecchi} ${u.vecchi===1?'è un annuncio più vecchio':'sono annunci più vecchi'} di tre mesi e ${u.vecchi===1?'pesa':'pesano'} meno`);
+  if(u.venduti) pezzi.push(plurale(u.venduti,'è un prezzo di venduto','sono prezzi di venduto'));
+  if(u.stessaCond) pezzi.push(plurale(u.stessaCond,'ha','hanno')+' la stessa condizione del tuo');
+  if(u.vecchi) pezzi.push(plurale(u.vecchi,'è un annuncio più vecchio','sono annunci più vecchi')
+    +' di tre mesi e '+(u.vecchi===1?'pesa':'pesano')+' meno');
   if(!pezzi.length) return `Di questi ${u.n} annunci non so né la data né la condizione: contano tutti uguale.`;
   return `Di ${u.n} annunci: ${pezzi.join(', ')}.`;
 }
@@ -2302,23 +2304,27 @@ function sxLacuna(mercato, prove, medianaPrima){
   if(prove.length && mercato.pertinenti < prove.length/2){
     return 'piu\' di meta\' dei risultati parla di un altro capo';
   }
-  if(!mercato.usato || mercato.usato.nEff < SX_USATI_OK){
-    const u=mercato.usato;
-    if(!u) return `ho 0 annunci dell'usato con un prezzo, ne servono ${SX_USATI_OK}`;
+  const u=mercato.usato;
+  if(!u || u.nEff < SX_USATI_OK){
     // Il conto che manca e' quello delle prove che pesano, non delle righe:
     // sei annunci vecchi e di un'altra condizione valgono meno di sei prove,
     // e il giro dopo deve saperlo per cercare meglio invece che di piu'.
-    return u.nEff < u.n - 0.4
+    return sxPesiContano(u)
       ? `ho ${u.n} annunci dell'usato ma valgono come ${u.nEff}: sono vecchi o di un'altra condizione`
-      : `ho solo ${u.n} annunci dell'usato con un prezzo, ne servono ${SX_USATI_OK}`;
+      : `ho solo ${u?u.n:0} annunci dell'usato con un prezzo, ne servono ${SX_USATI_OK}`;
   }
-  const larghezza=(mercato.usato.q3-mercato.usato.q1)/mercato.usato.mediana;
+  const larghezza=(u.q3-u.q1)/u.mediana;
   if(larghezza>SX_SPARSI) return 'i prezzi dell\'usato sono troppo sparsi per dire un numero';
-  if(medianaPrima && Math.abs(mercato.usato.mediana-medianaPrima)/medianaPrima > SX_STABILE){
+  if(medianaPrima && Math.abs(u.mediana-medianaPrima)/medianaPrima > SX_STABILE){
     return 'la mediana si sta ancora muovendo';
   }
   return null;
 }
+
+// Quando i pesi hanno spostato qualcosa davvero: sotto mezza prova di
+// differenza non vale la pena dirlo, ed e' la stessa soglia per tutti quelli
+// che lo raccontano.
+function sxPesiContano(u){ return !!u && u.nEff < u.n - 0.4; }
 
 // La fiducia la calcola il codice dai dati, non la dichiara il modello: un
 // modello a cui si chiede quanto e' sicuro risponde quasi sempre "media".
@@ -2328,22 +2334,24 @@ function sxLacuna(mercato, prove, medianaPrima){
 // campo "numero" dice di no, e la pagina mostra la banda invece della cifra.
 function sxFiducia(mercato){
   const u=mercato.usato;
+  const pesati=sxPesiContano(u) ? ` (${u.n} trovati, ma vecchi o di un'altra condizione)` : '';
   if(!u || u.nEff<3){
     return { livello:'bassa', numero:false,
-      perche:`solo ${u?u.n:0} annunci dell'usato con un prezzo leggibile${u&&u.nEff<u.n-0.4?`, che pesati valgono come ${u.nEff}`:''}` };
+      perche:`solo ${u?u.n:0} annunci dell'usato con un prezzo leggibile${pesati}` };
   }
   const largh=(u.q3-u.q1)/u.mediana;
-  const pesati=u.nEff<u.n-0.4 ? ` (${u.n} trovati, ma vecchi o di un'altra condizione)` : '';
+  if(largh>SX_SPARSI){
+    return { livello:'bassa', numero:false,
+      perche:`${u.n} annunci, ma con prezzi molto diversi fra loro (da ${u.min}€ a ${u.max}€)` };
+  }
   if(u.nEff>=8 && largh<=0.45){
     return { livello:'alta', numero:true, perche:`${u.n} annunci dell'usato, e i prezzi stanno vicini fra loro` };
   }
-  if(u.nEff>=SX_USATI_OK && largh<=SX_SPARSI){
+  if(u.nEff>=SX_USATI_OK){
     return { livello:'media', numero:true, perche:`${u.nEff} annunci dell'usato che contano${pesati}, prezzi abbastanza vicini` };
   }
   return { livello:'bassa', numero:false,
-    perche: largh>SX_SPARSI
-      ? `${u.n} annunci, ma con prezzi molto diversi fra loro (da ${u.min}€ a ${u.max}€)`
-      : `${u.nEff} annunci che contano${pesati}: troppo pochi perche' un numero solo voglia dire qualcosa` };
+    perche:`${u.nEff} annunci che contano${pesati}: troppo pochi perche' un numero solo voglia dire qualcosa` };
 }
 
 // Quanto e' incerta la mediana, in euro. Meta' della larghezza del quartile
@@ -2380,12 +2388,11 @@ async function sxVerdetto(identita, mercato, prove){
   // peggiore: se e' un venduto, quanto e' vecchia, in che condizione e' il
   // capo di cui parla. Il modello cita per numero, e deve poter dire "il (3)
   // e' di sei mesi fa" invece di trattarlo come l'annuncio di ieri.
-  const cond=['soddisfacente','buono','ottimo','nuovo senza cartellino','nuovo con cartellino'];
   const elenco=prove.map((r,k)=>
     `${k+1}. [${r.pertinente?r.mercato:'fuori tema'}]${r.venduto?' [venduto]':''} ${String(r.titolo).slice(0,80)} — ${r.fonte||'fonte ignota'}`
     + (r.prezzo?` — ${r.prezzo.valore}${r.prezzo.valuta}`:' — prezzo non leggibile')
     + (r.eta && r.eta.testo?` — ${r.eta.testo}`:'')
-    + (r.condScala!==null && r.condScala!==undefined?` — condizione: ${cond[r.condScala]}`:'')).join('\n');
+    + (r.condScala!==null && r.condScala!==undefined?` — condizione: ${CONDIZIONI[4-r.condScala].toLowerCase()}`:'')).join('\n');
 
   const r=await callAIJson({
     type:'text',
@@ -2437,13 +2444,6 @@ function sxDentroBanda(valore, u){
   return { valore: Math.min(u.max, Math.max(u.min, valore)), spostato:true };
 }
 
-// Il range del modello allargato dell'incertezza della banda: con pochi
-// annunci e prezzi sparsi si apre, con tanti annunci vicini resta com'e'.
-function sxAllarga(valore, delta, u){
-  if(valore===null) return null;
-  return sxDentroBanda(Math.round(valore+delta), u).valore;
-}
-
 function sxDisegna(){
   const s=lastScan, d=s.verdetto||{}, u=s.mercato.usato, n=s.mercato.nuovo;
   const fiducia=u?sxFiducia(s.mercato):{ livello:'nessuna', numero:false, perche:'nessun annuncio dell\'usato trovato' };
@@ -2451,12 +2451,17 @@ function sxDisegna(){
 
   const grezzo=num(d.prezzoConsigliato,null,0,100000);
   const corretto=sxDentroBanda(grezzo,u);
-  // Sotto la soglia di fiducia il numero singolo non si dice proprio: resta la
-  // banda, e scritto perche'. A volte non e' la risposta che si voleva, ma e'
-  // la risposta che si ha.
+  // Il numero del modello: prima riportato dentro la banda, poi allargato
+  // dell'incertezza, poi di nuovo dentro la banda. Sotto la soglia di fiducia
+  // non si dice proprio: resta la banda, e scritto perche'. A volte non e' la
+  // risposta che si voleva, ma e' la risposta che si ha.
+  const estremo=(valore,delta)=>{
+    const x=sxDentroBanda(num(valore,null,0,100000),u).valore;
+    return (!fiducia.numero || x===null) ? null : sxDentroBanda(Math.round(x+delta),u).valore;
+  };
   const prezzo=fiducia.numero?corretto.valore:null;
-  const veloce=fiducia.numero?sxAllarga(sxDentroBanda(num(d.prezzoVeloce,null,0,100000),u).valore,-margine,u):null;
-  const paziente=fiducia.numero?sxAllarga(sxDentroBanda(num(d.prezzoPaziente,null,0,100000),u).valore,margine,u):null;
+  const veloce=estremo(d.prezzoVeloce,-margine), paziente=estremo(d.prezzoPaziente,margine);
+  const banda=u?`${u.q1}–${u.q3}€`:'', composizione=sxComposizione(u);
 
   const identita=[
     ['Capo', s.identita.tipo], ['Marca', s.identita.marca], ['Modello', s.identita.modello],
@@ -2475,18 +2480,18 @@ function sxDisegna(){
       + (fiducia.numero
         ? `<div class="ph"><span class="pn">${prezzo!==null?prezzo+'€':'—'}</span>`
           + `<span class="pr">${veloce!==null&&paziente!==null?`veloce ${veloce}€ · paziente ${paziente}€`:''}</span></div>`
-        : `<div class="ph"><span class="pn">${u.q1}–${u.q3}€</span><span class="pr">nessun numero singolo</span></div>`)
+        : `<div class="ph"><span class="pn">${banda}</span><span class="pr">nessun numero singolo</span></div>`)
       + sxBanda(u, prezzo)
       + `<div class="agm">`
       + sxValore(u.mediana+'€', `Mediana di ${u.n} annunci usati`)
-      + sxValore(`${u.q1}–${u.q3}€`, 'Dove sta metà del mercato')
+      + sxValore(banda, 'Dove sta metà del mercato')
       + (n?sxValore(n.mediana+'€', `Nuovo in negozio${s.mercato.tenuta?` · l'usato ne vale il ${s.mercato.tenuta}%`:''}`):'')
       + sxValore(fiducia.livello, 'Fiducia')
       + `</div>`
       + `<div class="hSub" style="margin-bottom:6px">Fiducia ${esc(fiducia.livello)}: ${esc(fiducia.perche)}.</div>`
-      + `<div class="hSub" style="margin-bottom:12px">${esc(sxComposizione(u))}${fiducia.numero&&margine>0?` Il range tiene conto dell'incertezza: ±${margine}€.`:''}</div>`;
+      + `<div class="hSub" style="margin-bottom:12px">${esc(composizione)}${fiducia.numero&&margine>0?` Il range tiene conto dell'incertezza: ±${margine}€.`:''}</div>`;
     if(!fiducia.numero){
-      html+=`<div class="tip">⚠️ Non dico un prezzo solo: ${esc(fiducia.perche)}. Una cifra precisa qui sembrerebbe una misura senza esserlo. Quello che si può dire è che metà del mercato sta fra ${u.q1}€ e ${u.q3}€.</div>`;
+      html+=`<div class="tip">⚠️ Non dico un prezzo solo: ${esc(fiducia.perche)}. Una cifra precisa qui sembrerebbe una misura senza esserlo: resta la banda qui sopra.</div>`;
     }
     if(fiducia.numero && corretto.spostato){
       html+=`<div class="tip">⚠️ Il prezzo proposto dal modello era ${grezzo}€, fuori dai prezzi trovati: l'ho riportato dentro la banda degli annunci veri (${u.min}–${u.max}€).</div>`;
@@ -2503,9 +2508,9 @@ function sxDisegna(){
     if(cal){
       const base=prezzo!==null?prezzo:u.mediana;
       const atteso=Math.round(base*(1+cal.scarto/100));
-      html+=`<div class="tip">📉 I tuoi ultimi ${cal.n} capi venduti sono andati `
-        + (cal.scarto<0?`il ${-cal.scarto}% sotto`:cal.scarto>0?`il ${cal.scarto}% sopra`:'esattamente')
-        + ` il prezzo suggerito${cal.giorni!==null?`, in ${cal.giorni} giorni`:''}. Con lo stesso scarto questo capo andrebbe a ${atteso}€.</div>`;
+      html+=`<div class="tip">📉 I tuoi ultimi ${cal.n} capi venduti sono andati ${scartoInParole(cal.scarto)}`
+        + ` il prezzo suggerito${cal.giorni!==null?`, in ${plurale(cal.giorni,'giorno','giorni')}`:''}.`
+        + ` Con lo stesso scarto questo capo andrebbe a ${atteso}€.</div>`;
     }
   }else{
     html+=`<div class="tip">⚠️ Non ho trovato nessun annuncio dell'usato con un prezzo leggibile, quindi non dico un numero: sarebbe inventato. `
@@ -2563,9 +2568,9 @@ function sxDisegna(){
   sxTesto=[
     sxDescrizioneBreve(s.identita),
     prezzo!==null?`Prezzo consigliato: ${prezzo}€${veloce!==null&&paziente!==null?` (veloce ${veloce}€, paziente ${paziente}€)`:''}`
-      :(u?`Nessun prezzo singolo: metà del mercato sta fra ${u.q1}€ e ${u.q3}€`:''),
+      :(u?`Nessun prezzo singolo: metà del mercato sta fra ${banda}`:''),
     u?`Mediana di ${u.n} annunci usati: ${u.mediana}€, metà del mercato fra ${u.q1}€ e ${u.q3}€`:'',
-    u?sxComposizione(u):'',
+    composizione,
     n?`Nuovo in negozio: ${n.mediana}€`:'',
     `Fiducia ${fiducia.livello}: ${fiducia.perche}`,
     d.lettura||'',
@@ -2681,6 +2686,8 @@ function soloNoti(patch){
   return out;
 }
 
+// Torna lo storico aggiornato: chi ha appena scritto quasi sempre deve anche
+// ridisegnare, e senza questo lo rileggeva da capo dal localStorage.
 function upsertHistoryItem(id, patch){
   const arr = loadHistory();
   const dati = soloNoti(patch);
@@ -2691,6 +2698,7 @@ function upsertHistoryItem(id, patch){
     arr.unshift(Object.assign({id, createdAt: Date.now(), updatedAt: Date.now()}, dati));
   }
   saveHistoryArr(arr);
+  return arr;
 }
 
 function deleteHistoryItem(id){
@@ -2784,16 +2792,32 @@ function medianaSemplice(valori){
   return o.length % 2 ? o[m] : (o[m-1]+o[m])/2;
 }
 
-function calibrazioneStorico(){
-  const venduti = loadHistory().filter(x => x.esito && x.esito.venduto
-    && typeof x.esito.prezzo === 'number'
-    && typeof x.prezzoSuggerito === 'number' && x.prezzoSuggerito > 0);
+// Di quanto il prezzo incassato si e' scostato da quello suggerito, in
+// percentuale. Negativo = venduto sotto, che e' il caso normale. Torna null
+// quando non c'e' niente da confrontare: senza questa guardia un suggerito a
+// zero darebbe Infinity e avvelenerebbe la mediana di tutte le altre voci.
+function scartoDi(voce){
+  if(!voce || !voce.esito || !voce.esito.venduto) return null;
+  if(typeof voce.esito.prezzo !== 'number') return null;
+  if(typeof voce.prezzoSuggerito !== 'number' || voce.prezzoSuggerito <= 0) return null;
+  return (voce.esito.prezzo - voce.prezzoSuggerito) / voce.prezzoSuggerito * 100;
+}
+
+// Lo stesso scarto detto a parole. Sta qui e non nei quattro posti che lo
+// mostrano, perche' e' la frase centrale di tutta questa parte.
+function scartoInParole(scarto, prefisso){
+  if(scarto < 0) return `${prefisso||''}il ${-scarto}% sotto`;
+  if(scarto > 0) return `${prefisso||''}il ${scarto}% sopra`;
+  return 'esattamente';
+}
+
+function calibrazioneStorico(voci){
+  const venduti = (voci || loadHistory()).filter(x => scartoDi(x) !== null);
   if(venduti.length < CALIBRA_MIN) return null;
   const giorni = venduti.map(x => x.esito.giorni).filter(g => typeof g === 'number');
   return {
     n: venduti.length,
-    // Negativo = venduto sotto il suggerito, che e' il caso normale.
-    scarto: Math.round(medianaSemplice(venduti.map(x => (x.esito.prezzo - x.prezzoSuggerito) / x.prezzoSuggerito * 100))),
+    scarto: Math.round(medianaSemplice(venduti.map(scartoDi))),
     giorni: giorni.length ? Math.round(medianaSemplice(giorni)) : null
   };
 }
@@ -2806,37 +2830,35 @@ function esitoChiedi(id){
   if(campo) campo.focus();
 }
 
-function esitoNonVenduto(id){
-  upsertHistoryItem(id, { esito: { venduto:false, il: Date.now() } });
-  renderHistory();
+// "Non ancora" e "correggi" sono la stessa cosa fatta con due valori diversi.
+function esitoSegna(id, esito){
+  renderHistory(upsertHistoryItem(id, { esito }));
 }
 
 function esitoSalva(id){
-  const prezzo = num(document.getElementById('esP_' + id) && document.getElementById('esP_' + id).value, null, 1, 100000);
-  const giorni = num(document.getElementById('esG_' + id) && document.getElementById('esG_' + id).value, null, 0, 3650);
+  const campo = pre => { const el = document.getElementById(pre + id); return el ? el.value : null; };
+  const prezzo = num(campo('esP_'), null, 1, 100000);
+  const giorni = num(campo('esG_'), null, 0, 3650);
   if(prezzo === null){ toast('A quanto è venduto?'); return; }
-  upsertHistoryItem(id, { esito: { venduto:true, prezzo, giorni: giorni === null ? undefined : giorni, il: Date.now() } });
-  renderHistory();
-  const cal = calibrazioneStorico();
-  toast(cal ? `✅ Segnato. I tuoi capi vendono in media ${cal.scarto<0?`il ${-cal.scarto}% sotto`:cal.scarto>0?`il ${cal.scarto}% sopra`:'esattamente'} il suggerito`
+  const voci = upsertHistoryItem(id, { esito: { venduto:true, prezzo, giorni: giorni === null ? undefined : giorni, il: Date.now() } });
+  renderHistory(voci);
+  const cal = calibrazioneStorico(voci);
+  toast(cal ? `✅ Segnato. I tuoi capi vendono ${scartoInParole(cal.scarto, 'in media ')} il suggerito`
             : '✅ Segnato: com\'è andata davvero');
 }
 
-function esitoRiapri(id){
-  upsertHistoryItem(id, { esito: null });
-  renderHistory();
-}
-
-// La domanda, o la risposta che era gia' stata data. Si mostra solo dove c'e'
-// un prezzo suggerito da confrontare: senza, non ci sarebbe niente da imparare.
+// La domanda, o la risposta che era gia' stata data. Si mostra dove c'e'
+// qualcosa da confrontare: un prezzo suggerito, oppure la sola banda - e quei
+// capi li' sono quelli che avrebbero piu' da insegnare, perche' sono proprio
+// quelli su cui non siamo riusciti a dire un numero.
 function esitoHtml(item){
   const id = esc(item.id);
-  if(typeof item.prezzoSuggerito !== 'number') return '';
+  if(typeof item.prezzoSuggerito !== 'number' && typeof item.rangeMin !== 'number') return '';
   const e = item.esito;
   if(e && e.venduto){
-    const scarto = Math.round((e.prezzo - item.prezzoSuggerito) / item.prezzoSuggerito * 100);
-    return `<div class="hEs">✅ Venduto a ${e.prezzo}€${typeof e.giorni === 'number' ? ` in ${e.giorni} ${e.giorni === 1 ? 'giorno' : 'giorni'}` : ''}`
-      + (scarto ? ` · ${Math.abs(scarto)}% ${scarto < 0 ? 'sotto' : 'sopra'} il suggerito` : ' · esattamente il suggerito')
+    const scarto = scartoDi(item);
+    return `<div class="hEs">✅ Venduto a ${e.prezzo}€${typeof e.giorni === 'number' ? ` in ${plurale(e.giorni,'giorno','giorni')}` : ''}`
+      + (scarto === null ? '' : ` · ${scartoInParole(Math.round(scarto))} il suggerito`)
       + ` <button class="hb" data-az="esitoRiapri" data-arg="${id}">correggi</button></div>`;
   }
   if(e){
@@ -2854,11 +2876,11 @@ function esitoForm(id){
     </div>`;
 }
 
-function renderHistory(){
-  const arr = loadHistory().sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+function renderHistory(voci){
+  const arr = (voci || loadHistory()).slice().sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
   const list = document.getElementById('historyList');
   document.getElementById('historyEmpty').style.display = arr.length ? 'none' : '';
-  renderCalibrazione();
+  renderCalibrazione(arr);
   list.innerHTML = arr.map(item => {
     const foto = safePhoto(item.foto);
     return `
@@ -2885,16 +2907,14 @@ function renderHistory(){
 // Quello che i capi di chi usa l'app hanno fatto davvero, in una riga. Non e'
 // una statistica per far numero: e' il solo dato di verita' che questa app
 // possa avere, e serve a leggere ogni prezzo suggerito da qui in avanti.
-function renderCalibrazione(){
+function renderCalibrazione(voci){
   const box = document.getElementById('calibra');
   if(!box) return;
-  const cal = calibrazioneStorico();
+  const cal = calibrazioneStorico(voci);
   if(!cal){ box.style.display = 'none'; box.textContent = ''; return; }
   box.style.display = '';
-  box.textContent = `📉 Su ${cal.n} capi venduti: vanno via `
-    + (cal.scarto < 0 ? `in media il ${-cal.scarto}% sotto` : cal.scarto > 0 ? `in media il ${cal.scarto}% sopra` : 'esattamente a')
-    + ' il prezzo suggerito'
-    + (cal.giorni !== null ? `, in ${cal.giorni} ${cal.giorni === 1 ? 'giorno' : 'giorni'}` : '') + '.';
+  box.textContent = `📉 Su ${cal.n} capi venduti: vanno via ${scartoInParole(cal.scarto, 'in media ')} il prezzo suggerito`
+    + (cal.giorni !== null ? `, in ${plurale(cal.giorni, 'giorno', 'giorni')}` : '') + '.';
 }
 
 // La pagina si apre sul sole: la classe la mette sw(), ma al primo giro sw()
@@ -2943,9 +2963,9 @@ const AZIONI = {
   usaLensPerPrezzo:    () => usaLensPerPrezzo(),
   esportaStorico:      () => esportaStorico(),
   esitoChiedi:         (el, arg) => esitoChiedi(arg),
-  esitoNonVenduto:     (el, arg) => esitoNonVenduto(arg),
+  esitoNonVenduto:     (el, arg) => esitoSegna(arg, { venduto:false, il: Date.now() }),
   esitoSalva:          (el, arg) => esitoSalva(arg),
-  esitoRiapri:         (el, arg) => esitoRiapri(arg),
+  esitoRiapri:         (el, arg) => esitoSegna(arg, null),
   clearHistoryConfirm: () => clearHistoryConfirm(),
   avviaScanner:        () => avviaScanner(),
   scannerPerAnnuncio:  () => scannerPerAnnuncio(),

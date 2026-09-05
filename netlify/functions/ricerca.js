@@ -172,28 +172,28 @@ function normalizza(data, query, tipo) {
 // relativa ("3 giorni fa", "ieri") o per esteso ("8 set 2025").
 function etaDi(r) {
   const testo = String((r && r.date) || '').replace(/\s+/g, ' ').trim().slice(0, 40);
-  if (!testo) return null;
-  const giorni = giorniDa(testo);
-  return giorni === null ? { testo, giorni: null } : { testo, giorni };
+  return testo ? { testo, giorni: giorniDa(testo) } : null;
 }
 
 const MESI = { gen: 0, feb: 1, mar: 2, apr: 3, mag: 4, giu: 5, lug: 6, ago: 7, set: 8, ott: 9, nov: 10, dic: 11 };
 const UNITA = { minut: 1 / 1440, or: 1 / 24, giorn: 1, settiman: 7, mes: 30, ann: 365 };
+
+// Undici anni di annunci non esistono, e una data del futuro nemmeno: quello
+// che non ci sta dentro e' testo letto male, e vale meno di "non lo so".
+const plausibile = g => (isFinite(g) && g >= 0 && g < 4000) ? g : null;
 
 function giorniDa(testo) {
   if (/\bieri\b/i.test(testo)) return 1;
   if (/\boggi\b/i.test(testo)) return 0;
   const rel = /(\d+)\s*(minut|or|giorn|settiman|mes|ann)/i.exec(testo);
   if (rel && /\bfa\b/i.test(testo)) {
-    const g = Math.round(Number(rel[1]) * UNITA[rel[2].toLowerCase()]);
-    return isFinite(g) && g >= 0 && g < 4000 ? g : null;
+    return plausibile(Math.round(Number(rel[1]) * UNITA[rel[2].toLowerCase()]));
   }
   const ass = /(\d{1,2})\s+([a-zà-ù]{3})[a-zà-ù.]*\s+(\d{4})/i.exec(testo);
   if (ass) {
     const mese = MESI[ass[2].toLowerCase()];
     if (mese === undefined) return null;
-    const g = Math.round((Date.now() - Date.UTC(Number(ass[3]), mese, Number(ass[1]))) / 86400000);
-    return g >= 0 && g < 4000 ? g : null;
+    return plausibile(Math.round((Date.now() - Date.UTC(Number(ass[3]), mese, Number(ass[1]))) / 86400000));
   }
   return null;
 }

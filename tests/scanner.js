@@ -299,7 +299,8 @@ const NEGOZIO = (titolo, prezzo) => ({
     /–/.test(await page.textContent('#rSxBody .pn')) && !/^\d+€$/.test(await page.textContent('#rSxBody .pn')),
     await page.textContent('#rSxBody .pn'));
   check('e dice perche\' non la dice', /Non dico un prezzo solo/.test(incerto), incerto.slice(0, 600));
-  check('la banda resta, con dentro dove sta meta\' del mercato', /metà del mercato sta fra/.test(incerto));
+  check('la banda resta, con dentro dove sta meta\' del mercato',
+    /Dove sta metà del mercato/.test(incerto) && /[\d.]+–[\d.]+€/.test(await page.textContent('#rSxBody .pn')), incerto.slice(0, 400));
   check('e nello storico non finisce un prezzo che non ha detto',
     await page.evaluate(() => loadHistory().every(x => x.prezzoSuggerito === undefined || typeof x.prezzoSuggerito === 'number')));
 
@@ -336,7 +337,9 @@ const NEGOZIO = (titolo, prezzo) => ({
     /41\.81€/.test(conCondizioni), (conCondizioni.match(/Mediana[^€]*€/) || [])[0]);
   check('e dice quanti hanno davvero la stessa condizione',
     /3 hanno la stessa condizione del tuo/.test(conCondizioni), (conCondizioni.match(/Di \d+ annunci[^.]*\./) || [])[0]);
-  check('il verdetto legge la condizione riga per riga', /condizione: nuovo con cartellino/.test(primo('verdetto').prompt));
+  check('il verdetto legge la condizione riga per riga, col nome della tendina',
+    /condizione: nuovo con etichetta/.test(primo('verdetto').prompt),
+    (primo('verdetto').prompt.match(/— condizione: [^\n]*/) || [])[0]);
 
   console.log('\n-- venduto e chiesto non sono lo stesso prezzo --');
   reset();
@@ -357,7 +360,7 @@ const NEGOZIO = (titolo, prezzo) => ({
   await page.click('#btnSx');
   await attendiRapporto();
   const conVenduto = await page.textContent('#rSxBody');
-  check('un prezzo di venduto viene contato, e detto', /e un prezzo di venduto/.test(conVenduto), (conVenduto.match(/Di \d+ annunci[^.]*\./) || [])[0]);
+  check('un prezzo di venduto viene contato, e detto', /è un prezzo di venduto/.test(conVenduto), (conVenduto.match(/Di \d+ annunci[^.]*\./) || [])[0]);
   check('il verdetto lo vede marcato', /\[venduto\]/.test(primo('verdetto').prompt), (primo('verdetto').prompt.match(/\d+\. \[[^\]]+\]\s*\[venduto\][^\n]*/) || [])[0]);
   check('e fra le ricerche di riserva ce n\'e una che punta al venduto',
     await page.evaluate(() => sxRiserva({ marca: { v: 'Carhartt', f: 'foto' }, tipo: { v: 'felpa', f: 'foto' } }, []).some(p => /venduto/.test(p.q))));

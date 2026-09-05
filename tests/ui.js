@@ -156,6 +156,23 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
     /Venduto a 34€ in 9 giorni/.test(await page.textContent('#historyList .hEs'))
     && /15% sotto/.test(await page.textContent('#historyList .hEs')), await page.textContent('#historyList .hEs'));
 
+  // Il capo su cui lo scanner non se l'e' sentita di dire un numero ha solo la
+  // banda. Chiedergli com'e' andata e' proprio il caso che insegna di piu':
+  // finche' la domanda non arrivava, quei capi restavano fuori dal giro.
+  await page.evaluate(() => {
+    localStorage.clear();
+    upsertHistoryItem('id_banda', { nome: 'Felpa incerta', rangeMin: 30, rangeMax: 48 });
+    renderHistory();
+  });
+  check('anche senza un numero singolo la domanda arriva',
+    /Venduto\?/.test(await page.textContent('#historyList .hEs')), await page.textContent('#historyList .hEs'));
+  await page.click('#historyList [data-az="esitoChiedi"]');
+  await page.fill('#historyList input[id^="esP_"]', '36');
+  await page.click('#historyList [data-az="esitoSalva"]');
+  check('e l\'esito si salva senza inventare uno scarto da un suggerito che non c\'era',
+    /Venduto a 36€/.test(await page.textContent('#historyList .hEs'))
+    && !/%/.test(await page.textContent('#historyList .hEs')), await page.textContent('#historyList .hEs'));
+
   await page.evaluate(() => {
     localStorage.clear();
     upsertHistoryItem('id_n', { nome: 'Jeans', prezzoSuggerito: 30 });
@@ -185,10 +202,6 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
   check('dal terzo in poi dice come vendono davvero i suoi capi', /3 capi venduti/.test(calib), calib);
   check('col divario dal suggerito', /15% sotto/.test(calib), calib);
   check('e col tempo che ci mettono', /12 giorni/.test(calib), calib);
-  check('e non e\' un numero inventato: viene dagli esiti segnati',
-    await page.evaluate(() => { const c = calibrazioneStorico(); return c.n === 3 && c.scarto === -15 && c.giorni === 12; }),
-    await page.evaluate(() => calibrazioneStorico()));
-
   // Lo storico sta solo qui dentro: se l'export perde un campo, quel campo e'
   // perso davvero il giorno che il browser cancella i dati del sito.
   console.log('\n-- export dello storico --');
