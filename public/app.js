@@ -3023,6 +3023,20 @@ function renderCalibrazione(voci){
     + (cal.giorni !== null ? `, in ${plurale(cal.giorni, 'giorno', 'giorni')}` : '') + '.';
 }
 
+// La mascot risponde a chi la tocca: si ferma, salta e strizza l'occhio, poi
+// riprende la sua strada. Il movimento e' tutto nel CSS - qui si accende e si
+// spegne una classe - e il tempo e' quello del salto: rimetterla in cammino
+// prima che sia atterrata la farebbe scivolare via a mezz'aria.
+let mascotteAttesa = null;
+function toccaMascotte(){
+  const m = document.querySelector('.mascotte');
+  if(!m) return;
+  m.classList.add('reagisce');
+  tocco(6);
+  clearTimeout(mascotteAttesa);
+  mascotteAttesa = setTimeout(()=>m.classList.remove('reagisce'), 900);
+}
+
 // ===== LA GUIDA =====
 // Il sole non e' una barra di schede: si gira e si preme al centro. Chi apre
 // l'app per la prima volta non ha modo di saperlo guardando, quindi glielo si
@@ -3159,6 +3173,7 @@ const AZIONI = {
   esitoRiapri:         (el, arg) => esitoSegna(arg, null),
   clearHistoryConfirm: () => clearHistoryConfirm(),
   avviaScanner:        () => avviaScanner(),
+  toccaMascotte:       () => toccaMascotte(),
   apriGuida:           () => apriGuida(),
   chiudiGuida:         () => chiudiGuida(),
   guidaAvanti:         () => guidaAvanti(),

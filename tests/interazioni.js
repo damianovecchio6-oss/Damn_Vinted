@@ -337,7 +337,7 @@ async function apri(browser, opzioni) {
              : (s.visibility === 'hidden' || Number(s.opacity) < .1);
   }, visibile, { timeout: 3000 });
   await mascotFerma(true);
-  check('sta in home, accanto al sole', await mascotVisibile());
+  check('sta in home, e va in giro sul fondo', await mascotVisibile());
   check('e disegnata a mano ma colorata dal tema', await page.evaluate(() =>
     getComputedStyle(document.querySelector('.mFrame')).backgroundColor) === 'rgb(232, 200, 74)',
     await page.evaluate(() => getComputedStyle(document.querySelector('.mFrame')).backgroundColor));
@@ -349,8 +349,44 @@ async function apri(browser, opzioni) {
     const b = getComputedStyle(document.querySelector('.mBoil')).backgroundColor;
     return b === 'rgba(0, 0, 0, 0)' || b === 'transparent';
   }), await page.evaluate(() => getComputedStyle(document.querySelector('.mBoil')).backgroundColor));
-  check('non ruba tocchi al sole', await page.evaluate(() =>
+  check('passeggia lungo il fondo della home', await page.evaluate(() =>
+    getComputedStyle(document.querySelector('.mPasseggio')).animationName) === 'passeggio',
+    await page.evaluate(() => getComputedStyle(document.querySelector('.mPasseggio')).animationName));
+  check('e girandosi si specchia', await page.evaluate(() =>
+    getComputedStyle(document.querySelector('.mVerso')).animationName) === 'verso');
+  // La fascia su cui cammina e' larga quanto lo schermo: se prendesse i tocchi
+  // sarebbe una lastra invisibile stesa sul fondo della pagina.
+  check('la strada non ruba tocchi', await page.evaluate(() =>
     getComputedStyle(document.querySelector('.mascotte')).pointerEvents) === 'none');
+  check('li prende solo lei', await page.evaluate(() =>
+    getComputedStyle(document.querySelector('.mPasseggio')).pointerEvents) === 'auto');
+  check('da sola ammicca di rado, non e un tic', await page.evaluate(() =>
+    parseFloat(getComputedStyle(document.querySelector('.mOcchiolino')).animationDuration) >= 24),
+    await page.evaluate(() => getComputedStyle(document.querySelector('.mOcchiolino')).animationDuration));
+
+  console.log('\n-- e risponde a chi la tocca --');
+  await page.evaluate(() => { window.__vibrazioni = []; navigator.vibrate = ms => { window.__vibrazioni.push(ms); return true; }; });
+  await page.click('.mPasseggio');
+  const reazione = await page.evaluate(() => {
+    const m = document.querySelector('.mascotte');
+    return {
+      reagisce: m.classList.contains('reagisce'),
+      salta: getComputedStyle(document.querySelector('.mSalto')).animationName,
+      ferma: getComputedStyle(document.querySelector('.mPasseggio')).animationPlayState,
+      occhio: getComputedStyle(document.querySelector('.mOcchiolino')).opacity,
+      aperti: getComputedStyle(document.querySelector('.mBoil')).opacity
+    };
+  });
+  check('salta', reazione.salta === 'saltello', reazione);
+  check('e intanto si ferma', reazione.ferma === 'paused', reazione);
+  check('strizza l\'occhio: l\'occhiolino e una risposta, non un tic', reazione.occhio === '1' && reazione.aperti === '0', reazione);
+  check('e si sente sotto il dito', await page.evaluate(() => window.__vibrazioni.length) === 1,
+    await page.evaluate(() => window.__vibrazioni));
+  await page.waitForFunction(() => !document.querySelector('.mascotte').classList.contains('reagisce'), null, { timeout: 3000 });
+  check('poi riprende la sua strada', await page.evaluate(() =>
+    getComputedStyle(document.querySelector('.mPasseggio')).animationPlayState) === 'running');
+  check('e torna a occhi aperti', await page.evaluate(() =>
+    getComputedStyle(document.querySelector('.mOcchiolino')).opacity) === '0');
   check('e non la legge chi usa uno screen reader', await page.evaluate(() =>
     document.querySelector('.mascotte').getAttribute('aria-hidden')) === 'true');
   await page.evaluate(() => sw('prezzo'));
@@ -365,6 +401,8 @@ async function apri(browser, opzioni) {
   check('con meno movimento non vibra', await fermaLei.evaluate(() =>
     parseFloat(getComputedStyle(document.querySelector('.mA')).animationDuration) < 0.001),
     await fermaLei.evaluate(() => getComputedStyle(document.querySelector('.mA')).animationDuration));
+  check('e nemmeno passeggia', await fermaLei.evaluate(() =>
+    parseFloat(getComputedStyle(document.querySelector('.mPasseggio')).animationDuration) < 0.001));
   check('ma si vede lo stesso', await fermaLei.evaluate(() =>
     getComputedStyle(document.querySelector('.mA')).opacity) === '1');
   await fermaLei.close();

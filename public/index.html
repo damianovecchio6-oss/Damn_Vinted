@@ -542,22 +542,46 @@ body.guidaAperta{overflow:hidden}
 
    Due pose quasi uguali che si alternano sono il "boil" dei cartoni disegnati
    a mano: il tratto vibra e la mascot sembra respirare, con due file e nessun
-   fotogramma in mezzo. L'occhiolino passa ogni tanto, non di continuo: una
-   mascot che ammicca senza sosta smette di essere viva e diventa un banner. */
+   fotogramma in mezzo.
+
+   Non sta ferma in un angolo: passeggia lungo il fondo della home, si ferma
+   alle due estremita' come chi si guarda intorno, e girandosi si specchia -
+   la chioma spiove dall'altra parte e il giro si legge come una giravolta.
+   L'occhiolino invece e' diventato raro: e' la risposta a chi la tocca, non
+   un tic. Una mascot che ammicca da sola ogni pochi secondi smette di essere
+   viva e diventa un banner. */
 .mascotte{
-  position:fixed;left:14px;bottom:calc(16px + var(--sb));z-index:50;
-  width:clamp(74px,21vw,104px);aspect-ratio:1;
-  pointer-events:none;                  /* si guarda, non si preme */
+  /* Una fascia larga quanto lo schermo: e' la strada su cui cammina. La
+     fascia non prende tocchi, altrimenti sarebbe una lastra invisibile sopra
+     il fondo della pagina; li prende solo lei (.mPasseggio). */
+  --mDim:clamp(66px,18.5vw,92px);
+  position:fixed;left:0;right:0;bottom:calc(14px + var(--sb));z-index:50;
+  height:var(--mDim);pointer-events:none;
   opacity:0;visibility:hidden;
-  transform:translateY(10px);
-  transition:opacity .45s var(--sp),transform .45s var(--sp),visibility 0s linear .45s;
+  transition:opacity .45s var(--sp),visibility 0s linear .45s;
 }
 /* Vive in home: dentro una funzione lo spazio e' del contenuto e del sole
-   parcheggiato, e un pupazzo fermo in un angolo diventa un ingombro. */
-body.home .mascotte{opacity:1;visibility:visible;transform:none;transition-delay:0s,0s,0s}
-/* Il colore sta solo sui fotogrammi: darlo anche al contenitore vorrebbe dire
-   un quadrato d'oro pieno, perche' lui la maschera non ce l'ha. */
+   parcheggiato, e un pupazzo che passeggia sopra un modulo e' un disturbo. */
+body.home .mascotte{opacity:1;visibility:visible;transition-delay:0s,0s}
+.mPasseggio{
+  position:absolute;top:0;left:0;width:var(--mDim);height:var(--mDim);
+  pointer-events:auto;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  animation:passeggio 38s ease-in-out infinite;
+}
+/* Il giro di boa: si specchia a meta' strada, di scatto, mentre e' ferma. */
+.mVerso{position:absolute;inset:0;animation:verso 38s steps(1) infinite}
+.mSalto{position:absolute;inset:0;animation:salto 1.15s ease-in-out infinite}
+@keyframes passeggio{
+  0%,7%{transform:translateX(16px)}
+  43%,57%{transform:translateX(min(calc(100vw - var(--mDim) - 16px), 640px))}
+  93%,100%{transform:translateX(16px)}
+}
+@keyframes verso{0%,49%{transform:scaleX(1)}50%,100%{transform:scaleX(-1)}}
+@keyframes salto{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+
 .mascotte span{position:absolute;inset:0}
+/* Il colore sta solo sui fotogrammi: darlo anche ai contenitori vorrebbe dire
+   un quadrato d'oro pieno, perche' loro la maschera non ce l'hanno. */
 .mFrame{
   background:var(--t);
   filter:drop-shadow(0 6px 18px rgba(232,200,74,.28));
@@ -573,12 +597,31 @@ body.home .mascotte{opacity:1;visibility:visible;transform:none;transition-delay
 @keyframes boilA{0%,49%{opacity:1}50%,100%{opacity:0}}
 @keyframes boilB{0%,49%{opacity:0}50%,100%{opacity:1}}
 /* Durante l'occhiolino le altre due spariscono: sovrapposte, gli occhi aperti
-   si vedrebbero attraverso quello chiuso. */
-.mBoil{position:absolute;inset:0;animation:boilVia 8.4s infinite}
-.mOcchiolino{animation:occhiolino 8.4s infinite}
-@keyframes boilVia{0%,88%{opacity:1}89%,95%{opacity:0}96%,100%{opacity:1}}
-@keyframes occhiolino{0%,88%{opacity:0}89%,95%{opacity:1}96%,100%{opacity:0}}
-/* Ferma per chi ha chiesto meno movimento: resta la posa a occhi aperti. */
+   si vedrebbero attraverso quello chiuso. Da sola lo fa una volta ogni mezzo
+   minuto - abbastanza raro da sembrare una cosa sua e non un richiamo. */
+.mBoil{position:absolute;inset:0;animation:boilVia 31s infinite}
+.mOcchiolino{animation:occhiolino 31s infinite}
+@keyframes boilVia{0%,96.5%{opacity:1}97%,98.6%{opacity:0}99%,100%{opacity:1}}
+@keyframes occhiolino{0%,96.5%{opacity:0}97%,98.6%{opacity:1}99%,100%{opacity:0}}
+
+/* Toccata: si ferma di colpo, fa un salto e strizza l'occhio. E' l'unico
+   momento in cui l'occhiolino e' una risposta invece che un tic. */
+.mascotte.reagisce .mPasseggio,
+.mascotte.reagisce .mVerso{animation-play-state:paused}
+.mascotte.reagisce .mSalto{animation:saltello .85s cubic-bezier(.3,1.5,.5,1) 1}
+.mascotte.reagisce .mBoil{opacity:0;animation:none}
+.mascotte.reagisce .mOcchiolino{opacity:1;animation:none}
+@keyframes saltello{
+  0%{transform:translateY(0) scale(1)}
+  28%{transform:translateY(-17px) scale(1.06)}
+  55%{transform:translateY(0) scale(.96)}
+  78%{transform:translateY(-5px) scale(1.01)}
+  100%{transform:translateY(0) scale(1)}
+}
+/* Chi ha chiesto meno movimento se la trova ferma dov'e', a occhi aperti: il
+   passeggio e' proprio la cosa che quel sistema chiede di non fare. Toccarla
+   pero' risponde lo stesso - l'occhiolino li' e' un cambio di disegno, non un
+   movimento. */
 
 /* storico */
 .hItem{
@@ -634,8 +677,12 @@ body.home .mascotte{opacity:1;visibility:visible;transform:none;transition-delay
 <!-- La mascot: decorazione, non comando. aria-hidden perche' a chi ascolta la
      pagina non aggiunge niente, e senza tocchi perche' non fa niente. -->
 <div class="mascotte" aria-hidden="true">
-  <span class="mBoil"><span class="mFrame mA"></span><span class="mFrame mB"></span></span>
-  <span class="mFrame mOcchiolino"></span>
+  <div class="mPasseggio" data-az="toccaMascotte">
+    <div class="mVerso"><div class="mSalto">
+      <span class="mBoil"><span class="mFrame mA"></span><span class="mFrame mB"></span></span>
+      <span class="mFrame mOcchiolino"></span>
+    </div></div>
+  </div>
 </div>
 
 <div id="soleApp">
