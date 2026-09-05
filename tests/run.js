@@ -22,7 +22,8 @@ const SUITE = [
   ['i conti sui prezzi', 'prezzi.js', 'quantile pesato, peso delle prove, casi limite, calibrazione'],
   ['micro-interazioni', 'interazioni.js', 'ghiera, attesa, focus, vibrazione, motion'],
   ['dito sul telefono', 'tocco.js', 'tocchi veri: ghiera, tasto centrale, parcheggio'],
-  ['app installabile', 'app.js', 'manifest, icone, service worker, offline']
+  ['app installabile', 'app.js', 'manifest, icone, service worker, offline'],
+  ['porta su Vercel', 'vercel.js', 'adattatore, header uguali sui due host, origini']
 ];
 
 let totale = 0, falliti = 0, suiteKo = [];

@@ -38,6 +38,14 @@ function buildAllowlist() {
     if (val) list.push(val);
   }
 
+  // Le stesse di Vercel, che pero' le scrive senza lo schema
+  // ("mio-sito.vercel.app"): senza https:// davanti, normalizeOrigin le
+  // lascerebbe cosi' e non combacerebbero mai con un Origin vero.
+  for (const key of ['VERCEL_PROJECT_PRODUCTION_URL', 'VERCEL_BRANCH_URL', 'VERCEL_URL']) {
+    const host = (process.env[key] || '').trim();
+    if (host) list.push(normalizeOrigin(/^https?:\/\//.test(host) ? host : 'https://' + host));
+  }
+
   if (process.env.NETLIFY_DEV) {
     list.push('http://localhost:8888', 'http://127.0.0.1:8888');
   }

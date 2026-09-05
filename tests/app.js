@@ -76,7 +76,8 @@ const leggi = f => fs.readFileSync(path.join(L.SITO, f), 'utf8');
 
   /* ===== IL WORKER, LETTO ===== */
   const sw = leggi('sw.js');
-  check('le function non finiscono mai in cache', /url\.pathname\.startsWith\('\/\.netlify\/'\)/.test(sw) && /return;/.test(sw));
+  check('le function non finiscono mai in cache',
+    /url\.pathname\.startsWith\('\/api\/'\)/.test(sw) && /url\.pathname\.startsWith\('\/\.netlify\/'\)/.test(sw));
   check('solo le GET passano dal worker', /req\.method !== 'GET'/.test(sw));
   check('il guscio contiene la pagina e lo script',
     /'\.\/index\.html'/.test(sw) && /'\.\/app\.js'/.test(sw));
@@ -121,7 +122,7 @@ const leggi = f => fs.readFileSync(path.join(L.SITO, f), 'utf8');
   // E le function no: una risposta AI di ieri servita dalla cache sarebbe
   // peggio di un errore onesto.
   const funzioneOffline = await page.evaluate(async () => {
-    try { const r = await fetch('/.netlify/functions/claude'); return 'risposta ' + r.status; }
+    try { const r = await fetch('/api/claude'); return 'risposta ' + r.status; }
     catch (e) { return 'errore'; }
   });
   check('le function non vengono servite dalla cache', funzioneOffline === 'errore', funzioneOffline);

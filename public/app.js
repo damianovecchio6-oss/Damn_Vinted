@@ -409,7 +409,7 @@ function delFile(i){
 }
 
 const AI_TIMEOUT_MS=25000;
-const AI_URL='/.netlify/functions/claude';
+const AI_URL='/api/claude';
 
 // AbortSignal.timeout non c'e' sui browser piu' vecchi: li' restiamo senza
 // timeout invece di far esplodere la fetch.
@@ -642,7 +642,7 @@ function attesaBottone(id, attiva){
   if(!attiva && gia) gia.remove();
 }
 const BTN_FOTO=['btnA'], BTN_ANN=['btnG','btnR'], BTN_PRE=['btnP'], BTN_LENS=['btnL'];
-const LENS_URL='/.netlify/functions/lens';
+const LENS_URL='/api/lens';
 
 // createImageBitmap decodifica fuori dal main thread: la UI non si blocca
 // mentre si aprono 4 foto da fotocamera. Dove manca, si torna a <img>.
@@ -1325,7 +1325,7 @@ function shareAnnuncio(){
    rapporto) non ci starebbe mai. Ogni passo e' una chiamata corta per conto
    suo, e intanto la pagina racconta cosa sta facendo invece di far girare uno
    spinner muto per venti secondi. */
-const RICERCA_URL='/.netlify/functions/ricerca';
+const RICERCA_URL='/api/ricerca';
 const BTN_RIC=['btnS'];
 // Due giri al massimo: il primo esegue il piano, il secondo raffina solo se i
 // prezzi raccolti sono troppo pochi per dire qualcosa. Ogni ricerca costa

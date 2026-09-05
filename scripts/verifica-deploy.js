@@ -4,6 +4,7 @@
 // alle variabili d'ambiente.
 //
 //   node scripts/verifica-deploy.js https://il-tuo-sito.netlify.app
+//   node scripts/verifica-deploy.js https://il-tuo-progetto.vercel.app
 //
 // Consuma una ricerca SerpApi (su 250 al mese) e una richiesta AI: e' il solo
 // modo di sapere se le chiavi funzionano davvero invece di sembrare a posto.
@@ -55,7 +56,7 @@ function motivoIrraggiungibile(res) {
   }
   if (res.status === 0) return `nessuna risposta: ${corpo || 'connessione fallita'}`;
   if (res.status === 404) return `HTTP 404: l'indirizzo esiste ma non serve niente. Nome del sito giusto?`;
-  if (res.status >= 500) return `HTTP ${res.status}: il sito risponde ma con un errore. Guarda i log del deploy su Netlify.`;
+  if (res.status >= 500) return `HTTP ${res.status}: il sito risponde ma con un errore. Guarda i log del deploy sull'host.`;
   return `HTTP ${res.status}. ${corpo.trim()}`;
 }
 
@@ -88,10 +89,11 @@ const esito = (nome, passato, dettaglio) => {
     'la pagina non contiene la scheda Ricerca: il deploy e\' di un commit piu\' vecchio');
   esito('il sorgente delle function non e\' servito come file statico',
     (await chiamata('/netlify/functions/ricerca.js', 'GET')).status === 404,
-    'publish dir sbagliato in netlify.toml: deve restare "public"');
+    'la cartella pubblicata e\' sbagliata: deve restare "public" '
+    + '(publish in netlify.toml, outputDirectory in vercel.json)');
 
   console.log('\n-- sessione --');
-  const sessione = await chiamata('/.netlify/functions/claude', 'GET');
+  const sessione = await chiamata('/api/claude', 'GET');
   const token = (json(sessione) || {}).token;
   esito('la function claude rilascia un token', sessione.status === 200 && !!token,
     `HTTP ${sessione.status} ${sessione.body.slice(0, 160)}`);
@@ -99,13 +101,13 @@ const esito = (nome, passato, dettaglio) => {
   const conToken = { 'X-Session-Token': token };
 
   esito('senza token la ricerca risponde 401',
-    (await chiamata('/.netlify/functions/ricerca', 'POST', { query: 'prova' })).status === 401);
+    (await chiamata('/api/ricerca', 'POST', { query: 'prova' })).status === 401);
   esito('da un\'altra origine risponde 403',
-    (await chiamata('/.netlify/functions/ricerca', 'POST', { query: 'prova' },
+    (await chiamata('/api/ricerca', 'POST', { query: 'prova' },
       { Origin: 'https://sito-estraneo.tld' })).status === 403);
 
   console.log('\n-- chiavi --');
-  const ai = await chiamata('/.netlify/functions/claude', 'POST',
+  const ai = await chiamata('/api/claude', 'POST',
     { type: 'text', prompt: 'Rispondi solo con: ok' }, conToken);
   const testoAi = (json(ai) || {}).text;
   esito('GROQ_API_KEY / GEMINI_API_KEY funzionano', ai.status === 200 && !!testoAi,
@@ -113,7 +115,7 @@ const esito = (nome, passato, dettaglio) => {
       : `HTTP ${ai.status} ${(json(ai) || {}).error || ai.body.slice(0, 160)}`);
   if (testoAi) console.log(`       ha risposto ${(json(ai) || {}).model} (${(json(ai) || {}).provider})`);
 
-  const ricerca = await chiamata('/.netlify/functions/ricerca', 'POST',
+  const ricerca = await chiamata('/api/ricerca', 'POST',
     { query: 'felpa carhartt usata vinted' }, conToken);
   const datiRicerca = json(ricerca) || {};
   if (ricerca.status === 501) {

@@ -21,7 +21,7 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
   let postCount = 0, tokenCount = 0, lastAuthHeader = null;
   let reply = { text: JSON.stringify({ prezzoSuggerito: 25, rangeMin: 18, rangeMax: 35, percentuale: 60, motivazione: 'perche si', fattori: ['a', 'b'], consiglio: 'vendi' }), model: 'modello-finto' };
   let delayMs = 0;
-  await page.route('**/.netlify/functions/claude', async route => {
+  await page.route('**/api/claude', async route => {
     const req = route.request();
     if (req.method() === 'GET') {
       tokenCount++;

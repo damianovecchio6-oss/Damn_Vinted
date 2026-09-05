@@ -12,7 +12,7 @@
 // browser "butta via quello che avevi". La cache vecchia viene cancellata
 // all'attivazione, non prima: finche' la versione nuova non e' pronta, quella
 // vecchia e' ancora l'unica che sa servire la pagina offline.
-const VERSIONE = 'alba-v1';
+const VERSIONE = 'alba-v2';
 
 // Il guscio: quello che deve esserci perche' l'app si apra da spenta. Le foto
 // della mascot ci stanno perche' senza si aprirebbe una pagina a meta'; le
@@ -64,7 +64,11 @@ self.addEventListener('fetch', e => {
   // Fuori dal nostro dominio non ci mettiamo in mezzo: le immagini dei
   // risultati di ricerca arrivano da Google, e non sono nostre da conservare.
   if (url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith('/.netlify/')) return;
+  // Le function: /api/ e' la strada di oggi, /.netlify/ quella di quando il
+  // sito stava solo su Netlify. Restano fuori dalla cache tutte e due, o una
+  // pagina vecchia in home continuerebbe a chiamare la seconda e si vedrebbe
+  // servire la risposta dell'altro ieri.
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/.netlify/')) return;
 
   // La pagina: prima la rete, cosi' chi ha campo vede sempre l'ultima
   // versione; la copia in cache e' la rete di sicurezza, non la regola.

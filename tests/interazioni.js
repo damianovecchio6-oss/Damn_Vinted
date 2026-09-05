@@ -7,7 +7,7 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
 // servono, che spariscano dopo, e che chi ha chiesto meno movimento lo ottenga.
 async function apri(browser, opzioni) {
   const page = await browser.newPage(Object.assign({ viewport: { width: 430, height: 900 } }, opzioni));
-  await page.route('**/.netlify/functions/claude', async route => {
+  await page.route('**/api/claude', async route => {
     const req = route.request();
     if (req.method() === 'GET') {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 't.t', expiresIn: 900000 }) });
@@ -460,7 +460,7 @@ async function apri(browser, opzioni) {
   let sblocca = null;
   const lento = await browser.newPage({ viewport: { width: 430, height: 900 } });
   lento.on('pageerror', e => errors.push(String(e)));
-  await lento.route('**/.netlify/functions/claude', async route => {
+  await lento.route('**/api/claude', async route => {
     if (route.request().method() === 'GET') {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 't.t', expiresIn: 900000 }) });
     }

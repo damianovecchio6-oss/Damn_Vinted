@@ -9,3 +9,12 @@
   # Senza questo Netlify sceglie da sola la versione di Node delle function,
   # e puo' cambiarla sotto i piedi al primo deploy dopo un aggiornamento loro.
   NODE_VERSION = "20"
+
+# La pagina chiama /api/claude, che e' il posto dove le function stanno su
+# Vercel e dove Netlify non ha niente: qui quella strada viene rimandata a
+# quella vera. Cosi' l'indirizzo nel codice e' uno solo e il sito funziona
+# uguale sui due host, invece di avere un ramo per casa.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200

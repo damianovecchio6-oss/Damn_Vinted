@@ -23,7 +23,7 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
     prezzi: { n: 2, min: 60, max: 100, mediana: 80 }
   };
 
-  await page.route('**/.netlify/functions/claude', async route => {
+  await page.route('**/api/claude', async route => {
     const req = route.request();
     if (req.method() === 'GET') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 't.t', expiresIn: 900000 }) });
     const b = JSON.parse(req.postData());
@@ -35,7 +35,7 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
       body: JSON.stringify({ text: JSON.stringify(eEtichetta ? rispostaEtichetta : rispostaCapo), model: 'gemini-3.7-flash', provider: 'gemini' })
     });
   });
-  await page.route('**/.netlify/functions/lens', async route => {
+  await page.route('**/api/lens', async route => {
     lensPost.push(JSON.parse(route.request().postData()));
     if (lensStatus !== 200) return route.fulfill({ status: lensStatus, contentType: 'application/json', body: JSON.stringify({ error: 'non configurata' }) });
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(lensBody) });
@@ -103,8 +103,8 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
   check('etichetta illeggibile -> lo dice invece di tacere', (await page.textContent('#rFotoTxt')).includes('non sono riuscito a leggerla'));
 
   console.log('\n-- se la lettura etichetta fallisce del tutto --');
-  await page.unroute('**/.netlify/functions/claude');
-  await page.route('**/.netlify/functions/claude', async route => {
+  await page.unroute('**/api/claude');
+  await page.route('**/api/claude', async route => {
     const req = route.request();
     if (req.method() === 'GET') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 't.t', expiresIn: 900000 }) });
     const b = JSON.parse(req.postData());

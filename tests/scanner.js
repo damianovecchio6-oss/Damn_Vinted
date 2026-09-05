@@ -66,7 +66,7 @@ const NEGOZIO = (titolo, prezzo) => ({
   const primo = (tipo) => aiPost.find(b => tipoPrompt(b) === tipo);
   const tutti = (tipo) => aiPost.filter(b => tipoPrompt(b) === tipo);
 
-  await page.route('**/.netlify/functions/claude', async route => {
+  await page.route('**/api/claude', async route => {
     const req = route.request();
     if (req.method() === 'GET') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 't.t', expiresIn: 900000 }) });
     const b = JSON.parse(req.postData());
@@ -81,12 +81,12 @@ const NEGOZIO = (titolo, prezzo) => ({
     }
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: risposta, model: 'modello-finto', provider: 'groq' }) });
   });
-  await page.route('**/.netlify/functions/lens', async route => {
+  await page.route('**/api/lens', async route => {
     lensPost.push(JSON.parse(route.request().postData()));
     if (lensStatus !== 200) return route.fulfill({ status: lensStatus, contentType: 'application/json', body: JSON.stringify({ error: lensErrore }) });
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(lens) });
   });
-  await page.route('**/.netlify/functions/ricerca', async route => {
+  await page.route('**/api/ricerca', async route => {
     const b = JSON.parse(route.request().postData());
     ricPost.push(b);
     if (ricercaStatus !== 200) return route.fulfill({ status: ricercaStatus, contentType: 'application/json', body: JSON.stringify({ error: ricercaErrore }) });

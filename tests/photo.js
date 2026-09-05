@@ -11,7 +11,7 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
   page.on('pageerror', e => errors.push(String(e)));
 
   let bodies = [];
-  await page.route('**/.netlify/functions/claude', async route => {
+  await page.route('**/api/claude', async route => {
     const req = route.request();
     if (req.method() === 'GET')
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 't.t', expiresIn: 900000 }) });
@@ -122,8 +122,8 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
   // dice lui, e questo controllo e' la prova che la discesa avviene davvero.
   bodies = [];
   let rifiutiRimasti = 1;
-  await page.unroute('**/.netlify/functions/claude');
-  await page.route('**/.netlify/functions/claude', async route => {
+  await page.unroute('**/api/claude');
+  await page.route('**/api/claude', async route => {
     const req = route.request();
     if (req.method() === 'GET')
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 't.t', expiresIn: 900000 }) });
@@ -165,8 +165,8 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
   // conto suo, quindi la cura e' toglierne.
   bodies = [];
   let tokenRimasti = 1;
-  await page.unroute('**/.netlify/functions/claude');
-  await page.route('**/.netlify/functions/claude', async route => {
+  await page.unroute('**/api/claude');
+  await page.route('**/api/claude', async route => {
     const req = route.request();
     if (req.method() === 'GET')
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 't.t', expiresIn: 900000 }) });
@@ -194,8 +194,8 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
 
   console.log('\n-- ma solo per il peso, non per ogni errore --');
   bodies = [];
-  await page.unroute('**/.netlify/functions/claude');
-  await page.route('**/.netlify/functions/claude', async route => {
+  await page.unroute('**/api/claude');
+  await page.route('**/api/claude', async route => {
     const req = route.request();
     if (req.method() === 'GET')
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 't.t', expiresIn: 900000 }) });
@@ -216,8 +216,8 @@ const check = (n, c, e) => { if (c) { pass++; console.log(`  ok   ${n}`); } else
 
   // Le due prove qui sopra hanno lasciato installato uno stub che rifiuta:
   // da qui in poi serve di nuovo quello che risponde bene.
-  await page.unroute('**/.netlify/functions/claude');
-  await page.route('**/.netlify/functions/claude', async route => {
+  await page.unroute('**/api/claude');
+  await page.route('**/api/claude', async route => {
     const req = route.request();
     if (req.method() === 'GET')
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 't.t', expiresIn: 900000 }) });

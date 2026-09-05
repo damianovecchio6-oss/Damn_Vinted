@@ -15,6 +15,7 @@ public/_headers               header di sicurezza (CSP, ecc.)
 public/img/                   i disegni: il sole, il sole+luna, le icone dell'app
 public/manifest.webmanifest   nome, icone e schermo intero: l'app installabile
 public/sw.js                  service worker: il guscio resta anche senza rete
+api/                          gli stessi tre endpoint per Vercel: solo l'involucro
 netlify/functions/claude.js   proxy verso i modelli AI (Groq / Gemini)
 netlify/functions/lens.js     ricerca per immagine (Google Lens via SerpApi)
 netlify/functions/ricerca.js  ricerca testuale online, lo strumento dell'agente
@@ -44,7 +45,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-745 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+774 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -524,6 +525,51 @@ Cosa manca per un'app da store: un negozio non accetta un URL, vuole un
 pacchetto firmato. Da qui la strada corta e' Trusted Web Activity per il Play
 Store (`bubblewrap`, che parte proprio da questo manifest) e un wrapper per
 iOS; nessuno dei due tocca il codice del sito.
+
+## Due case: Netlify e Vercel
+
+Lo stesso repo si pubblica su tutti e due, senza un ramo nel codice. La pagina
+chiama `/api/claude`, `/api/lens`, `/api/ricerca`: su Vercel e' il posto dove
+le function stanno davvero, su Netlify un redirect in `netlify.toml` manda
+quella strada a `/.netlify/functions/`. L'indirizzo nel codice resta uno.
+
+Le function sono scritte una volta sola, nella forma di Netlify - una funzione
+che riceve un `event` e torna `{ statusCode, headers, body }`. E' quella la
+forma che i test chiamano direttamente, senza rete e senza browser. I tre file
+in `api/` non sono una copia: richiamano quelle e le avvolgono in un
+adattatore (`netlify/functions/lib/vercel.js`) che traduce la `(req, res)` di
+Node nell'`event` e la risposta all'indietro. Due copie della stessa function
+si sarebbero scollate al primo ritocco, e a scollarsi sarebbe stato il
+controllo dell'origine o del token.
+
+Gli header di sicurezza invece **sono** scritti due volte, perche' i due host
+li leggono da file diversi: `public/_headers` e la sezione `headers` di
+`vercel.json`. `tests/vercel.js` confronta le due liste riga per riga e
+fallisce se qualcuno ne cambia una sola: una CSP diversa fra i due domini e'
+esattamente il genere di cosa che nessuno si accorge di aver fatto.
+
+L'allowlist delle origini legge anche `VERCEL_URL`, `VERCEL_BRANCH_URL` e
+`VERCEL_PROJECT_PRODUCTION_URL`, che Vercel scrive senza schema: senza il
+`https://` davanti la function avrebbe rifiutato la propria pagina.
+
+Da sapere prima di spostarsi: il corpo di una richiesta su Vercel ha un tetto
+di circa 4.5MB contro i 6 di Netlify. L'app manda al massimo 3.5MB di foto
+codificate, quindi ci sta - ma il margine e' quello, e alzare i limiti in
+`public/app.js` lo consumerebbe.
+
+### Importare il progetto su Vercel
+
+1. **vercel.com/new** > *Import Git Repository* > `damianovecchio6-oss/Damn_Vinted`.
+   Non c'e' niente da configurare: `vercel.json` dice gia' che non si builda
+   niente e che si pubblica `public/`.
+2. **Settings > Environment Variables**: almeno `GROQ_API_KEY`, piu'
+   `GEMINI_API_KEY` e `SERPAPI_KEY` se le vuoi (stessa tabella qui sopra).
+   Le leggono solo le function.
+3. La verifica e' la stessa di Netlify, l'URL cambia:
+
+   ```
+   node scripts/verifica-deploy.js https://iltuoprogetto.vercel.app
+   ```
 
 ## Deploy su Netlify
 

@@ -35,7 +35,7 @@ const RISULTATO = (titolo, prezzo, fonte) => ({
   let risultatiPer = (b) => [RISULTATO('Felpa Carhartt ' + b.query, 45), RISULTATO('Hoodie Carhartt ' + b.query, 30), RISULTATO('Carhartt WIP ' + b.query, 60)];
   let ricercaStatus = 200, ricercaErrore = 'Ricerca online non disponibile al momento. Riprova tra poco.';
 
-  await page.route('**/.netlify/functions/claude', async route => {
+  await page.route('**/api/claude', async route => {
     const req = route.request();
     if (req.method() === 'GET') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 't.t', expiresIn: 900000 }) });
     const b = JSON.parse(req.postData());
@@ -47,7 +47,7 @@ const RISULTATO = (titolo, prezzo, fonte) => ({
     else risposta = JSON.stringify({ prezzoSuggerito: 40, rangeMin: 30, rangeMax: 50, percentuale: 50, motivazione: 'ok', fattori: [], consiglio: 'ok' });
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: risposta, model: 'modello-finto', provider: 'groq' }) });
   });
-  await page.route('**/.netlify/functions/ricerca', async route => {
+  await page.route('**/api/ricerca', async route => {
     const b = JSON.parse(route.request().postData());
     ricPost.push(b);
     if (ricercaStatus !== 200) return route.fulfill({ status: ricercaStatus, contentType: 'application/json', body: JSON.stringify({ error: ricercaErrore }) });
@@ -266,7 +266,7 @@ const RISULTATO = (titolo, prezzo, fonte) => ({
   reset();
   let sblocca;
   const bloccata = new Promise(r => { sblocca = r; });
-  await page.route('**/.netlify/functions/ricerca', async route => {
+  await page.route('**/api/ricerca', async route => {
     await bloccata;
     const b = JSON.parse(route.request().postData());
     ricPost.push(b);
@@ -284,8 +284,8 @@ const RISULTATO = (titolo, prezzo, fonte) => ({
   check('il passo in corso ha il suo spinner', await page.evaluate(() => !!document.querySelector('#agList .agp.corso .agspin')));
   sblocca();
   await attendiFine();
-  await page.unroute('**/.netlify/functions/ricerca');
-  await page.route('**/.netlify/functions/ricerca', async route => {
+  await page.unroute('**/api/ricerca');
+  await page.route('**/api/ricerca', async route => {
     const b = JSON.parse(route.request().postData());
     ricPost.push(b);
     if (ricercaStatus !== 200) return route.fulfill({ status: ricercaStatus, contentType: 'application/json', body: JSON.stringify({ error: ricercaErrore }) });
