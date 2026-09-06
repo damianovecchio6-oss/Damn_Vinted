@@ -709,6 +709,22 @@ Le icone si rifanno come quelle di ALBA:
 node scripts/icone-piano.js
 ```
 
+**La copia da provare subito.** Senza deployare niente, PIANO si puo'
+pubblicare come Artifact su claude.ai e aprire da un link sul telefono:
+
+```
+node scripts/artifact-piano.js copia.html
+```
+
+Lo script parte sempre da `public/vita/`, cosi' quella copia non diventa un
+fork scritto a mano: incorpora lo script nel markup (li' l'involucro della
+pagina lo mette il visualizzatore), toglie la registrazione del service worker
+(la pagina non e' servita da `/vita/`) e aggiunge il deposito - se il
+visualizzatore lo concede, lo stato va anche in un archivio privato, e la
+stessa giornata si apre da telefono e da computer. Va pubblicata dichiarando
+`capabilities: {"db": {}}`; senza, il deposito resta spento e resta tutto in
+`localStorage`, che e' comunque il posto dove la giornata vive.
+
 
 ## Due case: Netlify e Vercel
 
