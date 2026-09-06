@@ -638,8 +638,25 @@ function redigi(dettaglio) {
     .slice(0, 200);
 }
 
+// "Please try again in 46.68s": quando il rifiuto e' un limite al minuto - non
+// una quota finita - il provider dice anche quanto manca. E' l'unica cosa che
+// chi sta guardando lo schermo puo' davvero usare: "riprova fra qualche
+// secondo" con 47 secondi davanti fa premere il bottone sei volte per niente.
+function secondiDiAttesa(dettaglio) {
+  const s = Number((String(dettaglio || '').match(/try again in\s+([\d.]+)\s*s/i) || [])[1]);
+  if (!Number.isFinite(s) || s <= 0) return 0;
+  return Math.min(600, Math.ceil(s));
+}
+
 function erroreLeggibile(status, dettaglio) {
-  if (status === 429) return 'Troppe richieste, riprova tra qualche secondo.';
+  if (status === 429) {
+    const attesa = secondiDiAttesa(dettaglio);
+    // I limiti al minuto del piano gratuito si misurano sui token, e le foto
+    // sono token: una sola analisi puo' riempire il minuto da sola. Dirlo per
+    // quello che e' - un'attesa che finisce - vale piu' di un "riprova" secco.
+    if (attesa) return `Il servizio AI ha finito i gettoni di questo minuto. Riprova fra ${attesa} second${attesa === 1 ? 'o' : 'i'}.`;
+    return 'Troppe richieste, riprova tra qualche secondo.';
+  }
   if (status === 401 || status === 403) return 'Il servizio AI ha rifiutato le credenziali del sito.';
   // Groq risponde 400, non 413, quando la richiesta supera i suoi 4MB: dire
   // "riprova" mandava a ripetere identica una richiesta che non poteva

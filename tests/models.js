@@ -257,6 +257,18 @@ async function post(ip, payload) {
   check('un limite di richieste al giorno non fa riprovare', corpi.length === 1, corpi.length);
   check('e il rifiuto arriva al client come 429', r.statusCode === 429, r.statusCode);
 
+  // Il limite al minuto dice anche quanto manca: e' l'unica informazione che
+  // chi guarda lo schermo puo' usare. Senza, "riprova tra qualche secondo" con
+  // 47 secondi davanti fa premere il bottone sei volte per niente.
+  plan = [{ status: 429, body: JSON.stringify({ error: { message:
+    'Rate limit reached for model `qwen` on input tokens per minute (ITPM): Limit 7000, Used 5565, Requested 6881. Please try again in 46.68s.' } }) }];
+  corpi = [];
+  r = await post('1.0.0.22', { type: 'image', prompt: 'x', images: [{ base64: 'AAA' }] });
+  const attesa = JSON.parse(r.body);
+  check('quando il limite e al minuto, si dice quanti secondi mancano',
+    /riprova fra 47 secondi/i.test(attesa.error || ''), attesa.error);
+  check('e non si riprova da soli: 47 secondi non ci stanno nel budget', corpi.length === 1, corpi.length);
+
   console.log('\n-- deadline --');
   process.env.AI_TIMEOUT_MS = '9000';
   latency = 300; plan = Array(20).fill(MISSING); calls = [];

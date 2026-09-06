@@ -47,7 +47,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-857 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+859 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -714,6 +714,15 @@ chiedendone meno. Una risposta piu' corta e' meglio di nessuna risposta - ed
 era esattamente il caso in cui il ripiego serviva davvero, con la quota
 giornaliera di Gemini finita. Un 429 di altro tipo (richieste al giorno) non
 fa riprovare: chiedere meno non lo curerebbe.
+
+E c'e' un secondo tetto, quello che si tocca per primo con le foto: i token in
+**entrata** al minuto. Sul piano gratuito sono 7000, e una singola analisi con
+le foto ne chiede quasi 7000 da sola - cioe' **una foto al minuto**, quando
+Gemini non c'e'. Non e' aggirabile dal codice: quello che si puo' fare e'
+dirlo. Groq scrive nel rifiuto quanto manca ("try again in 46.68s"), e quel
+numero finisce nel messaggio che legge chi sta usando l'app: *riprova fra 47
+secondi* invece di "riprova tra qualche secondo", che con 47 secondi davanti
+fa premere il bottone sei volte per niente.
 
 Con un'eccezione che conta: se il ricordo li ha saltati **tutti**, si prova lo
 stesso. Serve a non sprecare un tentativo quando c'e' un'alternativa, non a
