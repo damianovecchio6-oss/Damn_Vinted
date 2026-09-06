@@ -27,7 +27,12 @@ const html = fs.readFileSync(path.join(VITA, 'index.html'), 'utf8');
 let app = fs.readFileSync(path.join(VITA, 'app.js'), 'utf8');
 
 let stile = html.match(/<style>[\s\S]*?<\/style>/)[0];
-let corpo = html.match(/<body>\n([\s\S]*?)\n<\/body>/)[1];
+const dentroIlBody = html.match(/<body[^>]*>\n([\s\S]*?)\n<\/body>/);
+if (!dentroIlBody) {
+  console.error('Non trovo il corpo della pagina in public/vita/index.html.');
+  process.exit(1);
+}
+let corpo = dentroIlBody[1];
 
 corpo = corpo.replace('\n<script src="./app.js"></script>', '');
 // Senza color-scheme i controlli di sistema - cursore, selezione - restano

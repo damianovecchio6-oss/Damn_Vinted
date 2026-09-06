@@ -957,6 +957,12 @@ document.addEventListener('visibilitychange', () => {
 carica();
 S.visto = oggi();
 salva();
+// La classe della casa e' nel markup per la prima pennellata, ma va rimessa da
+// qui: dove il <body> non e' nostro - la copia pubblicata come Artifact, dove
+// l'involucro lo scrive il visualizzatore - senza questa riga la ghiera non
+// prenderebbe i tocchi e il contenuto lascerebbe spazio a una luna che non e'
+// ancora parcheggiata.
+document.body.classList.toggle('casa', sezione === 'casa');
 intestazione();
 disegna();
 mostraSelezione();

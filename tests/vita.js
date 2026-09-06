@@ -145,6 +145,12 @@ const leggi = f => fs.readFileSync(path.join(VITA, f), 'utf8');
   console.log('\n-- si apre sulla luna --');
   check('la pagina si apre sulla casa', (await sezioneAperta()) === 'sez-casa');
   check('la luna e\' al centro, non parcheggiata', (await parcheggiata()) === false);
+  // La classe la rimette lo script a ogni avvio: nella copia pubblicata come
+  // Artifact il <body> lo scrive il visualizzatore, e senza classe la ghiera
+  // non prenderebbe i tocchi.
+  check('e la casa se la mette lo script, non solo il markup',
+    /classList\.toggle\('casa'/.test(fs.readFileSync(path.join(VITA, 'app.js'), 'utf8'))
+    && await page.evaluate(() => document.body.classList.contains('casa')));
   check('il disco dice cosa stai per aprire', (await disco()) === 'OGGI');
   check('e sotto c\'e\' una riga su come sta andando la giornata',
     /tre cose/i.test(await page.textContent('#casaRiga')));
