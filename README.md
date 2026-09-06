@@ -697,6 +697,18 @@ ripiego esisteva ma restava una promessa mantenuta solo quando avanzava tempo.
 `tests/gemini-riserva.js` fa proprio quella scena - Gemini lento e pieno - e
 pretende che risponda Groq.
 
+La riserva pero' copriva solo il Gemini che risponde MALE in fretta. Quello che
+non risponde affatto arrivava per un'altra strada: la deadline della sua fetta
+scade con un tentativo ancora in volo, e diventa un'eccezione (`AI_TIMEOUT`)
+che scavalcava il ripiego e finiva dritta nel `catch` del gestore - "L'AI ci ha
+messo troppo", con gli otto secondi di Groq mai spesi. Nei log del sito si
+riconosce cosi': un `504` con `Error: Deadline superata` e, sopra, un `Gemini
+503 ... provo il prossimo` senza nessuna riga di Groq sotto. Ora quella
+scadenza torna a essere quello che e' - un motivo per ripiegare come gli altri
+- e solo se la riserva esiste davvero: senza Groq configurato la deadline che
+scade e' quella vera, e non c'e' niente su cui ripiegare. La scena sta in
+`tests/gemini-lento.js`.
+
 E chi era pieno se lo ricorda. Il `503` di Gemini e' la capacita' del piano
 gratuito, non un guasto: dura qualche minuto, e colpisce di piu' i modelli
 appena usciti - sul sito vero il `3.8-flash` diceva "sono pieno" mentre il

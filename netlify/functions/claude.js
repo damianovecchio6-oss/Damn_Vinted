@@ -165,7 +165,21 @@ exports.handler = async (event) => {
 
     let esito, notaGemini = '';
     if (usaGemini) {
-      esito = await tentaGemini(richiesta, kind, deadline - riserva);
+      // Quando la fetta di Gemini finisce con un tentativo ancora in volo, la
+      // deadline arriva come ECCEZIONE: unTentativoGemini rilancia AI_TIMEOUT.
+      // Era giusto finche' quella deadline era una sola, la vera - non restava
+      // niente da fare. Da quando ne esiste una piu' corta apposta per lasciare
+      // spazio al ripiego non lo e' piu': l'eccezione scavalcava il ripiego e
+      // arrivava al catch qui sotto, che risponde "L'AI ci ha messo troppo" con
+      // la riserva di Groq ancora intera. E' il 504 che si leggeva nei log del
+      // sito, con sopra un "Gemini 503 ... provo il prossimo" e nessuna riga di
+      // Groq. Qui il tempo di Gemini che finisce torna a essere quello che e':
+      // un motivo per ripiegare, come tutti gli altri.
+      esito = await tentaGemini(richiesta, kind, deadline - riserva).catch(e => {
+        if (riserva && e && e.code === 'AI_TIMEOUT')
+          return { ok: false, motivo: 'non ha risposto in tempo', error: messaggioGemini('lento', kind) };
+        throw e;
+      });
       // Quota giornaliera finita o modello sparito: se abbiamo anche Groq e
       // resta tempo, meglio una risposta di Groq che un errore.
       if (!esito.ok) {
@@ -687,6 +701,15 @@ function messaggioGemini(caso, kind) {
   // cambiare modello non lo aggira: l'unica mossa utile e' un'altra foto.
   if (caso === 'pieno') {
     return 'Il servizio AI \u00e8 sovraccarico in questo momento. Riprova fra un minuto: non \u00e8 un problema del sito.';
+  }
+  // Lento non e' rotto: e' lo stesso sovraccarico di 'pieno' visto da un'altra
+  // parte - invece di rispondere "sono pieno" non risponde affatto. Il rimedio
+  // per chi legge e' lo stesso, e questo messaggio si vede solo se anche il
+  // ripiego non ce l'ha fatta.
+  if (caso === 'lento') {
+    return kind === 'image'
+      ? 'L\'AI ci ha messo troppo a guardare le foto. Riprova fra un minuto.'
+      : 'L\'AI ci ha messo troppo a rispondere. Riprova fra un minuto.';
   }
   if (caso === 'vuota') {
     return kind === 'image'
