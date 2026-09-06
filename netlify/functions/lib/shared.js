@@ -18,6 +18,21 @@ const GROQ_KEY = process.env.GROQ_API_KEY || process.env.GROQ_KEY;
 // garanzia.
 const PIN = (process.env.ALBA_PIN || '').trim();
 
+// Quanto tempo ha una function per rispondere, prima che a chiuderla sia la
+// piattaforma invece del nostro codice. Netlify taglia a 10s e non si discute:
+// da li' vengono i 9s storici, tenuti stretti per rispondere un JSON pulito
+// invece della sua pagina di timeout.
+//
+// Su Vercel il tetto lo decidiamo noi (maxDuration in vercel.json, 30s), e
+// quei 9s erano diventati il guasto: quattro foto da caricare, un Gemini
+// sovraccarico da scartare e il ripiego su Groq non ci stanno dentro, e
+// l'utente vedeva "L'AI ci ha messo troppo" su una richiesta che sarebbe
+// arrivata. 22s stanno sotto il maxDuration e sotto i 25s che la pagina
+// aspetta prima di mollare: chi decide resta il nostro budget, non un taglio
+// altrui.
+const SU_VERCEL = !!process.env.VERCEL;
+const TEMPO_MASSIMO = SU_VERCEL ? 22000 : 9000;
+
 // Allowlist per le chiamate CROSS-ORIGIN, cioe' da un dominio diverso da quello
 // che serve la function. Le chiamate della nostra pagina passano gia' dal
 // controllo same-site (vedi isSameSite) e non hanno bisogno di stare qui.
@@ -363,6 +378,7 @@ module.exports = {
   GROQ_KEY, SESSION_TTL_MS,
   normalizeOrigin, isSameSite, isAllowed, corsFor, clientIp, rateLimited,
   pinRichiesto, pinGiusto, controllaPin,
+  SU_VERCEL, TEMPO_MASSIMO,
   issueToken, verifyToken, lowerKeys, json, inviaHttp, statistichePrezzi,
   cacheGet, cacheSet, cachePeek, checkRequest
 };

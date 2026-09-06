@@ -11,6 +11,16 @@ const { check, fine } = L.contatore();
 
 const adatta = require(path.join(L.FUNCTIONS, 'lib', 'vercel.js'));
 
+// Una domanda a un processo pulito: le costanti che dipendono dall'ambiente
+// si leggono una volta sola all'avvio, e qui ne servono due versioni.
+function spawnSyncNode(codice) {
+  const { spawnSync } = require('child_process');
+  const r = spawnSync(process.execPath, ['-e', codice], {
+    encoding: 'utf8', env: Object.assign({}, process.env, { VERCEL: '' })
+  });
+  return (r.stdout || r.stderr || '').trim();
+}
+
 // Una richiesta e una risposta di Node quel tanto che basta all'adattatore.
 function richiesta(opzioni) {
   const o = opzioni || {};
@@ -121,6 +131,35 @@ const esegui = (handler, opzioni) => {
   // public/ e non la radice: con la radice finirebbero serviti come file
   // statici il sorgente delle function e i test.
   check('si pubblica solo public/', conf.outputDirectory === 'public', conf.outputDirectory);
+  // Il budget di tempo: su Vercel il tetto lo scriviamo noi, e deve stare
+  // sopra a quello che le function si danno da sole - se maxDuration fosse
+  // piu' basso, a chiudere la richiesta sarebbe la piattaforma, e l'utente
+  // vedrebbe una pagina di errore invece del nostro JSON.
+  const maxDurata = ((conf.functions || {})['api/*.js'] || {}).maxDuration;
+  const budget = spawnSyncNode(`
+    process.env.VERCEL = '1';
+    const S = require(${JSON.stringify(path.join(L.FUNCTIONS, 'lib', 'shared.js'))});
+    console.log(S.TEMPO_MASSIMO);
+  `);
+  check('su Vercel le function si danno piu\' tempo che su Netlify',
+    Number(budget) > 9000, budget);
+  check('e il tetto di Vercel sta sopra a quel budget',
+    maxDurata * 1000 > Number(budget), [maxDurata, budget]);
+  // Il cliente aspetta 25s prima di mollare: un budget piu' lungo di cosi'
+  // sarebbe tempo speso per una risposta che nessuno legge piu'.
+  const attesaPagina = (fs.readFileSync(path.join(L.SITO, 'app.js'), 'utf8')
+    .match(/const AI_TIMEOUT_MS\s*=\s*(\d+)/) || [])[1];
+  check('e sotto a quanto la pagina e\' disposta ad aspettare',
+    Number(budget) < Number(attesaPagina), [budget, attesaPagina]);
+
+  const senzaVercel = spawnSyncNode(`
+    delete process.env.VERCEL;
+    const S = require(${JSON.stringify(path.join(L.FUNCTIONS, 'lib', 'shared.js'))});
+    console.log(S.TEMPO_MASSIMO);
+  `);
+  check('su Netlify restano i 9s che stanno dentro ai suoi 10',
+    Number(senzaVercel) === 9000, senzaVercel);
+
   check('la strada vecchia delle function resta in piedi',
     (conf.rewrites || []).some(r => r.source.startsWith('/.netlify/functions/') && r.destination.startsWith('/api/')),
     conf.rewrites);

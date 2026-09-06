@@ -11,7 +11,7 @@ const SERPAPI_HOST = 'serpapi.com';
 // Teniamoci sotto: la pagina manda gia' un JPEG piccolo, questo e' il paracadute.
 const MAX_IMAGE_BYTES = 480 * 1024;
 const MAX_BODY = 1.5 * 1024 * 1024;
-const TIMEOUT_MS = Number(process.env.LENS_TIMEOUT_MS || 9000);
+const TIMEOUT_MS = Number(process.env.LENS_TIMEOUT_MS || S.TEMPO_MASSIMO);
 // Due round trip da fare dentro i 10s di Netlify: l'upload e' veloce, la
 // ricerca no, quindi il grosso del budget va alla seconda.
 const UPLOAD_BUDGET_MS = 3500;

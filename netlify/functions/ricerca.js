@@ -9,7 +9,7 @@ const S = require('./lib/shared');
 const SERPAPI_KEY = process.env.SERPAPI_KEY || process.env.SERP_API_KEY;
 
 const SERPAPI_HOST = 'serpapi.com';
-const TIMEOUT_MS = Number(process.env.RICERCA_TIMEOUT_MS || 9000);
+const TIMEOUT_MS = Number(process.env.RICERCA_TIMEOUT_MS || S.TEMPO_MASSIMO);
 const MAX_BODY = 32 * 1024;
 const MAX_QUERY = 160;
 const MAX_RISULTATI = 8;

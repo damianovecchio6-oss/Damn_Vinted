@@ -13,10 +13,10 @@ const MAX_BODY = 6 * 1024 * 1024;   // 6MB, limite Netlify
 const MAX_PROMPT = 8000;            // caratteri
 const MAX_IMAGES = 4;
 
-// Netlify chiude le function sincrone a 10s (default account).
-// Teniamoci sotto, cosi' restituiamo un errore JSON pulito invece della
-// pagina di timeout di Netlify. Alzabile se l'account ha il limite esteso.
-const TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || 9000);
+// Il budget di tempo per tutta la richiesta, tentativi di ripiego inclusi. Lo
+// decide la piattaforma (vedi S.TEMPO_MASSIMO): 9s dentro i 10 che Netlify
+// concede, 22 su Vercel dove il tetto lo scriviamo noi in vercel.json.
+const TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || S.TEMPO_MASSIMO);
 
 // Punto di partenza, non una certezza: i provider ritirano i modelli senza
 // preavviso. Se non esistono piu', la function chiede il catalogo e ripiega

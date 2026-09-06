@@ -47,7 +47,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-836 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+840 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -672,6 +672,21 @@ Da sapere prima di spostarsi: il corpo di una richiesta su Vercel ha un tetto
 di circa 4.5MB contro i 6 di Netlify. L'app manda al massimo 3.5MB di foto
 codificate, quindi ci sta - ma il margine e' quello, e alzare i limiti in
 `public/app.js` lo consumerebbe.
+
+### Il tempo che una function ha per rispondere
+
+Cambia con la casa, e per questo non e' un numero scritto a mano nelle
+function ma `S.TEMPO_MASSIMO`. Netlify taglia a 10s e non si discute: da li'
+vengono i **9s** storici, tenuti stretti per rispondere un JSON pulito invece
+della sua pagina di timeout. Su Vercel il tetto lo scriviamo noi -
+`maxDuration: 30` in `vercel.json` - e il budget diventa **22s**.
+
+Non e' un lusso: con 9s, quattro foto da caricare, un Gemini sovraccarico da
+scartare e il ripiego su Groq non ci stavano dentro, e chi analizzava un capo
+si vedeva "L'AI ci ha messo troppo" su una richiesta che sarebbe arrivata. I
+22s stanno sotto il `maxDuration` e sotto i 25s che la pagina aspetta prima di
+mollare: a decidere resta il nostro budget, non un taglio di qualcun altro.
+`tests/vercel.js` verifica che i tre numeri restino in quest'ordine.
 
 ### Importare il progetto su Vercel
 
