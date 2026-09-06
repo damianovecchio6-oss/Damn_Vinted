@@ -233,6 +233,30 @@ async function post(ip, payload) {
   r = await post('1.0.0.14', { type: 'text', prompt: 'x' });
   check('ne pezzi di chiave', !/gsk_abc123def456/.test(r.body), r.body);
 
+  console.log('\n-- il tetto ai token in uscita del piano gratuito --');
+  // Visto sul sito vero, e proprio quando serviva: Gemini aveva finito la
+  // quota del giorno, il ripiego su Groq partiva, e Groq lo rifiutava perche'
+  // per le foto chiediamo 3072 token in uscita mentre il piano gratuito ne
+  // concede 1000. Il rifiuto arriva prima ancora che il modello guardi le
+  // immagini, e nel messaggio c'e' scritto il tetto: si richiede meno.
+  const OTPM = { status: 429, body: JSON.stringify({ error: { message:
+    'Request too large for model `qwen/qwen3.6-27b` in organization `org_01x` service tier `on_demand` on output tokens per minute (OTPM): Limit 1000, Requested 1039. Reduce max_tokens and try again.' } }) };
+  plan = [OTPM]; calls = []; corpi = [];
+  r = await post('1.0.0.20', { type: 'image', prompt: 'x', images: [{ base64: 'AAA' }] });
+  check('il rifiuto per token in uscita fa riprovare, non arrendere', corpi.length === 2, corpi.length);
+  check('la prima volta chiede quello che serve davvero', corpi[0] && corpi[0].max_tokens === 3072, corpi[0] && corpi[0].max_tokens);
+  check('la seconda sta sotto al tetto che Groq ha appena detto',
+    corpi[1] && corpi[1].max_tokens === 900, corpi[1] && corpi[1].max_tokens);
+  check('e la risposta arriva', r.statusCode === 200 && JSON.parse(r.body).text === 'ok', r.statusCode);
+
+  // Un 429 di quota vera (non di token in uscita) non si cura chiedendo meno:
+  // riprovare sarebbe solo un'altra richiesta sprecata.
+  plan = [{ status: 429, body: JSON.stringify({ error: { message: 'Rate limit reached for requests per day (RPD): Limit 1000' } }) }];
+  calls = []; corpi = [];
+  r = await post('1.0.0.21', { type: 'image', prompt: 'x', images: [{ base64: 'AAA' }] });
+  check('un limite di richieste al giorno non fa riprovare', corpi.length === 1, corpi.length);
+  check('e il rifiuto arriva al client come 429', r.statusCode === 429, r.statusCode);
+
   console.log('\n-- deadline --');
   process.env.AI_TIMEOUT_MS = '9000';
   latency = 300; plan = Array(20).fill(MISSING); calls = [];

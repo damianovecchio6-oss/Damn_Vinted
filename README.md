@@ -47,7 +47,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-851 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+857 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -705,6 +705,15 @@ un tentativo lungo per niente, e con le foto da ricaricare quel tentativo e' il
 grosso del budget. Ora un modello che risponde `503` resta fuori per quattro
 minuti: abbastanza da non ripetere l'errore a ogni foto, abbastanza pochi da
 non restare indietro di una generazione per un blip.
+
+E c'e' un tetto in piu' che il ripiego deve conoscere: il piano gratuito di
+Groq limita i **token in uscita al minuto** (1000), mentre per le foto ne
+chiediamo 3072. Il rifiuto arriva prima ancora che il modello guardi le
+immagini, e nel messaggio Groq scrive quanti ne accetta: si riprova una volta
+chiedendone meno. Una risposta piu' corta e' meglio di nessuna risposta - ed
+era esattamente il caso in cui il ripiego serviva davvero, con la quota
+giornaliera di Gemini finita. Un 429 di altro tipo (richieste al giorno) non
+fa riprovare: chiedere meno non lo curerebbe.
 
 Con un'eccezione che conta: se il ricordo li ha saltati **tutti**, si prova lo
 stesso. Serve a non sprecare un tentativo quando c'e' un'alternativa, non a

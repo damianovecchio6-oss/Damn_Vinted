@@ -548,6 +548,18 @@ async function tentaGroq(richiesta, kind, deadline) {
     res = await chiamataGroq(Object.assign({}, richiesta, { senzaRagionamento: true }), modello, deadline);
   }
 
+  // Il piano gratuito di Groq ha un tetto ai token in USCITA al minuto, e per
+  // le foto ne chiediamo 3072: il rifiuto arriva prima ancora che il modello
+  // guardi le immagini, e nel messaggio c'e' scritto quanti ne accetta. Si
+  // riprova una volta chiedendone meno - una risposta piu' corta e' meglio di
+  // nessuna risposta, ed e' esattamente il caso in cui il ripiego su Groq
+  // serviva davvero: Gemini aveva finito la quota del giorno.
+  const tetto = limiteTokenUscita(res);
+  if (tetto && richiesta.maxTokens > tetto && deadline - Date.now() >= MIN_ATTEMPT_MS) {
+    console.error(`Groq accetta al massimo ${tetto} token in uscita: riprovo chiedendone ${tetto}`);
+    res = await chiamataGroq(Object.assign({}, richiesta, { maxTokens: tetto }), modello, deadline);
+  }
+
   let data;
   try {
     data = JSON.parse(res.body);
@@ -581,6 +593,18 @@ async function tentaGroq(richiesta, kind, deadline) {
   if (!text) return { ok: false, status: 502, error: 'Il modello ha restituito una risposta vuota', motivo: 'risposta vuota' };
 
   return { ok: true, text, model: modello, provider: 'groq' };
+}
+
+// "Limit 1000, Requested 1039": quando il rifiuto e' per i token in uscita al
+// minuto, Groq dice anche il tetto. Serve il numero, non il messaggio - e un
+// margine sotto, perche' la stima la fa lui e la fa per eccesso.
+function limiteTokenUscita(res) {
+  if (!res || res.status !== 429) return 0;
+  const testo = String(res.body || '');
+  if (!/output tokens per minute|OTPM/i.test(testo)) return 0;
+  const tetto = Number((testo.match(/Limit\s+(\d+)/i) || [])[1]);
+  if (!Number.isFinite(tetto) || tetto < 320) return 0;
+  return tetto - 100;
 }
 
 // Lo status del provider non va rimandato tale e quale: un 401 upstream
