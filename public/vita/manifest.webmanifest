@@ -1,0 +1,21 @@
+{
+  "name": "PIANO — la giornata, con calma",
+  "short_name": "PIANO",
+  "description": "Le tre cose di oggi, il ritmo delle abitudini, la settimana e un momento di calma. Tutto sul telefono.",
+  "lang": "it",
+  "dir": "ltr",
+  "start_url": "/vita/",
+  "id": "/vita/",
+  "scope": "/vita/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#07090b",
+  "theme_color": "#07090b",
+  "categories": ["productivity", "lifestyle", "health"],
+  "icons": [
+    { "src": "/vita/img/icona-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/vita/img/icona-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/vita/img/icona-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

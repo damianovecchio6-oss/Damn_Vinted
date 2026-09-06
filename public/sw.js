@@ -49,7 +49,10 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil((async () => {
     const nomi = await caches.keys();
-    await Promise.all(nomi.filter(n => n !== VERSIONE).map(n => caches.delete(n)));
+    // Solo le proprie: da qui si vedono anche le cache di PIANO (l'app sotto
+    // /vita/), e cancellare tutto quello che non si chiama come noi le
+    // toglieva l'offline a ogni attivazione.
+    await Promise.all(nomi.filter(n => n.startsWith('alba-') && n !== VERSIONE).map(n => caches.delete(n)));
     // Prende in carico le pagine gia' aperte: senza, la prima visita dopo
     // l'installazione resta scoperta fino al ricaricamento.
     await self.clients.claim();
@@ -69,6 +72,12 @@ self.addEventListener('fetch', e => {
   // pagina vecchia in home continuerebbe a chiamare la seconda e si vedrebbe
   // servire la risposta dell'altro ieri.
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/.netlify/')) return;
+
+  // PIANO, l'app della giornata, sta sotto /vita/ e ha il suo service worker:
+  // qui non ci si mette in mezzo. Senza questa riga la sua pagina passerebbe
+  // dal ramo "navigate" qui sotto e finirebbe salvata come index.html di
+  // ALBA - cioe' offline, al posto del sole, si aprirebbe l'altra app.
+  if (url.pathname.startsWith('/vita')) return;
 
   // La pagina: prima la rete, cosi' chi ha campo vede sempre l'ultima
   // versione; la copia in cache e' la rete di sicurezza, non la regola.

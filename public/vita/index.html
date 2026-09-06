@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>PIANO — la giornata, con calma</title>
+<meta name="description" content="Le tre cose di oggi, il ritmo delle abitudini, la settimana e un momento di calma. Tutto sul telefono, niente account."/>
+
+<!-- Questa e' un'app a se': vive sotto /vita/ e ha il suo manifest, il suo
+     service worker e le sue icone. Condivide con ALBA solo il dominio e il
+     modo di essere fatta - niente build, niente dipendenze, un file di
+     markup e uno di script. -->
+<link rel="manifest" href="./manifest.webmanifest"/>
+<meta name="theme-color" content="#07090b"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="PIANO"/>
+<link rel="apple-touch-icon" href="./img/apple-touch-icon.png"/>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cmask id='m'%3E%3Crect width='100' height='100' fill='%23fff'/%3E%3Ccircle cx='66' cy='40' r='26' fill='%23000'/%3E%3C/mask%3E%3Ccircle cx='50' cy='50' r='30' fill='%23a9dcc8' mask='url(%23m)'/%3E%3C/svg%3E"/>
+<style>
+:root{
+  /* Il verde salvia e' il colore di questa app: ALBA e' l'oro del sole che
+     sveglia, PIANO e' la luce piu' fredda di chi la giornata la sta gia'
+     attraversando. Il fondo resta della stessa famiglia, perche' e' la
+     stessa casa. */
+  --v:#a9dcc8;--vl:rgba(169,220,200,.13);
+  --lil:#b6adea;         /* la sera, e tutto quello che riguarda il riposo */
+  --oro:#e8c84a;         /* resta solo nel glifo del marchio */
+
+  --bg:#07090b;--bg2:#121418;
+  --card:rgba(255,255,255,.05);
+  --vetro:blur(28px) saturate(160%);
+  --tx:#f2f4f3;--mu:#93999b;--mu2:#6c7274;
+  --bd:rgba(255,255,255,.085);
+  --bd2:rgba(255,255,255,.05);
+
+  --sb:env(safe-area-inset-bottom,0px);
+  --st:env(safe-area-inset-top,0px);
+
+  --fb:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI Variable Text','Segoe UI',system-ui,'Helvetica Neue',sans-serif;
+  --fd:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI Variable Display','Segoe UI',system-ui,'Helvetica Neue',sans-serif;
+
+  --sp:cubic-bezier(.32,.72,0,1);
+  --r:24px;
+  --r2:15px;
+  --om:0 1px 0 rgba(255,255,255,.05) inset, 0 16px 40px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+/* L'attributo hidden lo mette il browser a display:none, ma con una
+   specificita' bassissima: qualunque nostra regola con display: dentro se lo
+   mangia, e il pezzo "nascosto" resta li' a vista. Qui vale sempre. */
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--fb);
+  background:var(--bg);
+  color:var(--tx);
+  min-height:100dvh;
+  -webkit-font-smoothing:antialiased;
+  letter-spacing:-.01em;
+  /* Due luci ferme: una verde in alto, una lilla in basso. Sono l'unica
+     cosa "decorativa" della pagina, e non si muovono mentre scorri. */
+  background-image:
+    radial-gradient(115% 58% at 50% -6%, rgba(169,220,200,.11) 0%, rgba(169,220,200,.03) 40%, transparent 70%),
+    radial-gradient(90% 46% at 50% 106%, rgba(182,173,234,.075) 0%, transparent 64%);
+  background-attachment:fixed;
+  overscroll-behavior-y:none;
+}
+
+/* ===== testa ===== */
+.testa{
+  max-width:640px;margin:0 auto;
+  padding:calc(22px + var(--st)) 20px 4px 20px;
+}
+.marchio{display:flex;align-items:center;gap:9px}
+.marchio svg{width:22px;height:22px;color:var(--v);flex-shrink:0}
+.marchio b{font-family:var(--fd);font-size:15px;font-weight:600;letter-spacing:.16em;color:var(--tx)}
+.saluto{font-family:var(--fd);font-size:26px;font-weight:600;letter-spacing:-.028em;margin-top:18px;line-height:1.15}
+.data{color:var(--mu);font-size:14px;margin-top:5px}
+
+/* ===== impalcatura ===== */
+.shell{max-width:640px;margin:0 auto;padding:18px 20px calc(104px + var(--sb)) 20px}
+.sez{display:none}
+.sez.on{display:block;animation:entra .32s var(--sp)}
+@keyframes entra{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+
+.card{
+  background:var(--card);
+  -webkit-backdrop-filter:var(--vetro);backdrop-filter:var(--vetro);
+  border:1px solid var(--bd);
+  border-radius:var(--r);
+  padding:20px 18px;
+  margin-bottom:14px;
+  box-shadow:var(--om);
+}
+.ct{font-family:var(--fd);font-size:17px;font-weight:600;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
+.sub{color:var(--mu);font-size:13.5px;margin-top:6px;line-height:1.45}
+.vuoto{color:var(--mu2);font-size:14px;padding:14px 2px;line-height:1.5}
+
+/* ===== le cose ===== */
+.cose{list-style:none;margin-top:14px}
+.cosa{
+  display:flex;align-items:flex-start;gap:12px;
+  padding:12px 0;border-top:1px solid var(--bd2);
+}
+.cose .cosa:first-child{border-top:none}
+.segno{
+  width:26px;height:26px;flex-shrink:0;margin-top:1px;
+  border-radius:50%;border:1.5px solid rgba(255,255,255,.2);
+  background:transparent;cursor:pointer;
+  display:grid;place-items:center;
+  color:transparent;font-size:14px;
+  transition:border-color .25s var(--sp),background .25s var(--sp),color .25s var(--sp),transform .2s var(--sp);
+  -webkit-tap-highlight-color:transparent;
+}
+.segno:active{transform:scale(.88)}
+.cosa.fatta .segno{background:var(--v);border-color:var(--v);color:#0b1a15}
+.corpo{flex:1;min-width:0}
+.testo{font-size:15.5px;line-height:1.35;word-break:break-word}
+.cosa.fatta .testo{color:var(--mu2);text-decoration:line-through;text-decoration-color:rgba(255,255,255,.22)}
+.meta{display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap}
+.tag{font-size:11.5px;color:var(--mu);background:rgba(255,255,255,.055);border:1px solid var(--bd2);border-radius:999px;padding:2px 9px}
+.tag.sera{color:var(--lil);border-color:rgba(182,173,234,.25)}
+.azioni{display:flex;gap:2px;flex-shrink:0}
+.mini{
+  background:none;border:none;color:var(--mu2);
+  font-size:12.5px;padding:7px 8px;border-radius:10px;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+.mini:active{background:rgba(255,255,255,.06);color:var(--tx)}
+
+/* Le tre caselle: quelle libere si vedono, ed e' voluto. Uno spazio vuoto
+   disegnato dice "ci sta ancora qualcosa"; tre righe piene dicono basta. */
+.slot{
+  border:1px dashed rgba(255,255,255,.13);
+  border-radius:var(--r2);
+  padding:13px 14px;margin-top:10px;
+  color:var(--mu2);font-size:14px;
+}
+
+/* ===== aggiungi ===== */
+.agg{margin-top:16px}
+.riga{display:flex;gap:8px}
+input[type=text]{
+  flex:1;min-width:0;
+  background:rgba(255,255,255,.045);
+  border:1px solid var(--bd);border-radius:var(--r2);
+  color:var(--tx);font-family:var(--fb);font-size:16px;
+  padding:13px 14px;
+  transition:border-color .25s var(--sp),background .25s var(--sp);
+}
+input[type=text]::placeholder{color:var(--mu2)}
+input[type=text]:focus{outline:none;border-color:rgba(169,220,200,.45);background:rgba(169,220,200,.055)}
+.ok{
+  background:var(--v);color:#08201a;border:none;border-radius:var(--r2);
+  font-family:var(--fb);font-size:15px;font-weight:600;
+  padding:0 18px;cursor:pointer;flex-shrink:0;
+  -webkit-tap-highlight-color:transparent;
+  transition:transform .2s var(--sp),opacity .2s var(--sp);
+}
+.ok:active{transform:scale(.96)}
+.ok:disabled{opacity:.35;cursor:default}
+.chips{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
+.chip{
+  background:rgba(255,255,255,.045);border:1px solid var(--bd2);
+  color:var(--mu);font-family:var(--fb);font-size:13px;
+  border-radius:999px;padding:7px 13px;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+  transition:all .22s var(--sp);
+}
+.chip[aria-pressed="true"]{background:var(--vl);border-color:rgba(169,220,200,.4);color:var(--v)}
+
+/* ===== il ritmo ===== */
+.ab{display:flex;align-items:center;gap:13px;padding:14px 0;border-top:1px solid var(--bd2)}
+.abLista .ab:first-child{border-top:none}
+.tondo{
+  width:44px;height:44px;flex-shrink:0;border-radius:50%;
+  border:1.5px solid rgba(255,255,255,.16);background:rgba(255,255,255,.03);
+  font-size:19px;cursor:pointer;display:grid;place-items:center;
+  -webkit-tap-highlight-color:transparent;
+  transition:transform .22s var(--sp),background .25s var(--sp),border-color .25s var(--sp);
+}
+.tondo:active{transform:scale(.9)}
+.ab.oggi .tondo{background:var(--vl);border-color:var(--v);box-shadow:0 0 0 4px rgba(169,220,200,.09)}
+.abNome{font-size:15.5px}
+.abFila{color:var(--mu);font-size:12.5px;margin-top:3px}
+.punti{display:flex;gap:4px;margin-top:7px}
+.p{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.11)}
+.p.si{background:var(--v)}
+.p.oggi{box-shadow:0 0 0 2px rgba(169,220,200,.22)}
+
+/* ===== la settimana ===== */
+.sett{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:16px}
+.gio{
+  background:rgba(255,255,255,.035);border:1px solid var(--bd2);
+  border-radius:14px;padding:9px 2px 10px 2px;
+  text-align:center;cursor:pointer;color:var(--tx);
+  font-family:var(--fb);
+  -webkit-tap-highlight-color:transparent;
+  transition:all .22s var(--sp);
+}
+/* Le tre righe del giorno stanno una sotto l'altra: dentro un <button> gli
+   span restano in linea, e "gio" finiva accanto al 3 invece che sopra. */
+.gio span{display:block}
+.gio .gn{font-size:10.5px;color:var(--mu2);text-transform:lowercase}
+.gio .gd{font-family:var(--fd);font-size:16px;font-weight:600;margin-top:3px}
+.gio .gp{display:flex;gap:3px;justify-content:center;margin-top:6px;min-height:6px}
+.gio .gp i{width:5px;height:5px;border-radius:50%;background:var(--v);display:block}
+.gio .gp i.att{background:rgba(255,255,255,.2)}
+.gio.oggi{border-color:rgba(169,220,200,.45);background:var(--vl)}
+.gio.scelto{border-color:var(--v);box-shadow:0 0 0 3px rgba(169,220,200,.13)}
+.gio.passato .gd{color:var(--mu)}
+
+.banner{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  background:rgba(182,173,234,.1);border:1px solid rgba(182,173,234,.25);
+  border-radius:var(--r2);padding:11px 12px 11px 15px;margin-bottom:14px;
+  font-size:14px;color:var(--lil);
+}
+.banner button{background:none;border:none;color:var(--lil);font-family:var(--fb);font-size:13.5px;font-weight:600;padding:6px 8px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+
+/* ===== la calma ===== */
+.scala{display:flex;gap:8px;margin-top:14px}
+.liv{
+  flex:1;background:rgba(255,255,255,.04);border:1px solid var(--bd2);
+  border-radius:var(--r2);padding:13px 0;cursor:pointer;
+  font-family:var(--fb);font-size:20px;color:var(--tx);
+  -webkit-tap-highlight-color:transparent;
+  transition:all .22s var(--sp);
+}
+.liv[aria-pressed="true"]{background:var(--vl);border-color:var(--v);transform:translateY(-2px)}
+.striscia{display:flex;gap:5px;margin-top:16px;align-items:flex-end;height:34px}
+.striscia div{flex:1;border-radius:4px;background:rgba(255,255,255,.07);min-height:4px}
+
+.respiro{display:grid;place-items:center;padding:14px 0 4px 0}
+.bolla{
+  width:132px;height:132px;border-radius:50%;
+  background:radial-gradient(circle at 38% 32%, rgba(169,220,200,.4), rgba(169,220,200,.09) 62%, transparent 72%);
+  border:1px solid rgba(169,220,200,.3);
+  display:grid;place-items:center;
+  color:var(--v);font-size:14px;letter-spacing:.03em;
+  transform:scale(.72);
+  transition:transform 4s var(--sp);
+}
+.bolla.dentro{transform:scale(1.08);transition-duration:4s}
+.bolla.tieni{transform:scale(1.08);transition-duration:7s}
+.bolla.fuori{transform:scale(.72);transition-duration:8s}
+.conta{color:var(--mu);font-size:13px;margin-top:14px;min-height:18px}
+
+.piede{color:var(--mu2);font-size:12.5px;line-height:1.6;text-align:center;padding:6px 4px 0 4px}
+textarea{
+  width:100%;margin-top:12px;min-height:110px;
+  background:rgba(255,255,255,.04);border:1px solid var(--bd);border-radius:var(--r2);
+  color:var(--mu);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
+  padding:12px;resize:vertical;
+}
+textarea:focus{outline:none;border-color:rgba(169,220,200,.4)}
+
+/* ===== la barra in basso ===== */
+/* Sta in basso e non in alto per un motivo solo: il pollice. Su un telefono
+   grande la parte alta dello schermo la raggiungi con due mani. */
+.barra{
+  position:fixed;left:0;right:0;bottom:0;z-index:40;
+  display:flex;justify-content:center;gap:2px;
+  padding:8px 12px calc(8px + var(--sb)) 12px;
+  background:rgba(10,12,14,.72);
+  -webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);
+  border-top:1px solid var(--bd2);
+}
+.nav{
+  flex:1;max-width:120px;
+  background:none;border:none;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:7px 4px;border-radius:14px;
+  color:var(--mu2);font-family:var(--fb);font-size:10.5px;letter-spacing:.01em;
+  -webkit-tap-highlight-color:transparent;
+  transition:color .25s var(--sp);
+}
+.nav svg{width:21px;height:21px}
+.nav[aria-selected="true"]{color:var(--v)}
+
+.solo-lettore{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.001s!important;transition-duration:.001s!important}
+  .bolla{transition-duration:.001s!important}
+}
+</style>
+</head>
+<body>
+
+<header class="testa">
+  <div class="marchio">
+    <svg viewBox="0 0 100 100" fill="currentColor" aria-hidden="true">
+      <mask id="morso"><rect width="100" height="100" fill="#fff"/><circle cx="66" cy="40" r="26" fill="#000"/></mask>
+      <circle cx="50" cy="50" r="30" mask="url(#morso)"/>
+      <path d="M44.3 20.6 L50 4 L55.7 20.6 Z M79.5 44.8 L97 51.6 L79.1 57.3 Z M55.2 79.5 L50 95 L44.8 79.5 Z M20.8 56.7 L2 51.7 L20.4 45.3 Z M24.8 33.7 L18.8 21.9 L31.1 26.7 Z" opacity=".85"/>
+    </svg>
+    <b>PIANO</b>
+  </div>
+  <h1 class="saluto" id="saluto">Ciao</h1>
+  <p class="data" id="dataOggi"></p>
+</header>
+
+<main class="shell">
+
+  <!-- ===== OGGI ===== -->
+  <section class="sez on" id="sez-oggi" role="tabpanel" aria-labelledby="nav-oggi">
+    <div class="banner" id="bannerGiorno" hidden></div>
+    <div class="banner" id="bannerRimaste" hidden></div>
+
+    <div class="card">
+      <h2 class="ct">Le tre cose</h2>
+      <p class="sub" id="statoTre"></p>
+      <ul class="cose" id="listaTre"></ul>
+      <div id="slotLiberi"></div>
+
+      <div class="agg">
+        <div class="riga">
+          <input type="text" id="nuovaCosa" placeholder="una cosa, scritta corta" maxlength="120"
+                 autocomplete="off" autocapitalize="sentences" enterkeyhint="done" aria-label="Aggiungi una cosa"/>
+          <button class="ok" id="btnAggiungi" data-az="aggiungi">ok</button>
+        </div>
+        <div class="chips" id="momenti" role="group" aria-label="Quando">
+          <button class="chip" data-az="momento" data-arg="" aria-pressed="true">quando capita</button>
+          <button class="chip" data-az="momento" data-arg="mattina" aria-pressed="false">mattina</button>
+          <button class="chip" data-az="momento" data-arg="pomeriggio" aria-pressed="false">pomeriggio</button>
+          <button class="chip" data-az="momento" data-arg="sera" aria-pressed="false">sera</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="ct">Se avanza</h2>
+      <p class="sub">Quello che non entra nelle tre. Nessuna fretta: sta li' e aspetta.</p>
+      <ul class="cose" id="listaExtra"></ul>
+    </div>
+  </section>
+
+  <!-- ===== RITMO ===== -->
+  <section class="sez" id="sez-ritmo" role="tabpanel" aria-labelledby="nav-ritmo">
+    <div class="card">
+      <h2 class="ct">Il ritmo</h2>
+      <p class="sub">Le cose piccole che si ripetono. Un giorno saltato non rompe niente.</p>
+      <div class="abLista" id="listaAbitudini"></div>
+
+      <div class="agg">
+        <div class="riga">
+          <input type="text" id="nuovaAbitudine" placeholder="camminare, leggere, bere acqua..." maxlength="60"
+                 autocomplete="off" enterkeyhint="done" aria-label="Aggiungi un'abitudine"/>
+          <button class="ok" id="btnAbitudine" data-az="aggiungiAbitudine">ok</button>
+        </div>
+        <div class="chips" id="emoji" role="group" aria-label="Simbolo">
+          <button class="chip" data-az="emoji" data-arg="🌿" aria-pressed="true">🌿</button>
+          <button class="chip" data-az="emoji" data-arg="🚶" aria-pressed="false">🚶</button>
+          <button class="chip" data-az="emoji" data-arg="📖" aria-pressed="false">📖</button>
+          <button class="chip" data-az="emoji" data-arg="💧" aria-pressed="false">💧</button>
+          <button class="chip" data-az="emoji" data-arg="🧘" aria-pressed="false">🧘</button>
+          <button class="chip" data-az="emoji" data-arg="🎧" aria-pressed="false">🎧</button>
+          <button class="chip" data-az="emoji" data-arg="✏️" aria-pressed="false">✏️</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== SETTIMANA ===== -->
+  <section class="sez" id="sez-settimana" role="tabpanel" aria-labelledby="nav-settimana">
+    <div class="card">
+      <h2 class="ct" id="titoloSettimana">Questa settimana</h2>
+      <p class="sub">Tocca un giorno per vedere - o preparare - le sue tre cose.</p>
+      <div class="sett" id="grigliaSettimana"></div>
+      <div class="chips" style="margin-top:16px">
+        <button class="chip" data-az="settimana" data-arg="-1">← prima</button>
+        <button class="chip" data-az="settimana" data-arg="0">questa</button>
+        <button class="chip" data-az="settimana" data-arg="1">dopo →</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2 class="ct">Come e' andata</h2>
+      <div id="riassuntoSettimana"></div>
+    </div>
+  </section>
+
+  <!-- ===== CALMA ===== -->
+  <section class="sez" id="sez-calma" role="tabpanel" aria-labelledby="nav-calma">
+    <div class="card">
+      <h2 class="ct">Come stai, oggi</h2>
+      <p class="sub">Una domanda sola, e nessuno la legge tranne te.</p>
+      <div class="scala" id="scalaEnergia" role="group" aria-label="Energia di oggi">
+        <button class="liv" data-az="energia" data-arg="1" aria-pressed="false" aria-label="molto giu'">😞</button>
+        <button class="liv" data-az="energia" data-arg="2" aria-pressed="false" aria-label="fiacco">😕</button>
+        <button class="liv" data-az="energia" data-arg="3" aria-pressed="false" aria-label="cosi' cosi'">😐</button>
+        <button class="liv" data-az="energia" data-arg="4" aria-pressed="false" aria-label="bene">🙂</button>
+        <button class="liv" data-az="energia" data-arg="5" aria-pressed="false" aria-label="benissimo">😄</button>
+      </div>
+      <div class="riga" style="margin-top:12px">
+        <input type="text" id="notaGiorno" placeholder="una riga, se ti va" maxlength="140"
+               autocomplete="off" enterkeyhint="done" aria-label="Nota di oggi"/>
+      </div>
+      <div class="striscia" id="strisciaUmore" aria-hidden="true"></div>
+      <p class="sub" id="leggendaUmore"></p>
+    </div>
+
+    <div class="card">
+      <h2 class="ct">Un respiro</h2>
+      <p class="sub">Quattro dentro, sette fermi, otto fuori. Tre giri e sei un'altra persona.</p>
+      <div class="respiro">
+        <div class="bolla" id="bolla" aria-hidden="true">inizia</div>
+        <p class="conta" id="contaRespiro" role="status"></p>
+        <button class="chip" data-az="respira" id="btnRespira" style="margin-top:12px">comincia</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="ct">I tuoi dati</h2>
+      <p class="sub">Stanno solo qui dentro, in questo telefono. Non c'e' nessun account e niente esce
+        da questa pagina - il che vuol dire anche che se cancelli i dati del browser se ne vanno.
+        Questa e' la copia da tenere da parte.</p>
+      <div class="chips" style="margin-top:14px">
+        <button class="chip" data-az="mostraCopia">mostra la copia</button>
+        <button class="chip" data-az="ripristina">ripristina da una copia</button>
+      </div>
+      <textarea id="copiaDati" hidden spellcheck="false" aria-label="Copia dei dati in formato JSON"></textarea>
+      <p class="sub" id="esitoDati"></p>
+    </div>
+
+    <p class="piede">PIANO — la giornata, con calma.</p>
+  </section>
+
+</main>
+
+<nav class="barra" role="tablist" aria-label="Sezioni">
+  <button class="nav" id="nav-oggi" data-az="vai" data-arg="oggi" role="tab" aria-selected="true" aria-controls="sez-oggi">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l4.5 4.5L20 6"/></svg>
+    oggi
+  </button>
+  <button class="nav" id="nav-ritmo" data-az="vai" data-arg="ritmo" role="tab" aria-selected="false" aria-controls="sez-ritmo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h3.5l2-6 3 12 2.5-8 1.8 4H21"/></svg>
+    ritmo
+  </button>
+  <button class="nav" id="nav-settimana" data-az="vai" data-arg="settimana" role="tab" aria-selected="false" aria-controls="sez-settimana">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+    settimana
+  </button>
+  <button class="nav" id="nav-calma" data-az="vai" data-arg="calma" role="tab" aria-selected="false" aria-controls="sez-calma">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a6.8 6.8 0 0 0 11 11z"/></svg>
+    calma
+  </button>
+</nav>
+
+<p class="solo-lettore" role="status" id="annuncio"></p>
+
+<script src="./app.js"></script>
+</body>
+</html>

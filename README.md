@@ -14,6 +14,7 @@ public/app.js                 tutto lo script della pagina, fuori da index.html
 public/_headers               header di sicurezza (CSP, ecc.)
 public/img/                   i disegni: il sole, il sole+luna, le icone dell'app
 public/manifest.webmanifest   nome, icone e schermo intero: l'app installabile
+public/vita/                  PIANO: l'app della giornata, a se' e installabile
 public/sw.js                  service worker: il guscio resta anche senza rete
 api/                          gli stessi endpoint per Vercel: solo l'involucro
 netlify/functions/claude.js   proxy verso i modelli AI (Groq / Gemini)
@@ -47,7 +48,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-859 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+958 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -641,6 +642,73 @@ Cosa manca per un'app da store: un negozio non accetta un URL, vuole un
 pacchetto firmato. Da qui la strada corta e' Trusted Web Activity per il Play
 Store (`bubblewrap`, che parte proprio da questo manifest) e un wrapper per
 iOS; nessuno dei due tocca il codice del sito.
+
+## PIANO: la giornata, con calma
+
+Sotto `/vita/` c'e' una seconda app, e non ha niente a che vedere con Vinted:
+si chiama **PIANO** ed e' un programmatore della giornata fatto per non mettere
+ansia. Sta in questo repo perche' e' fatta con la stessa mano - niente build,
+niente dipendenze, un file di markup e uno di script - e perche' si installa
+dallo stesso dominio.
+
+```
+public/vita/index.html           markup e stile
+public/vita/app.js               tutto lo script, fuori dal markup
+public/vita/manifest.webmanifest nome, icone, scope /vita/
+public/vita/sw.js                il suo service worker
+public/vita/img/                 le icone dell'app, e la luna da cui nascono
+scripts/icone-piano.js           le ridisegna quando cambia il glifo
+tests/vita.js                    la suite: 94 controlli
+```
+
+**Cosa fa.** Quattro schede, tutte raggiungibili col pollice dalla barra in
+basso. *Oggi* tiene **le tre cose** della giornata, con un momento appiccicato
+(mattina, pomeriggio, sera) e le caselle libere disegnate, perche' il limite si
+veda prima di riempirlo; la quarta cosa non viene rifiutata, scivola in "se
+avanza". *Ritmo* sono le abitudini, con la fila dei giorni e gli ultimi sette
+pallini. *Settimana* e' il calendario di sette giorni: toccandone uno si
+apre - o si prepara - la sua lista. *Calma* e' il come stai di oggi, la forma
+delle ultime due settimane, un 4-7-8 da respirare e la copia dei dati da
+portarsi via.
+
+**Le regole che la rendono chill** sono nel codice, non nella pubblicita':
+
+- tre cose al giorno e non di piu'; il resto aspetta in "se avanza";
+- quello che non hai fatto ieri **non** viene trascinato a oggi da solo: te lo
+  si chiede, e puoi lasciarlo andare. Una lista che si porta dietro tutto
+  diventa un registro di colpe;
+- la fila delle abitudini sopporta un buco: saltare un giorno non azzera
+  niente, saltarne due di fila si'. E oggi, finche' non e' segnato, non conta
+  contro - alle nove del mattino la fila di ieri e' ancora tutta li';
+- nessuna percentuale e niente in rosso. Il testo di stato dice "una fatta, il
+  resto aspetta", non "ti manca il 66%".
+
+**Dove finiscono i dati.** In `localStorage`, su quel telefono. Non c'e' un
+account, non c'e' una function, non parte una richiesta: l'app non chiama la
+rete per funzionare, e per questo il suo service worker si tiene in cache
+tutto il guscio. Il rovescio della medaglia e' che cancellare i dati del
+browser cancella anche la giornata: in *Calma* c'e' "mostra la copia", che
+sputa il JSON da incollare dove si vuole e da cui si rientra.
+
+**Installarla.** Si apre `indirizzo-del-sito/vita/` e si aggiunge alla home:
+su Android il browser la propone da solo, su iPhone si fa da Safari,
+*Condividi > Aggiungi a Home*. Ha icona (una luna salvia), nome e schermo
+intero suoi: in home compaiono due app separate, ALBA e PIANO.
+
+**I due worker sulla stessa origine.** E' il punto in cui questa roba si
+rompe, e la suite lo guarda apposta. Quello di ALBA sta sulla radice e
+vedrebbe anche `/vita/`: senza la riga che lo esclude, la pagina di PIANO
+finirebbe salvata come `index.html` di ALBA, e offline al posto del sole si
+aprirebbe l'altra app. E la pulizia delle cache vecchie, che cancellava tutto
+quello che non si chiamava come lei, adesso guarda solo i nomi che cominciano
+per `alba-`: gli altri sono di PIANO.
+
+Le icone si rifanno come quelle di ALBA:
+
+```
+node scripts/icone-piano.js
+```
+
 
 ## Due case: Netlify e Vercel
 

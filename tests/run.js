@@ -25,6 +25,7 @@ const SUITE = [
   ['micro-interazioni', 'interazioni.js', 'ghiera, attesa, focus, vibrazione, motion'],
   ['dito sul telefono', 'tocco.js', 'tocchi veri: ghiera, tasto centrale, parcheggio'],
   ['app installabile', 'app.js', 'manifest, icone, service worker, offline'],
+  ['la giornata (PIANO)', 'vita.js', 'le tre cose, il ritmo, la settimana, i due worker'],
   ['porta su Vercel', 'vercel.js', 'adattatore, header uguali sui due host, origini'],
   ['codice di accesso', 'pin.js', 'la function lo pretende, la pagina lo chiede una volta'],
   ['mercato condiviso', 'mercato.js', 'cosa esce dal telefono, la banda, il tasto del codice']

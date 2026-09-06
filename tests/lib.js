@@ -46,8 +46,15 @@ function serviSito(porta) {
     // La query si toglie prima di decidere se e' la radice: con "/?vai=foto"
     // il confronto con '/' fallisce, e si finiva a leggere la cartella.
     const percorso = req.url.split('?')[0];
-    const richiesto = percorso === '/' ? '/index.html' : percorso;
-    const completo = path.join(SITO, richiesto);
+    let richiesto = percorso === '/' ? '/index.html' : percorso;
+    let completo = path.join(SITO, richiesto);
+    // Una cartella e' la pagina che ci sta dentro: e' quello che fanno Netlify
+    // e Vercel, e senza questo la suite di PIANO dovrebbe chiedere
+    // /vita/index.html - un indirizzo che in produzione non usa nessuno.
+    if (completo.startsWith(SITO) && fs.existsSync(completo) && fs.statSync(completo).isDirectory()) {
+      richiesto = richiesto.replace(/\/*$/, '') + '/index.html';
+      completo = path.join(SITO, richiesto);
+    }
     if (!completo.startsWith(SITO) || !fs.existsSync(completo)) { res.writeHead(404); return res.end('no'); }
     // Il tipo giusto per i .js non e' pignoleria: servito come text/plain, uno
     // <script src> viene rifiutato dal browser appena c'e' un nosniff di mezzo,

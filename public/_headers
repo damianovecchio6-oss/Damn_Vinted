@@ -35,3 +35,25 @@
   Cache-Control: public, max-age=31536000, immutable
 /img/apple-touch-icon.png
   Cache-Control: public, max-age=31536000, immutable
+
+# PIANO, l'app della giornata, sta sotto /vita/ e ha il suo guscio: stesse
+# regole della radice, o il suo worker e il suo manifest invecchierebbero in
+# cache e un deploy nuovo resterebbe invisibile per giorni.
+/vita/index.html
+  Cache-Control: no-cache
+
+/vita/sw.js
+  Cache-Control: no-cache
+
+/vita/manifest.webmanifest
+  Cache-Control: no-cache
+  Content-Type: application/manifest+json
+
+/vita/img/icona-192.png
+  Cache-Control: public, max-age=31536000, immutable
+/vita/img/icona-512.png
+  Cache-Control: public, max-age=31536000, immutable
+/vita/img/icona-maskable.png
+  Cache-Control: public, max-age=31536000, immutable
+/vita/img/apple-touch-icon.png
+  Cache-Control: public, max-age=31536000, immutable
