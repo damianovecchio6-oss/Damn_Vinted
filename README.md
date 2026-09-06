@@ -15,11 +15,13 @@ public/_headers               header di sicurezza (CSP, ecc.)
 public/img/                   i disegni: il sole, il sole+luna, le icone dell'app
 public/manifest.webmanifest   nome, icone e schermo intero: l'app installabile
 public/sw.js                  service worker: il guscio resta anche senza rete
-api/                          gli stessi tre endpoint per Vercel: solo l'involucro
+api/                          gli stessi endpoint per Vercel: solo l'involucro
 netlify/functions/claude.js   proxy verso i modelli AI (Groq / Gemini)
 netlify/functions/lens.js     ricerca per immagine (Google Lens via SerpApi)
 netlify/functions/ricerca.js  ricerca testuale online, lo strumento dell'agente
+netlify/functions/mercato.js  gli esiti condivisi e il tasto del codice
 netlify/functions/lib/        codice condiviso dalle function
+supabase/001_mercato.sql      le tabelle del mercato condiviso, da eseguire una volta
 tests/                        suite di test, nessun framework
 .claude/                      skill e agenti: collaudo e riparazione
 .github/workflows/            i test a ogni push
@@ -45,7 +47,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-799 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+836 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -101,6 +103,8 @@ senza di loro il sito continua a funzionare come prima.
 | `GEMINI_API_KEY` | Analisi foto: legge il testo delle etichette molto meglio | No |
 | `SERPAPI_KEY` | Bottone "Identifica prodotto", agente di ricerca e scanner | No |
 | `ALBA_PIN` | Chiude il sito dietro un codice: senza, chi ha l'indirizzo entra | No |
+| `SUPABASE_URL` | Il deposito: prezzi condivisi e tasto del codice | No |
+| `SUPABASE_SERVICE_KEY` | La chiave di servizio dello stesso progetto Supabase | No |
 
 Su Vercel stanno in **Settings > Environment Variables**, e vale la stessa
 regola del riquadro: contano dal deploy dopo.
@@ -399,6 +403,87 @@ un quarto d'ora di accesso a chi lo aveva.
 Quello che questo codice **non** e': non e' autenticazione, e non protegge da
 chi il codice ce l'ha. E' la serratura di casa, non una cassaforte - tiene
 fuori chi passa, non chi ha le chiavi.
+
+## Il mercato condiviso
+
+Lo storico di una persona sola dice poco: tre capi venduti sono un aneddoto.
+Gli esiti di tutti quelli che usano ALBA sono invece l'unica cosa vera che
+nessun modello sa - **come si vende davvero quel marchio su Vinted Italia,
+questo mese** - e messi insieme diventano un riferimento che nessuna ricerca
+online puo' dare, perche' gli annunci online sono richieste, non vendite.
+
+### Cosa esce dal telefono, e cosa no
+
+Quando qualcuno segna una vendita, parte una riga: **marca, categoria,
+condizione, prezzo suggerito, prezzo incassato, giorni**. Basta.
+
+Non parte, e non deve partire mai: le foto, il testo dell'annuncio, le note
+scritte a mano, il nome del capo battuto sulla tastiera, e qualunque cosa che
+dica *chi* ha venduto. Il campo `dispositivo` e' un numero casuale nato nel
+browser: serve a contare quanti esiti arrivano dalla stessa parte, non a
+riconoscere qualcuno. `tests/mercato.js` verifica l'elenco esatto dei campi
+che partono: se qualcuno ne aggiunge uno, quella suite diventa rossa.
+
+Si spegne dallo **Storico > Impostazioni**, ed e' acceso di default: chi non
+decide contribuisce, perche' e' quello che fa funzionare i prezzi condivisi
+anche per lui.
+
+### Cosa torna indietro
+
+Nel prompt della stima, sotto la riga di chi sta vendendo: *gli altri
+venditori: 180 capi di questa marca, il 22% sotto il suggerito, in 11 giorni*.
+Sempre col numero di capi su cui e' fatta, perche' un numero senza il suo
+campione e' un'opinione. E sempre **sotto** i suoi: i propri esiti restano la
+voce piu' forte.
+
+Nello scanner e nella Ricerca, dove il prezzo viene corretto dal codice invece
+che dal modello, il mercato entra **solo se chi guarda non ha ancora esiti
+suoi**. Sommare le due correzioni vorrebbe dire scontare due volte lo stesso
+capo.
+
+### Perche' non si avvelena facilmente
+
+Chiunque puo' mandare numeri finti: e' il rischio vero di un dato condiviso.
+Quattro strati, nessuno dei quali basta da solo:
+
+- **mediane, non medie**: per spostare una mediana bisogna essere la meta' del
+  campione, non il piu' rumoroso;
+- **valori fuori scala rifiutati**: un capo venduto a un ventesimo o a cinque
+  volte il suggerito non entra, e la stessa regola sta anche nel database,
+  cosi' vale pure per chi scrivesse da un'altra strada;
+- **una soglia minima**: sotto cinque esiti il mercato non risponde niente;
+- **un tetto per dispositivo**: venti esiti al giorno, che taglia lo script
+  banale che ne manda mille.
+
+Piu' quello che c'era gia': token di sessione, controllo dell'origine, e il
+limite di richieste al minuto per IP.
+
+### Il deposito
+
+Dentro c'e' un Postgres di Supabase, raggiunto dalla sua API REST senza
+nessuna libreria (`netlify/functions/lib/deposito.js`). Le due tabelle hanno
+RLS acceso e **nessuna policy**: le chiavi pubbliche non le vedono proprio, ci
+arriva solo la function con la service key.
+
+Da fare una volta sola: crea il progetto su **supabase.com**, apri il **SQL
+Editor** e incolla `supabase/001_mercato.sql`, poi copia da *Project Settings
+> API* l'URL e la **service_role key** in `SUPABASE_URL` e
+`SUPABASE_SERVICE_KEY`. Senza queste due variabili il mercato non esiste e il
+sito funziona come prima: nessun contributo, nessuna riga in piu' nel prompt,
+e l'interruttore del codice non si mostra.
+
+### Il tasto del codice
+
+E' l'altra cosa che ha bisogno di un posto comune. `ALBA_PIN` dice *quale* e'
+il codice; la riga `pin_attivo` nel deposito dice *se* si chiede, e quella la
+gira il tasto in **Storico > Impostazioni**. Per girarlo serve il codice, in un
+senso e nell'altro - con il sito aperto, il codice e' quello che permette di
+richiuderlo.
+
+Il valore si legge con una cache di un minuto: e' anche il ritardo massimo fra
+il tasto premuto e il codice che entra in vigore. Se il deposito non risponde
+si tiene l'ultimo valore conosciuto, e se non se ne conosce nessuno la
+serratura resta chiusa: in dubbio, non si apre.
 
 ## Lo storico, e come portarselo via
 

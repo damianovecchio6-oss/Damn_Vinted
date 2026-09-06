@@ -62,7 +62,7 @@ function sw(n, opzioni){
   // all'altra. Aspetta che il giro si fermi, o sfarfallerebbe a ogni scatto.
   entrataQuandoTiFermi();
 
-  if(n==='storico') renderHistory();
+  if(n==='storico'){ renderHistory(); sincronizzaImpostazioni(); }
   if(n==='ricerca') prefillRicerca();
   if(n==='scanner') syncUploadUI();
 
@@ -556,11 +556,11 @@ function getSessionToken(force){
 const UNAUTHORIZED=Symbol('unauthorized');
 
 // Un solo giro di token per tutti gli endpoint della funzione.
-async function chiamaEndpoint(url, payload){
-  let d=await inviaA(url, payload, await getSessionToken(false));
+async function chiamaEndpoint(url, payload, extra){
+  let d=await inviaA(url, payload, await getSessionToken(false), extra);
   // 401 = token scaduto, oppure siamo finiti su un'istanza che non lo conosce.
   // Se ne prende uno nuovo e si riprova una volta sola, in silenzio.
-  if(d===UNAUTHORIZED) d=await inviaA(url, payload, await getSessionToken(true));
+  if(d===UNAUTHORIZED) d=await inviaA(url, payload, await getSessionToken(true), extra);
   if(d===UNAUTHORIZED) throw new Error('Sessione non valida. Ricarica la pagina e riprova.');
   return d;
 }
@@ -577,12 +577,15 @@ async function callAI(payload){
   return d.text;
 }
 
-async function inviaA(url, payload, token){
+async function inviaA(url, payload, token, extra){
   let r;
   try{
     r=await fetch(url,{
       method:'POST',
-      headers:{'Content-Type':'application/json','X-Session-Token':token},
+      // Gli header in piu' li passa solo chi ne ha davvero bisogno: il codice
+      // di accesso viaggia con la richiesta che gira l'interruttore, non con
+      // tutte le altre. Meno strada fa, meglio e'.
+      headers:Object.assign({'Content-Type':'application/json','X-Session-Token':token}, extra||{}),
       body:JSON.stringify(payload),
       signal:timeoutSignal(AI_TIMEOUT_MS)
     });
@@ -1288,6 +1291,11 @@ async function stimaPrezzo(){
     // Non piu' una media sola su tutto lo storico: la calibrazione stretta su
     // questa famiglia di capi, piu' i capi veri gia' venduti che le somigliano.
     mercato += esperienzaPerPrompt({ nome:v('pNome'), marca:v('pMarca') });
+    // E sotto, quello che hanno incassato gli altri su capi come questo. Non
+    // blocca niente: se il mercato condiviso non c'e' o non risponde, la riga
+    // non esce e la stima si fa come prima.
+    await aggiornaMercato({ nome:v('pNome'), marca:v('pMarca') });
+    mercato += mercatoPerPrompt();
 
     // Il rapporto dell'agente pesa piu' dei listini di Lens: sono annunci
     // dell'usato, cioe' esattamente il mercato su cui si vende qui.
@@ -1434,6 +1442,7 @@ function shareAnnuncio(){
    suo, e intanto la pagina racconta cosa sta facendo invece di far girare uno
    spinner muto per venti secondi. */
 const RICERCA_URL='/api/ricerca';
+const MERCATO_URL='/api/mercato';
 const BTN_RIC=['btnS'];
 // Due giri al massimo: il primo esegue il piano, il secondo raffina solo se i
 // prezzi raccolti sono troppo pochi per dire qualcosa. Ogni ricerca costa
@@ -1537,6 +1546,9 @@ async function avviaAgente(){
       senzaRapporto=e.message;
     }
     lastRicerca={ capo, prove:citate, mercato, largo, rapporto };
+    // Come nello scanner: se chi guarda non ha esiti suoi, la correzione del
+    // prezzo puo' appoggiarsi a quelli degli altri.
+    await aggiornaMercato(capo);
     renderRicerca(senzaRapporto);
     show('rRic');
     tocco();
@@ -1790,7 +1802,7 @@ function renderRicerca(senzaRapporto){
   // Come nello scanner: sotto la soglia il numero singolo non si dice, perche'
   // sarebbe una precisione finta. Qui la banda c'e' comunque.
   const grezzo=num(d.prezzoConsigliato,null,0,100000);
-  const cal=(x=>x.famiglia||x.tutti)(calibrazioneFamiglia(null, lastRicerca.capo||null));
+  const cal=(x=>x.famiglia||x.tutti)(calibrazioneFamiglia(null, lastRicerca.capo||null)) || calibrazioneMercato();
   const tarato=calibra(fiducia.numero?sxDentroBanda(grezzo,u).valore:null, cal, u);
   const prezzo=tarato.valore;
   const rMin=calibra(num(d.rangeMin,null,0,100000), cal, u).valore;
@@ -2006,6 +2018,9 @@ async function avviaScanner(){
     // modello inventerebbe un numero, ed e' esattamente quello che questo
     // agente esiste per non fare. L'identita' pero' vale gia' da sola.
     if(mercato.usato) lastScan.verdetto=await sxVerdetto(identita, mercato, lastScan.prove);
+    // Prima di disegnare: se chi guarda non ha ancora esiti suoi, la
+    // correzione del prezzo puo' appoggiarsi a quelli degli altri.
+    await aggiornaMercato({ nome:sxVal(identita.modello)||sxVal(identita.tipo), marca:sxVal(identita.marca) });
     sxDisegna();
     show('rSx');
     tocco();
@@ -2669,7 +2684,11 @@ function sxDisegna(){
   // a questo), quella su tutto lo storico quando i capi simili sono pochi:
   // correggere un Carhartt con lo scarto medio di tutto il guardaroba e' un
   // numero preciso costruito su un dato che non parla di questo capo.
-  const cal=(x=>x.famiglia||x.tutti)(calibrazioneFamiglia(null, { nome:sxNomeCapo(), marca:sxVal(s.identita.marca) }));
+  const cal=(x=>x.famiglia||x.tutti)(calibrazioneFamiglia(null, { nome:sxNomeCapo(), marca:sxVal(s.identita.marca) }))
+    // Chi non ha ancora venduto niente non ha una calibrazione sua: quella
+    // degli altri e' meglio di nessuna. Chi ce l'ha tiene la propria, o si
+    // sconterebbe due volte lo stesso capo.
+    || calibrazioneMercato();
   const tarato=calibra(fiducia.numero?corretto.valore:null, cal, u);
   const prezzo=tarato.valore;
   const veloce=calibra(estremo(d.prezzoVeloce,-margine), cal, u).valore;
@@ -3124,6 +3143,164 @@ function esperienzaPerPrompt(capo, voci){
     + `\nSono le uniche vendite CONCLUSE che hai: pesale piu' degli annunci ancora online, tienine conto nel prezzo e scrivilo.`;
 }
 
+/* ===== IL MERCATO CONDIVISO =====
+   Lo storico di uno solo dice poco: tre capi venduti sono un aneddoto. Gli
+   esiti di tutti quelli che usano ALBA sono invece l'unica cosa vera che
+   nessun modello sa - come si vende davvero quel marchio su Vinted Italia,
+   questo mese - e vale la pena metterli insieme.
+
+   Cosa parte da qui: marca, categoria, condizione, quanto era stato
+   suggerito, quanto e' stato incassato, in quanti giorni. Cosa non parte, e
+   non deve partire mai: le foto, il testo dell'annuncio, il nome del capo
+   scritto a mano, e qualunque cosa che dica CHI ha venduto. Il "dispositivo"
+   e' un numero casuale nato in questo browser: serve a contare quanti esiti
+   arrivano dalla stessa parte, non a riconoscere qualcuno.
+
+   Si spegne con l'interruttore nello Storico, e da spento non parte niente. */
+const CONTRIBUTO_KEY='albaContributo';
+const DISPOSITIVO_KEY='albaDispositivo';
+
+function contributoAttivo(){
+  // Acceso di default: chi non decide contribuisce, perche' e' quello che fa
+  // funzionare i prezzi condivisi anche per lui. Lo spegne chi vuole.
+  try{ return localStorage.getItem(CONTRIBUTO_KEY) !== '0'; }catch(e){ return false; }
+}
+function impostaContributo(acceso){
+  try{ localStorage.setItem(CONTRIBUTO_KEY, acceso ? '1' : '0'); }catch(e){}
+}
+
+// L'impronta del dispositivo: casuale, nata qui, e non collegata a niente.
+// Serve solo a mettere un tetto agli esiti che arrivano dalla stessa parte.
+function dispositivo(){
+  try{
+    let v=localStorage.getItem(DISPOSITIVO_KEY);
+    if(!v){
+      v=[...crypto.getRandomValues(new Uint8Array(12))].map(b=>b.toString(16).padStart(2,'0')).join('');
+      localStorage.setItem(DISPOSITIVO_KEY, v);
+    }
+    return v;
+  }catch(e){ return ''; }
+}
+
+// Manda un esito al mercato. Non aspetta e non alza mai la voce: se il
+// deposito non c'e', se la rete cade o se il server dice di no, chi ha appena
+// segnato la sua vendita non deve vedere niente. Il suo storico ce l'ha
+// comunque, ed e' quello che gli serve.
+function contribuisci(voce){
+  if(!contributoAttivo()) return;
+  if(!voce || !voce.marca || typeof voce.prezzoSuggerito!=='number') return;
+  if(!voce.esito || !voce.esito.venduto || typeof voce.esito.prezzo!=='number') return;
+  const disp=dispositivo();
+  if(!disp) return;
+  chiamaEndpoint(MERCATO_URL, {
+    azione:'segna',
+    marca: voce.marca,
+    categoria: voce.nome || null,
+    condizione: voce.condizione || null,
+    prezzoSuggerito: voce.prezzoSuggerito,
+    prezzoVenduto: voce.esito.prezzo,
+    giorni: typeof voce.esito.giorni==='number' ? voce.esito.giorni : null,
+    dispositivo: disp
+  }).catch(()=>{});
+}
+
+// Quello che il mercato sa su un capo come questo. Tenuto per capo e per
+// sessione: la stessa stima rifatta due volte non deve interrogare due volte.
+let mercatoAltri=null, mercatoChiave='';
+
+function chiaveMercato(capo){
+  return String((capo&&capo.marca)||'').toLowerCase()+'|'+String((capo&&capo.nome)||'').toLowerCase();
+}
+
+async function aggiornaMercato(capo){
+  const chiave=chiaveMercato(capo);
+  if(chiave===mercatoChiave) return mercatoAltri;
+  mercatoChiave=chiave;
+  mercatoAltri=null;
+  try{
+    const d=await chiamaEndpoint(MERCATO_URL, { azione:'banda', marca:(capo&&capo.marca)||null, categoria:(capo&&capo.nome)||null });
+    mercatoAltri = (d && d.banda && typeof d.banda.n==='number') ? d.banda : null;
+  }catch(e){ mercatoAltri=null; }
+  return mercatoAltri;
+}
+
+const AMBITO_IN_PAROLE={ marca:'di questa marca', categoria:'di questo tipo', tutti:'di ogni tipo' };
+
+// La riga che il mercato aggiunge al prompt. Sta sotto quella di chi vende -
+// i suoi capi contano piu' di quelli degli altri - e dice sempre su quanti
+// capi e' fatta: un numero senza il suo campione e' un'opinione.
+function mercatoPerPrompt(){
+  const m=mercatoAltri;
+  if(!m || !m.n || m.scarto===null) return '';
+  return `\n\nGLI ALTRI VENDITORI (esiti veri di chi usa questa app, ${m.n} capi ${AMBITO_IN_PAROLE[m.ambito]||''} venduti davvero):`
+    + `\n- vendono ${scartoInParole(m.scarto)} il prezzo suggerito`
+    + (m.giorni!==null?`, in ${plurale(m.giorni,'giorno','giorni')}`:'')
+    + `\nPesano meno degli esiti di chi sta vendendo qui, ma sono vendite concluse su capi come questo: non ignorarli.`;
+}
+
+// La calibrazione del mercato, nella stessa forma di quella personale, per i
+// posti dove il prezzo viene corretto dal codice. Si usa SOLO quando la
+// persona non ha ancora esiti suoi: sommare le due correzioni vorrebbe dire
+// scontare due volte lo stesso capo.
+function calibrazioneMercato(){
+  const m=mercatoAltri;
+  if(!m || !m.n || m.scarto===null) return null;
+  return { n:m.n, scarto:m.scarto, giorni:m.giorni, etichetta:'di chi usa ALBA, '+(AMBITO_IN_PAROLE[m.ambito]||'') };
+}
+
+/* ===== I DUE INTERRUTTORI ===== */
+
+function cambiaContributo(el){
+  impostaContributo(!!el.checked);
+  toast(el.checked ? '🤝 Le tue vendite aiutano le stime di tutti' : '🔒 Le tue vendite restano su questo dispositivo');
+}
+
+// L'interruttore del codice vive sul server, non qui: e' l'unico modo perche'
+// valga per chi arriva e non solo per questo browser. Per girarlo bisogna
+// sapere il codice, in un senso e nell'altro - con il sito aperto, e' il
+// codice che permette di richiuderlo.
+async function cambiaPin(el){
+  const voluto=!!el.checked;
+  // Si rimette com'era finche' il server non conferma: un interruttore che
+  // scatta e poi non fa niente e' peggio di uno che si muove un attimo dopo.
+  el.checked=!voluto;
+  el.disabled=true;
+  try{
+    const pin=pinSalvato() || await chiediPin(false);
+    if(!pin){ return; }
+    salvaPin(pin);
+    const d=await chiamaEndpoint(MERCATO_URL, { azione:'impostazioni', cambia:true, valore:voluto }, { 'X-Alba-Pin': pin });
+    el.checked=!!d.pinAttivo;
+    toast(d.pinAttivo ? '🔐 Ora ALBA chiede il codice' : '🔓 ALBA e\' aperta a chi ha l\'indirizzo');
+  }catch(e){
+    // Codice sbagliato: si butta, cosi' al prossimo giro lo richiede.
+    if(/codice/i.test(e.message)) scordaPin();
+    toast('⚠️ '+e.message);
+  }finally{
+    el.disabled=false;
+  }
+}
+
+// Lo stato dei due interruttori quando si apre lo Storico. Quello del
+// contributo lo sa il browser; quello del codice va chiesto al server, e se il
+// server non ha ne' codice ne' deposito la riga non si mostra proprio: un
+// interruttore che non comanda niente e' peggio che non averlo.
+async function sincronizzaImpostazioni(){
+  const c=document.getElementById('swContributo');
+  if(c) c.checked=contributoAttivo();
+
+  const riga=document.getElementById('impPin');
+  if(!riga) return;
+  try{
+    const d=await chiamaEndpoint(MERCATO_URL, { azione:'impostazioni' });
+    riga.hidden=!d.pinDisponibile;
+    const sw=document.getElementById('swPin');
+    if(sw) sw.checked=!!d.pinAttivo;
+  }catch(e){
+    riga.hidden=true;
+  }
+}
+
 function esitoChiedi(id){
   const box = document.getElementById('es_' + id);
   if(!box) return;
@@ -3144,6 +3321,8 @@ function esitoSalva(id){
   if(prezzo === null){ toast('A quanto è venduto?'); return; }
   const voci = upsertHistoryItem(id, { esito: { venduto:true, prezzo, giorni: giorni === null ? undefined : giorni, il: Date.now() } });
   renderHistory(voci);
+  // Da qui in poi quella vendita non serve piu' solo a chi l'ha fatta.
+  contribuisci(voci.find(v => v.id === id));
   const cal = calibrazioneStorico(voci);
   toast(cal ? `✅ Segnato. I tuoi capi vendono ${scartoInParole(cal.scarto, 'in media ')} il suggerito`
             : '✅ Segnato: com\'è andata davvero');
@@ -3491,6 +3670,8 @@ const AZIONI = {
   apriGuida:           () => apriGuida(),
   installaApp:         () => installaApp(),
   pinConferma:         () => pinConferma(),
+  cambiaContributo:    (el) => cambiaContributo(el),
+  cambiaPin:           (el) => cambiaPin(el),
   chiudiGuida:         () => chiudiGuida(),
   guidaAvanti:         () => guidaAvanti(),
   guidaIndietro:       () => guidaIndietro(),

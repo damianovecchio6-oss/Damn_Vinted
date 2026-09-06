@@ -88,7 +88,7 @@ const esegui = (handler, opzioni) => {
     rotta.statusCode === 500 && rotta.chiusa === true, [rotta.statusCode, rotta.corpo]);
 
   console.log('\n-- le tre function ci sono, e sono le stesse --');
-  for (const nome of ['claude', 'lens', 'ricerca']) {
+  for (const nome of ['claude', 'lens', 'ricerca', 'mercato']) {
     const modulo = require(path.join(L.RADICE, 'api', nome + '.js'));
     check(`api/${nome}.js e\' una function di Vercel`, typeof modulo === 'function');
     // Il codice vero non e' duplicato: l'entrypoint richiama quello di

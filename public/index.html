@@ -759,6 +759,28 @@ body:not(.home) .mPasseggio{animation:none;transform:translateX(16px);pointer-ev
 .hEsF{display:flex;flex-wrap:wrap;gap:8px;align-items:center;flex-basis:100%}
 .hEsIn{width:auto;flex:1 1 110px;padding:9px 12px;font-size:15px}
 .calib{margin-top:14px;padding:14px 16px;background:rgba(255,255,255,.045);border:1px solid var(--bd2);border-radius:18px;font-size:14px;color:var(--tx);line-height:1.55;letter-spacing:-.012em}
+
+/* GLI INTERRUTTORI
+   Due sole impostazioni, e stanno nello Storico perche' e' li' che si guarda
+   indietro: il contributo riguarda gli esiti che si segnano li' sopra, e il
+   codice riguarda chi puo' entrare. Una scheda "Impostazioni" tutta sua, per
+   due righe, avrebbe aggiunto un raggio al sole per niente. */
+.imp{display:flex;align-items:flex-start;gap:14px;padding:14px 0;border-top:1px solid var(--bd2)}
+.impT{font-size:15px;letter-spacing:-.013em;margin-bottom:3px}
+.impS{font-size:13px;color:var(--mu);line-height:1.45}
+.impD{flex:1}
+/* L'interruttore e' un checkbox vero sotto: il tasto si prende il fuoco da
+   tastiera, lo screen reader lo annuncia come interruttore, e la spunta di
+   sistema non si vede perche' la disegna il CSS. */
+.sw{position:relative;flex:0 0 auto;width:50px;height:30px;margin-top:2px}
+.sw input{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;cursor:pointer}
+.swP{position:absolute;inset:0;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid var(--bd2);transition:background .3s var(--sp),border-color .3s var(--sp);pointer-events:none}
+.swP::after{content:'';position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#f5f5f7;box-shadow:0 2px 6px rgba(0,0,0,.45);transition:transform .3s var(--sp)}
+.sw input:checked + .swP{background:var(--oro);border-color:transparent}
+.sw input:checked + .swP::after{transform:translateX(20px)}
+.sw input:focus-visible + .swP{outline:2px solid var(--t);outline-offset:3px}
+.sw input:disabled{cursor:default}
+.sw input:disabled + .swP{opacity:.4}
 </style>
 </head>
 <body>
@@ -1048,6 +1070,26 @@ body:not(.home) .mPasseggio{animation:none;transform:translateX(16px);pointer-ev
            quando ci sono abbastanza esiti segnati, e resta via finche' no. -->
       <div id="calibra" class="calib" style="display:none"></div>
     </div>
+
+    <div class="card">
+      <div class="ct">⚙️ Impostazioni</div>
+
+      <div class="imp" style="border-top:none">
+        <div class="impD">
+          <div class="impT">Contribuisci ai prezzi condivisi</div>
+          <div class="impS">Quando segni una vendita, ALBA manda marca, categoria, condizione, prezzo suggerito, prezzo incassato e giorni. Mai le foto, mai il testo, mai niente che dica chi sei. In cambio le stime usano quello che hanno incassato gli altri su capi come il tuo.</div>
+        </div>
+        <label class="sw"><input type="checkbox" id="swContributo" data-az="cambiaContributo" aria-label="Contribuisci ai prezzi condivisi"/><span class="swP"></span></label>
+      </div>
+
+      <div class="imp" id="impPin" hidden>
+        <div class="impD">
+          <div class="impT">Chiedi il codice a chi entra</div>
+          <div class="impS" id="impPinS">Con l'interruttore acceso ALBA chiede il codice di accesso prima di usare le chiavi AI. Per girarlo serve il codice, in un senso e nell'altro.</div>
+        </div>
+        <label class="sw"><input type="checkbox" id="swPin" data-az="cambiaPin" aria-label="Chiedi il codice a chi entra"/><span class="swP"></span></label>
+      </div>
+    </div>
     <div id="historyList"></div>
     <div id="historyEmpty" class="card" style="display:none;text-align:center;color:var(--mu);font-size:15px;letter-spacing:-.012em">
       <svg class="soleVuoto" aria-hidden="true"><use href="#ico-sole-luna"/></svg>
@@ -1140,6 +1182,9 @@ body:not(.home) .mPasseggio{animation:none;transform:translateX(16px);pointer-ev
         <li><span>🗂️</span><span><strong>Storico</strong>: resta su questo dispositivo, non altrove</span></li>
         <li><span>🔬</span><span><strong>Scanner</strong>: fa da solo tutto il giro, dalle foto al prezzo</span></li>
       </ul>
+      <!-- Detto qui, alla prima visita, e non solo nell'interruttore che lo
+           spegne: chi contribuisce deve saperlo prima, non scoprirlo dopo. -->
+      <p class="gNota">Quando segni una vendita, ALBA manda solo marca, categoria, condizione e prezzi — mai foto, mai testo, mai chi sei — e le stime di tutti migliorano. Si spegne dallo Storico.</p>
     </section>
 
     <div class="gPunti" aria-hidden="true"><span class="on" id="gPunto1"></span><span id="gPunto2"></span></div>

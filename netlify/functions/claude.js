@@ -63,13 +63,7 @@ function resolvedModel(key) {
 }
 
 exports.handler = async (event) => {
-  const g = S.checkRequest(event, {
-    metodi: ['GET', 'POST'],
-    richiediToken: event.httpMethod === 'POST',
-    // Il codice di accesso si chiede una volta, al token: le POST che seguono
-    // portano il token e non hanno bisogno di riportarselo dietro.
-    richiediPin: event.httpMethod === 'GET'
-  });
+  const g = S.checkRequest(event, { metodi: ['GET', 'POST'], richiediToken: event.httpMethod === 'POST' });
   if (g.risposta) return g.risposta;
   const cors = g.cors;
 
@@ -79,6 +73,10 @@ exports.handler = async (event) => {
 
   // GET = "dammi un token per le prossime richieste".
   if (event.httpMethod === 'GET') {
+    // Il codice di accesso si chiede una volta, qui: le POST che seguono
+    // portano il token e non hanno bisogno di riportarselo dietro.
+    const chiuso = await S.controllaPin(event.headers, cors);
+    if (chiuso) return chiuso;
     return S.json(200, cors, { token: S.issueToken(g.ip), expiresIn: S.SESSION_TTL_MS });
   }
 

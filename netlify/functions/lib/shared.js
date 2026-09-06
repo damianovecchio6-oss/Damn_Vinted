@@ -142,6 +142,31 @@ function pinRichiesto() {
   return !!PIN;
 }
 
+// Il codice si controlla qui e non dentro checkRequest perche' questa e'
+// l'unica parte che deve andare a chiedere qualcosa al deposito - se il tasto
+// e' acceso - e checkRequest e' sincrona da sempre: renderla asincrona voleva
+// dire toccare ogni function per una domanda che riguarda solo il token.
+//
+// Torna null se si puo' passare, oppure la risposta gia' pronta da rimandare.
+async function controllaPin(headers, cors) {
+  if (!PIN) return null;
+  // Il require sta qui dentro e non in cima: deposito.js usa inviaHttp di
+  // questo file, e chiedendoselo a vicenda al caricamento uno dei due si
+  // sarebbe trovato l'altro a meta'.
+  const D = require('./deposito');
+  if (D.configurato()) {
+    // Solo un "0" esplicito spegne la serratura. Riga assente o deposito muto
+    // vogliono dire chiusa: se non si sa, non si apre.
+    const stato = await D.impostazione('pin_attivo');
+    if (stato === '0') return null;
+  }
+  if (pinGiusto(lowerKeys(headers || {})['x-alba-pin'])) return null;
+  // Il "codice" nella risposta non e' decorazione: e' come la pagina distingue
+  // "serve il codice" da "la sessione e' scaduta", che si somigliano - sono
+  // due 401 - e vogliono due cose diverse dall'utente.
+  return json(401, cors, { error: 'Serve il codice di accesso.', codice: 'pin' });
+}
+
 // Confronto a tempo costante su due impronte: sono sempre lunghe uguali, cosa
 // che timingSafeEqual pretende, e non si perde tempo a misurare la lunghezza
 // del codice giusto - che e' gia' un'informazione.
@@ -262,12 +287,6 @@ function checkRequest(event, opts) {
   if (options.richiediToken && !verifyToken(headers['x-session-token'], ip)) {
     return { risposta: json(401, cors, { error: 'Sessione scaduta, ricarico e riprovo.' }) };
   }
-  // Il "codice" nella risposta non e' decorazione: e' come la pagina distingue
-  // "serve il codice" da "la sessione e' scaduta", che si somigliano - sono
-  // due 401 - e vogliono due cose diverse dall'utente.
-  if (options.richiediPin && !pinGiusto(headers['x-alba-pin'])) {
-    return { risposta: json(401, cors, { error: 'Serve il codice di accesso.', codice: 'pin' }) };
-  }
   return { cors, ip, headers };
 }
 
@@ -343,7 +362,7 @@ function statistichePrezzi(valoriGrezzi) {
 module.exports = {
   GROQ_KEY, SESSION_TTL_MS,
   normalizeOrigin, isSameSite, isAllowed, corsFor, clientIp, rateLimited,
-  pinRichiesto, pinGiusto,
+  pinRichiesto, pinGiusto, controllaPin,
   issueToken, verifyToken, lowerKeys, json, inviaHttp, statistichePrezzi,
   cacheGet, cacheSet, cachePeek, checkRequest
 };
