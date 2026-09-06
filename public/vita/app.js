@@ -97,8 +97,11 @@ function quandoParlato(giorno) {
 
 /* ==================== STATO DELLA VISTA ==================== */
 
-const SEZIONI = ['oggi', 'ritmo', 'settimana', 'calma'];
-let sezione = 'oggi';
+// 'casa' e' la luna a schermo intero: non e' una scheda in piu' da riempire,
+// e' il posto da cui si sceglie. L'ordine e' quello dei raggi in senso
+// orario, cosi' girare la ghiera e scorrere questa lista sono la stessa cosa.
+const SEZIONI = ['casa', 'oggi', 'ritmo', 'settimana', 'calma'];
+let sezione = 'casa';
 let giornoScelto = oggi();
 let momentoScelto = '';
 let emojiScelta = '🌿';
@@ -106,6 +109,19 @@ let offsetSettimana = 0;
 
 const $ = id => document.getElementById(id);
 const menoMovimento = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Girando la ghiera parcheggiata la sezione cambia a ogni scatto, e scorrere
+// in cima a ognuna vuol dire far ballare la pagina sotto al dito per tutto il
+// giro. Mentre giri la pagina sta ferma; in cima ci si va una volta sola,
+// quando ti fermi.
+let scorriDopoIlGiro = null;
+function inCimaQuandoTiFermi() {
+  clearTimeout(scorriDopoIlGiro);
+  scorriDopoIlGiro = setTimeout(inCima, 260);
+}
+function inCima() {
+  window.scrollTo({ top: 0, behavior: menoMovimento() ? 'auto' : 'smooth' });
+}
 
 // Un colpetto quando qualcosa e' andato a segno. Su iOS non c'e' e non fa
 // niente; dove c'e', spuntare una cosa si sente anche senza guardare.
@@ -386,10 +402,33 @@ function disegnaCalma() {
     : 'Le ultime due settimane, come le hai raccontate tu.';
 }
 
+/* ==================== DISEGNARE: LA CASA ==================== */
+
+// Sotto la luna a schermo intero c'e' una riga sola. Non e' un riassunto di
+// produttivita': e' la risposta alla domanda che uno si fa aprendo l'app -
+// a che punto e' la giornata - detta come la direbbe una persona.
+function disegnaCasa() {
+  const tre = coseDi(oggi(), false);
+  const fatte = tre.filter(c => c.fatta).length;
+  const segni = S.abitudini.filter(ab => (ab.giorni || []).includes(oggi())).length;
+
+  let riga;
+  if (!tre.length) riga = 'Per oggi non c\'e\' ancora niente. Tre cose bastano.';
+  else if (fatte === tre.length) riga = tre.length === 1
+    ? 'La cosa di oggi e\' fatta. Il resto e\' bonus.'
+    : 'Le cose di oggi sono fatte. Il resto e\' bonus.';
+  else if (fatte) riga = fatte + ' su ' + tre.length + ', e il resto aspetta.';
+  else riga = tre.length === 1 ? 'Una cosa da fare, con calma.' : tre.length + ' cose da fare, con calma.';
+  if (segni) riga += segni === 1 ? ' Un segno sul ritmo.' : ' ' + segni + ' segni sul ritmo.';
+
+  $('casaRiga').textContent = riga;
+}
+
 /* ==================== DISEGNARE: TUTTO ==================== */
 
 function disegna() {
-  if (sezione === 'oggi') disegnaOggi();
+  if (sezione === 'casa') disegnaCasa();
+  else if (sezione === 'oggi') disegnaOggi();
   else if (sezione === 'ritmo') disegnaRitmo();
   else if (sezione === 'settimana') disegnaSettimana();
   else if (sezione === 'calma') disegnaCalma();
@@ -404,15 +443,245 @@ function intestazione() {
   $('dataOggi').textContent = dataParlata(oggi());
 }
 
-function vai(nome) {
-  if (!SEZIONI.includes(nome)) return;
+// Torna true se la sezione e' cambiata davvero: chi ha gia' mosso la ghiera
+// per arrivare qui deve sapere se rimetterla a posto.
+function vai(nome, opzioni) {
+  const pannello = $('sez-' + nome);
+  if (!pannello) return false;
+  // La sezione entra dal lato da cui l'hai chiamata: seguire il movimento
+  // costa meno che ritrovare da capo dove sei finito.
+  const daDestra = SEZIONI.indexOf(nome) > SEZIONI.indexOf(sezione);
   sezione = nome;
-  SEZIONI.forEach(n => {
-    $('sez-' + n).classList.toggle('on', n === nome);
-    $('nav-' + n).setAttribute('aria-selected', String(n === nome));
-  });
+
+  document.querySelectorAll('.sez').forEach(p => p.classList.remove('on', 'daDestra'));
+  pannello.classList.add('on');
+  pannello.classList.toggle('daDestra', daDestra);
+  document.body.classList.toggle('casa', nome === 'casa');
+  // La luna non sparisce mai: o e' al centro, o e' parcheggiata sul bordo.
+  const luna = $('lunaApp');
+  if (luna) luna.classList.toggle('parcheggiata', nome !== 'casa');
+
+  // Il disco dice sempre dove sei: se ci si arriva da un bottone invece che
+  // dalla ghiera - toccando un giorno nella settimana, per esempio - la
+  // ghiera deve seguire, o mostrerebbe il nome di una sezione che non e'
+  // quella aperta.
+  sincronizzaGhiera(nome);
   disegna();
-  window.scrollTo({ top: 0, behavior: menoMovimento() ? 'auto' : 'smooth' });
+
+  if (opzioni && opzioni.senzaScorrimento) return true;
+  // Una scorsa vera annulla quella rimandata: arrivando qui da un bottone
+  // mentre un giro si stava assestando, non deve scorrere due volte.
+  clearTimeout(scorriDopoIlGiro);
+  inCima();
+  return true;
+}
+
+/* ==================== LA GHIERA ====================
+   Il principio dell'iPod classic, lo stesso di ALBA: la ruota sta ferma, il
+   dito ci gira intorno e la selezione salta di voce in voce con uno scatto
+   per volta. Qui le voci sono i quattro raggi, il disco al centro fa da
+   schermo - dice dove stai per andare - e da tasto: si preme li' per entrare.
+
+   Restano tutte le altre strade: il tocco secco su un raggio lo apre, Tab e
+   Invio pure, la rotella del mouse gira. La ghiera si aggiunge, non
+   sostituisce. */
+
+const RAGGI = Array.from(document.querySelectorAll('.raggio'));
+// Quanti gradi di dito valgono uno scatto. 45 e' la distanza a cui gli scatti
+// si sentono senza doversi sbracciare: quanti ne servono per fare il giro
+// completo lo decide RAGGI.length, non questo numero.
+const GRADI_PER_SCATTO = 45;
+let selezione = 0;
+// Vero se il giro appena finito ha fatto scattare la ghiera. Il rilascio del
+// dito genera comunque un click, e se il dito era fermo su un raggio quel
+// click lo aprirebbe: qui si distingue "ho girato" da "ho toccato".
+let giroConScatti = false;
+// Il tocco lo gestiamo sul rilascio del dito e non sul click, perche' sul
+// telefono il click non arriva sempre: dopo un giro il browser lo sopprime, e
+// il tasto centrale non aprirebbe niente. Il click resta per mouse e
+// tastiera, con questa spia che evita di fare la stessa cosa due volte.
+let attivatoDaTocco = false, partenza = null;
+
+function nomeDi(raggio) {
+  const eti = raggio.querySelector('.rEti');
+  return eti ? eti.textContent : '';
+}
+
+function lunaParcheggiata() {
+  const l = $('lunaApp');
+  return !!(l && l.classList.contains('parcheggiata'));
+}
+
+// Chiamata da vai(): allinea la ghiera alla sezione che si sta aprendo, da
+// qualunque parte arrivi la richiesta. Dalla casa non si muove: li' il disco
+// deve continuare a mostrare cosa stai per aprire.
+function sincronizzaGhiera(nome) {
+  const i = RAGGI.findIndex(r => r.dataset.sezione === nome);
+  if (i < 0 || i === selezione) return;
+  selezione = i;
+  mostraSelezione();
+}
+
+function mostraSelezione() {
+  RAGGI.forEach((r, i) => r.classList.toggle('selezionato', i === selezione));
+  const nome = nomeDi(RAGGI[selezione]);
+  const display = $('dScelta');
+  if (display) display.textContent = nome;
+  const disco = document.querySelector('.disco');
+  if (disco) disco.setAttribute('aria-label', lunaParcheggiata()
+    ? nome + ' — tocca per tornare a scegliere'
+    : 'Apri ' + nome);
+}
+
+// Uno scatto per volta, e a ogni scatto la vibrazione corta: e' il "click"
+// della ghiera, l'unica cosa che rende il giro una cosa che si sente e non
+// solo si guarda.
+function scatta(verso) {
+  const prima = selezione;
+  selezione = (selezione + verso + RAGGI.length) % RAGGI.length;
+  mostraSelezione();
+  tocco(6);
+  // A casa il giro sceglie e basta: si entra premendo al centro. Da
+  // parcheggiata invece il giro CAMBIA sezione mentre lo fai - il contenuto
+  // sopra si sostituisce a ogni scatto - perche' li' la luna non e' piu' un
+  // menu da confermare, e' la manopola con cui passi da una sezione all'altra
+  // senza tornare indietro ogni volta.
+  if (lunaParcheggiata()) {
+    if (!vai(RAGGI[selezione].dataset.sezione, { senzaScorrimento: true })) {
+      selezione = prima;
+      mostraSelezione();
+      return false;
+    }
+    inCimaQuandoTiFermi();
+  }
+  return true;
+}
+
+function apriRaggio(raggio) {
+  const nome = raggio && raggio.dataset.sezione;
+  if (!nome) return;
+  const prima = selezione;
+  selezione = RAGGI.indexOf(raggio);
+  mostraSelezione();
+  raggio.classList.add('scelto');
+  tocco(10);
+  setTimeout(() => raggio.classList.remove('scelto'), 520);
+  // Il raggio si accende prima di sapere se la sezione si apre davvero:
+  // se il cambio venisse rifiutato, va rispento.
+  if (!vai(nome)) { selezione = prima; mostraSelezione(); }
+}
+
+RAGGI.forEach(raggio => {
+  raggio.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); apriRaggio(raggio); }
+  });
+});
+
+const lunaApp = $('lunaApp');
+if (lunaApp) {
+  const disegno = lunaApp.querySelector('.lunaNav');
+  const parcheggiata = () => lunaApp.classList.contains('parcheggiata');
+  const daRaggio = e => !!(e.target && e.target.closest && e.target.closest('.raggio'));
+
+  /* --- il giro del dito --- */
+  let giro = null;
+  const angolo = (e, centro) => Math.atan2(e.clientY - centro.y, e.clientX - centro.x) * 180 / Math.PI;
+
+  // Un disegno e' trascinabile di default, e il trascinamento nativo si mangia
+  // movimenti e rilascio: la ghiera si bloccherebbe dopo il primo giro. Va
+  // fermato qui e non sul pointerdown, dove porterebbe via anche il tap.
+  lunaApp.addEventListener('dragstart', e => e.preventDefault());
+
+  lunaApp.addEventListener('pointerdown', e => {
+    // Ogni tocco nuovo riparte pulito: se il ripristino stesse dopo i
+    // controlli qui sotto, un tocco al centro (che li salta) resterebbe
+    // marchiato come "fine di un giro" e non aprirebbe niente.
+    giroConScatti = false;
+    partenza = { x: e.clientX, y: e.clientY };
+    const r = disegno.getBoundingClientRect();
+    const centro = { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    // Il dito deve partire sulla corona, non sul disco: al centro c'e' il tasto.
+    if (Math.hypot(e.clientX - centro.x, e.clientY - centro.y) < r.width * 0.17) return;
+    giro = { centro, ultimo: angolo(e, centro), residuo: 0 };
+    // I movimenti si ascoltano sulla finestra, non sulla luna: girando, il
+    // dito esce e rientra dal disegno in continuazione, e dentro un <svg> il
+    // vuoto non riceve eventi.
+    window.addEventListener('pointermove', muoviGhiera);
+    window.addEventListener('pointerup', finisciGiro);
+    window.addEventListener('pointercancel', finisciGiro);
+  });
+
+  function muoviGhiera(e) {
+    if (!giro) return;
+    const ora = angolo(e, giro.centro);
+    // Il salto fra +180 e -180 non e' mezzo giro del dito: va riportato dentro.
+    let delta = ora - giro.ultimo;
+    if (delta > 180) delta -= 360;
+    if (delta < -180) delta += 360;
+    giro.ultimo = ora;
+    giro.residuo += delta;
+
+    while (Math.abs(giro.residuo) >= GRADI_PER_SCATTO) {
+      const verso = giro.residuo > 0 ? 1 : -1;
+      giro.residuo -= verso * GRADI_PER_SCATTO;
+      giroConScatti = true;
+      if (!scatta(verso)) { giro.residuo = 0; break; }
+    }
+  }
+
+  function finisciGiro() {
+    giro = null;
+    window.removeEventListener('pointermove', muoviGhiera);
+    window.removeEventListener('pointerup', finisciGiro);
+    window.removeEventListener('pointercancel', finisciGiro);
+  }
+
+  /* --- la rotella del mouse fa lo stesso lavoro del dito --- */
+  lunaApp.addEventListener('wheel', e => {
+    e.preventDefault();
+    scatta(e.deltaY > 0 || e.deltaX > 0 ? 1 : -1);
+  }, { passive: false });
+
+  /* --- l'attivazione: un raggio, il tasto centrale, o il ritorno --- */
+  function attiva(e) {
+    if (parcheggiata()) { tocco(8); vai('casa'); return; }
+    const raggio = e.target && e.target.closest && e.target.closest('.raggio');
+    // Fuori dai raggi si e' premuto il centro: apre quello che il disco mostra.
+    apriRaggio(raggio || RAGGI[selezione]);
+  }
+
+  lunaApp.addEventListener('pointerup', e => {
+    const da = partenza;
+    partenza = null;
+    if (giroConScatti) return;                // era un giro, non un tocco
+    if (da && Math.hypot(e.clientX - da.x, e.clientY - da.y) > 12) return;
+    attivatoDaTocco = true;
+    setTimeout(() => { attivatoDaTocco = false; }, 500);
+    attiva(e);
+  });
+
+  lunaApp.addEventListener('click', e => {
+    if (attivatoDaTocco) return;  // ci ha gia' pensato il rilascio del dito
+    if (giroConScatti) return;    // era la fine di un giro
+    attiva(e);
+  });
+
+  disegno.setAttribute('tabindex', '0');
+  disegno.setAttribute('role', 'application');
+  disegno.setAttribute('aria-label', 'Ghiera: frecce per scorrere le sezioni, Invio per aprire');
+  disegno.addEventListener('keydown', e => {
+    if (daRaggio(e)) return;
+    // Le frecce girano la ghiera dovunque sia la luna: a casa scelgono, da
+    // parcheggiata cambiano sezione. Invio a casa apre, da parcheggiata
+    // riporta alla luna intera - e' il solo tasto che cambia significato.
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); scatta(1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); scatta(-1); }
+    else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (parcheggiata()) { tocco(8); vai('casa'); }
+      else apriRaggio(RAGGI[selezione]);
+    }
+  });
 }
 
 /* ==================== IL RESPIRO ==================== */
@@ -690,6 +959,7 @@ S.visto = oggi();
 salva();
 intestazione();
 disegna();
+mostraSelezione();
 
 // Il service worker: e' questo che fa la differenza tra una pagina aperta a
 // schermo intero e un'applicazione. Scoperta a parte: registrato da /vita/,

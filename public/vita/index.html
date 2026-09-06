@@ -7,9 +7,9 @@
 <meta name="description" content="Le tre cose di oggi, il ritmo delle abitudini, la settimana e un momento di calma. Tutto sul telefono, niente account."/>
 
 <!-- Questa e' un'app a se': vive sotto /vita/ e ha il suo manifest, il suo
-     service worker e le sue icone. Condivide con ALBA solo il dominio e il
-     modo di essere fatta - niente build, niente dipendenze, un file di
-     markup e uno di script. -->
+     service worker e le sue icone. Condivide con ALBA il dominio, il modo di
+     essere fatta - niente build, niente dipendenze, un file di markup e uno di
+     script - e la navigazione: una ghiera che si gira col dito. -->
 <link rel="manifest" href="./manifest.webmanifest"/>
 <meta name="theme-color" content="#07090b"/>
 <meta name="mobile-web-app-capable" content="yes"/>
@@ -26,7 +26,7 @@
      stessa casa. */
   --v:#a9dcc8;--vl:rgba(169,220,200,.13);
   --lil:#b6adea;         /* la sera, e tutto quello che riguarda il riposo */
-  --oro:#e8c84a;         /* resta solo nel glifo del marchio */
+  --salvia:linear-gradient(155deg,#e6f6ee 0%,#bfe7d5 34%,#a9dcc8 60%,#6f9f8d 100%);
 
   --bg:#07090b;--bg2:#121418;
   --card:rgba(255,255,255,.05);
@@ -45,6 +45,11 @@
   --r:24px;
   --r2:15px;
   --om:0 1px 0 rgba(255,255,255,.05) inset, 0 16px 40px rgba(0,0,0,.5);
+
+  /* La misura della luna sta qui perche' la usano in tre: la larghezza del
+     riquadro, di quanto va alzata da parcheggiata, e lo spazio che il
+     contenuto le lascia sotto. Scritta tre volte, si sarebbe scollata. */
+  --luna:min(92vw,400px);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 /* L'attributo hidden lo mette il browser a display:none, ma con una
@@ -68,22 +73,27 @@ body{
   overscroll-behavior-y:none;
 }
 
-/* ===== testa ===== */
+/* ===== testa =====
+   Niente nome qui sopra: il nome sta nel disco della luna, e ripeterlo in
+   cima era l'unica cosa che questa riga diceva. Restano il saluto e la data,
+   che sono contenuto: in un'app della giornata, che giorno e' conta. */
 .testa{
   max-width:640px;margin:0 auto;
-  padding:calc(22px + var(--st)) 20px 4px 20px;
+  padding:calc(20px + var(--st)) 20px 0 20px;
 }
-.marchio{display:flex;align-items:center;gap:9px}
-.marchio svg{width:22px;height:22px;color:var(--v);flex-shrink:0}
-.marchio b{font-family:var(--fd);font-size:15px;font-weight:600;letter-spacing:.16em;color:var(--tx)}
-.saluto{font-family:var(--fd);font-size:26px;font-weight:600;letter-spacing:-.028em;margin-top:18px;line-height:1.15}
-.data{color:var(--mu);font-size:14px;margin-top:5px}
+.saluto{font-family:var(--fd);font-size:25px;font-weight:600;letter-spacing:-.028em;line-height:1.15}
+.data{color:var(--mu);font-size:14px;margin-top:4px}
 
 /* ===== impalcatura ===== */
-.shell{max-width:640px;margin:0 auto;padding:18px 20px calc(104px + var(--sb)) 20px}
+.shell{max-width:640px;margin:0 auto;padding:18px 20px 40px 20px}
+/* Dentro una sezione il contenuto lascia spazio alla luna parcheggiata, che
+   li' sotto ci sta tutta: mezza luna di altezza, piu' il margine. */
+body:not(.casa) .shell{padding-bottom:calc(var(--luna) * .5 + 34px + var(--sb))}
 .sez{display:none}
 .sez.on{display:block;animation:entra .32s var(--sp)}
-@keyframes entra{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+.sez.on.daDestra{animation-name:entraDx}
+@keyframes entra{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:none}}
+@keyframes entraDx{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
 
 .card{
   background:var(--card);
@@ -257,56 +267,155 @@ textarea{
 }
 textarea:focus{outline:none;border-color:rgba(169,220,200,.4)}
 
-/* ===== la barra in basso ===== */
-/* Sta in basso e non in alto per un motivo solo: il pollice. Su un telefono
-   grande la parte alta dello schermo la raggiungi con due mani. */
-.barra{
-  position:fixed;left:0;right:0;bottom:0;z-index:40;
-  display:flex;justify-content:center;gap:2px;
-  padding:8px 12px calc(8px + var(--sb)) 12px;
-  background:rgba(10,12,14,.72);
-  -webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);
-  border-top:1px solid var(--bd2);
+/* ===== LA CASA =====
+   La sezione che si vede col disco al centro: una riga sola su come sta
+   andando la giornata. Il resto dello schermo e' la luna. */
+/* Sta sotto il saluto e allineata a lui: e' la terza riga di un blocco solo -
+   "Buonasera / domenica 6 settembre / 1 su 3, e il resto aspetta" - e
+   centrata sembrava un pezzo staccato in mezzo al vuoto. */
+.casaRiga{color:var(--mu);font-size:15px;line-height:1.5;max-width:30ch;margin-top:2px}
+
+/* ===== LA LUNA =====
+   E' un elemento fisso della pagina, non il contenuto di una sezione: quando
+   scegli un raggio non sparisce, si rimpicciolisce e va a posarsi sotto al
+   contenuto, e li' resta mentre usi la sezione. Toccarla al centro la fa
+   risalire.
+
+   Il movimento e' una transizione sola sul transform, con una curva che parte
+   all'indietro: quel valore negativo nella cubic-bezier e' lo strappo verso
+   l'alto prima di calarsi, e funziona identico al contrario quando risale. */
+#lunaApp{
+  position:fixed;left:50%;z-index:60;
+  /* dvh e non vh: su un telefono vh e' l'altezza SENZA la barra del browser,
+     quindi con la barra visibile la luna finiva sotto il bordo. dvh e'
+     l'altezza che c'e' davvero in quel momento. */
+  top:50%;
+  top:50dvh;
+  width:var(--luna);aspect-ratio:1;
+  pointer-events:none;
+  transform:translate(-50%,-50%) scale(1);
+  transition:transform .52s cubic-bezier(.5,-0.3,.66,.42);
 }
-.nav{
-  flex:1;max-width:120px;
-  background:none;border:none;cursor:pointer;
-  display:flex;flex-direction:column;align-items:center;gap:4px;
-  padding:7px 4px;border-radius:14px;
-  color:var(--mu2);font-family:var(--fb);font-size:10.5px;letter-spacing:.01em;
-  -webkit-tap-highlight-color:transparent;
-  transition:color .25s var(--sp);
+/* Parcheggiata la luna si posa sotto al contenuto, e ci sta TUTTA: non e' un
+   mezzo disco che spunta dal bordo, perche' li' sotto non e' un ornamento -
+   e' la ghiera con cui cambi sezione, e una ghiera tagliata a meta' non si
+   gira. */
+#lunaApp.parcheggiata{
+  transform:translate(-50%, calc(-50% + 50vh - var(--luna) * .25 - 18px)) scale(.5);
 }
-.nav svg{width:21px;height:21px}
-.nav[aria-selected="true"]{color:var(--v)}
+@supports (height: 100dvh){
+  #lunaApp.parcheggiata{
+    transform:translate(-50%, calc(-50% + 50dvh - var(--luna) * .25 - 18px - var(--sb))) scale(.5);
+  }
+}
+/* Sotto la luna parcheggiata il contenuto continua a scorrere, e senza niente
+   in mezzo il testo le finiva addosso. Questa velatura lo fa sparire nel nero
+   prima di arrivarci: passa sotto, non ci sbatte. Sta sotto la luna (z-index
+   piu' basso) e non prende tocchi. */
+body:not(.casa)::after{
+  content:'';position:fixed;left:0;right:0;bottom:0;z-index:55;
+  height:calc(var(--luna) * .66 + var(--sb));
+  background:linear-gradient(to top, var(--bg) 36%, rgba(7,9,11,.86) 60%, transparent);
+  pointer-events:none;
+}
+
+.lunaWrap{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+.lunaNav{width:100%;overflow:visible;color:var(--v);pointer-events:auto}
+.lunaNav .decoro{fill:var(--v);opacity:.18;transform-origin:200px 200px;animation:giroLento 120s linear infinite}
+@keyframes giroLento{to{transform:rotate(360deg)}}
+
+/* Il disco e' il pezzo di luce vera della pagina: la sfumatura gli da' la
+   faccia inclinata di una medaglia, e l'ombra dell'ombra - il morso in alto a
+   destra - lo fa leggere come una luna anche mentre ci sta scritto sopra. */
+.disco{fill:url(#salviaDisco);filter:drop-shadow(0 10px 30px rgba(169,220,200,.2))}
+/* L'ombra e i decori non prendono tocchi: sono disegnati sopra i raggi, e il
+   morso copre buona parte di quello in alto a destra. Senza questa riga il
+   dito che tocca OGGI finiva sull'ombra, e si apriva quello che il disco
+   mostrava invece del raggio toccato. */
+.morso,.decoro{pointer-events:none}
+.morso{fill:#07090b;opacity:.13}
+.dTitolo{font-family:var(--fd);font-size:15px;font-weight:600;fill:#0d201a;text-anchor:middle;letter-spacing:.5px}
+.dSotto{font-family:var(--fd);font-size:29px;font-weight:600;fill:#0d201a;text-anchor:middle;letter-spacing:5px;opacity:.8}
+
+.raggio{cursor:pointer;-webkit-tap-highlight-color:transparent}
+.raggio .lama{fill:var(--v);opacity:.24;transition:opacity .28s var(--sp),transform .28s var(--sp),filter .28s var(--sp);transform-origin:200px 200px}
+.raggio .presa{fill:transparent}
+.rIco{stroke:var(--mu);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;transition:stroke .28s var(--sp)}
+.rEti{font-family:var(--fd);font-size:11px;font-weight:600;fill:var(--mu);text-anchor:middle;letter-spacing:1.2px;transition:fill .28s var(--sp)}
+.raggio:hover .lama,.raggio:focus-visible .lama{opacity:1;transform:scale(1.06)}
+.raggio:hover .rEti,.raggio:focus-visible .rEti{fill:var(--v)}
+.raggio:hover .rIco,.raggio:focus-visible .rIco{stroke:var(--v)}
+.raggio:focus{outline:none}
+.raggio:focus-visible .presa{fill:var(--vl);stroke:var(--v);stroke-width:2}
+.raggio.scelto .lama{opacity:1;transform:scale(1.14)}
+.raggio.scelto .rEti{fill:var(--v)}
+/* Il raggio su cui e' ferma la ghiera: pieno, mentre gli altri restano in
+   ombra. Da parcheggiata e' l'unico segno rimasto di quale sezione e'
+   aperta. */
+.raggio.selezionato .lama,.raggio.scelto .lama{fill:url(#salviaDisco);filter:drop-shadow(0 0 14px rgba(169,220,200,.45))}
+.raggio.selezionato .lama{opacity:1}
+#lunaApp.parcheggiata .raggio.selezionato .lama{transform:scale(1.1)}
+.raggio.selezionato .rEti{fill:var(--v)}
+.raggio.selezionato .rIco{stroke:var(--v)}
+
+/* A casa la ghiera e' tutta l'area della luna, non solo le forme disegnate:
+   dentro un <svg> il vuoto lascia passare il dito, e un giro che parte da uno
+   spazio vuoto non partirebbe. touch-action:none perche' altrimenti il giro
+   verticale diventa uno scorrimento. */
+body.casa #lunaApp,#lunaApp.parcheggiata{pointer-events:auto;touch-action:none}
+/* Girando, il dito non deve selezionare testo ne' trascinare il disegno. */
+#lunaApp{user-select:none;-webkit-user-select:none}
+#lunaApp svg,#lunaApp text{-webkit-user-drag:none}
+.disco{cursor:pointer}
+/* Fuori dal flusso: se contasse nell'altezza, il centro del riquadro non
+   sarebbe piu' il centro della luna e il parcheggio finirebbe storto. */
+.lunaAiuto{position:absolute;left:0;right:0;bottom:-2px;text-align:center;font-family:var(--fb);font-size:12px;color:var(--mu2);transition:opacity .3s var(--sp)}
+
+/* Parcheggiata: le scritte e le icone dei raggi a quella scala sarebbero
+   macchie, e la luna intera diventa un bottone solo - quello per tornare. */
+#lunaApp.parcheggiata .rEti,
+#lunaApp.parcheggiata .rIco,
+#lunaApp.parcheggiata .lunaAiuto{opacity:0}
+#lunaApp.parcheggiata .raggio{pointer-events:none}
+#lunaApp.parcheggiata .lunaNav{cursor:pointer}
+#lunaApp.parcheggiata .decoro{opacity:.45}
+
+/* Il focus da tastiera deve vedersi, e deve essere di questa app: senza una
+   regola qui il browser disegna il suo rettangolo arancione, che su una
+   ghiera tonda e' anche largo il doppio di lei. Sulla ghiera il segno lo
+   porta il disco, che e' il pezzo che si preme. */
+.ok:focus-visible,.chip:focus-visible,.mini:focus-visible,.segno:focus-visible,
+.tondo:focus-visible,.gio:focus-visible,.liv:focus-visible,
+.banner button:focus-visible{outline:2px solid var(--v);outline-offset:2px}
+input[type=text]:focus-visible{outline:none}
+.lunaNav:focus{outline:none}
+.lunaNav:focus-visible .disco{stroke:var(--v);stroke-width:3;paint-order:stroke}
 
 .solo-lettore{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
 @media (prefers-reduced-motion: reduce){
   *{animation-duration:.001s!important;transition-duration:.001s!important}
   .bolla{transition-duration:.001s!important}
+  #lunaApp{transition:none}
 }
 </style>
 </head>
-<body>
+<body class="casa">
 
 <header class="testa">
-  <div class="marchio">
-    <svg viewBox="0 0 100 100" fill="currentColor" aria-hidden="true">
-      <mask id="morso"><rect width="100" height="100" fill="#fff"/><circle cx="66" cy="40" r="26" fill="#000"/></mask>
-      <circle cx="50" cy="50" r="30" mask="url(#morso)"/>
-      <path d="M44.3 20.6 L50 4 L55.7 20.6 Z M79.5 44.8 L97 51.6 L79.1 57.3 Z M55.2 79.5 L50 95 L44.8 79.5 Z M20.8 56.7 L2 51.7 L20.4 45.3 Z M24.8 33.7 L18.8 21.9 L31.1 26.7 Z" opacity=".85"/>
-    </svg>
-    <b>PIANO</b>
-  </div>
   <h1 class="saluto" id="saluto">Ciao</h1>
   <p class="data" id="dataOggi"></p>
 </header>
 
 <main class="shell">
 
+  <!-- ===== CASA ===== -->
+  <section class="sez on" id="sez-casa" role="region" aria-label="La giornata">
+    <p class="casaRiga" id="casaRiga"></p>
+  </section>
+
   <!-- ===== OGGI ===== -->
-  <section class="sez on" id="sez-oggi" role="tabpanel" aria-labelledby="nav-oggi">
+  <section class="sez" id="sez-oggi" role="region" aria-label="Le tre cose">
     <div class="banner" id="bannerGiorno" hidden></div>
     <div class="banner" id="bannerRimaste" hidden></div>
 
@@ -339,7 +448,7 @@ textarea:focus{outline:none;border-color:rgba(169,220,200,.4)}
   </section>
 
   <!-- ===== RITMO ===== -->
-  <section class="sez" id="sez-ritmo" role="tabpanel" aria-labelledby="nav-ritmo">
+  <section class="sez" id="sez-ritmo" role="region" aria-label="Il ritmo">
     <div class="card">
       <h2 class="ct">Il ritmo</h2>
       <p class="sub">Le cose piccole che si ripetono. Un giorno saltato non rompe niente.</p>
@@ -365,7 +474,7 @@ textarea:focus{outline:none;border-color:rgba(169,220,200,.4)}
   </section>
 
   <!-- ===== SETTIMANA ===== -->
-  <section class="sez" id="sez-settimana" role="tabpanel" aria-labelledby="nav-settimana">
+  <section class="sez" id="sez-settimana" role="region" aria-label="La settimana">
     <div class="card">
       <h2 class="ct" id="titoloSettimana">Questa settimana</h2>
       <p class="sub">Tocca un giorno per vedere - o preparare - le sue tre cose.</p>
@@ -383,7 +492,7 @@ textarea:focus{outline:none;border-color:rgba(169,220,200,.4)}
   </section>
 
   <!-- ===== CALMA ===== -->
-  <section class="sez" id="sez-calma" role="tabpanel" aria-labelledby="nav-calma">
+  <section class="sez" id="sez-calma" role="region" aria-label="La calma">
     <div class="card">
       <h2 class="ct">Come stai, oggi</h2>
       <p class="sub">Una domanda sola, e nessuno la legge tranne te.</p>
@@ -430,24 +539,85 @@ textarea:focus{outline:none;border-color:rgba(169,220,200,.4)}
 
 </main>
 
-<nav class="barra" role="tablist" aria-label="Sezioni">
-  <button class="nav" id="nav-oggi" data-az="vai" data-arg="oggi" role="tab" aria-selected="true" aria-controls="sez-oggi">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l4.5 4.5L20 6"/></svg>
-    oggi
-  </button>
-  <button class="nav" id="nav-ritmo" data-az="vai" data-arg="ritmo" role="tab" aria-selected="false" aria-controls="sez-ritmo">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h3.5l2-6 3 12 2.5-8 1.8 4H21"/></svg>
-    ritmo
-  </button>
-  <button class="nav" id="nav-settimana" data-az="vai" data-arg="settimana" role="tab" aria-selected="false" aria-controls="sez-settimana">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
-    settimana
-  </button>
-  <button class="nav" id="nav-calma" data-az="vai" data-arg="calma" role="tab" aria-selected="false" aria-controls="sez-calma">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a6.8 6.8 0 0 0 11 11z"/></svg>
-    calma
-  </button>
-</nav>
+<!-- La luna: quattro raggi, uno per sezione, e un disco che fa da schermo e da
+     tasto. Non e' un'illustrazione con sopra dei bottoni - i raggi sono
+     bottoni veri, con la forma del raggio come area sensibile piu' una presa
+     tonda intorno all'icona, perche' un triangolo sottile col pollice non si
+     prende. I raggi sono in ordine orario: girando, la ghiera li segue. -->
+<div id="lunaApp">
+  <div class="lunaWrap">
+    <svg class="lunaNav" viewBox="0 0 400 400" role="group" aria-label="Scegli dove andare">
+      <defs>
+        <linearGradient id="salviaDisco" x1="0" y1="0" x2="0.42" y2="1">
+          <stop offset="0" stop-color="#e6f6ee"/>
+          <stop offset="0.36" stop-color="#c2e8d7"/>
+          <stop offset="0.64" stop-color="#a9dcc8"/>
+          <stop offset="1" stop-color="#6f9f8d"/>
+        </linearGradient>
+        <!-- La maschera tiene l'ombra dentro il disco: senza, il morso
+             sborderebbe sul fondo della pagina e non sarebbe piu' una luna,
+             sarebbe una macchia. -->
+        <mask id="dentroIlDisco">
+          <circle cx="200" cy="200" r="72" fill="#fff"/>
+        </mask>
+      </defs>
+
+      <g class="decoro">
+        <path d="M236.0 132.0 L262.0 116.0 L254.0 146.0 Z"/>
+        <path d="M276.0 214.0 L293.0 231.0 L268.0 234.0 Z"/>
+        <path d="M212.0 276.0 L200.0 306.0 L188.0 276.0 Z"/>
+        <path d="M132.0 236.0 L106.0 231.0 L125.0 212.0 Z"/>
+        <path d="M147.0 146.0 L142.0 117.0 L169.0 132.0 Z"/>
+      </g>
+
+      <g class="raggio" data-sezione="oggi" tabindex="0" role="button" aria-label="Le tre cose di oggi">
+        <path class="lama" d="M254.1 149.5 L318.0 130.0 L270.8 178.4 Z"/>
+        <circle class="presa" cx="329.9" cy="125.0" r="36"/>
+        <g class="rIco" transform="translate(329.9,125) scale(1.05) translate(-12,-12)">
+          <path d="M4 12.5l4.5 4.5L20 6"/>
+        </g>
+        <text class="rEti" x="329.9" y="155.0">OGGI</text>
+      </g>
+
+      <g class="raggio" data-sezione="ritmo" tabindex="0" role="button" aria-label="Il ritmo delle abitudini">
+        <path class="lama" d="M270.8 221.6 L308.0 262.0 L254.1 250.5 Z"/>
+        <circle class="presa" cx="329.9" cy="275.0" r="36"/>
+        <g class="rIco" transform="translate(329.9,275) scale(1.05) translate(-12,-12)">
+          <path d="M3 12h3.5l2-6 3 12 2.5-8 1.8 4H21"/>
+        </g>
+        <text class="rEti" x="329.9" y="305.0">RITMO</text>
+      </g>
+
+      <g class="raggio" data-sezione="settimana" tabindex="0" role="button" aria-label="La settimana">
+        <path class="lama" d="M145.9 250.5 L84.0 268.0 L129.2 221.6 Z"/>
+        <circle class="presa" cx="70.1" cy="275.0" r="36"/>
+        <g class="rIco" transform="translate(70.1,275) scale(1.05) translate(-12,-12)">
+          <rect x="3" y="5" width="18" height="16" rx="3"/>
+          <path d="M3 10h18M8 3v4M16 3v4"/>
+        </g>
+        <text class="rEti" x="70.1" y="305.0">SETTIMANA</text>
+      </g>
+
+      <g class="raggio" data-sezione="calma" tabindex="0" role="button" aria-label="Come stai, e un respiro">
+        <path class="lama" d="M129.2 178.4 L90.0 138.0 L145.9 149.5 Z"/>
+        <circle class="presa" cx="70.1" cy="125.0" r="36"/>
+        <g class="rIco" transform="translate(70.1,125) scale(1.05) translate(-12,-12)">
+          <path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a6.8 6.8 0 0 0 11 11z"/>
+        </g>
+        <text class="rEti" x="70.1" y="155.0">CALMA</text>
+      </g>
+
+      <circle class="disco" cx="200" cy="200" r="72"/>
+      <!-- Il morso: la stessa luna dell'icona, tenuta a un'ombra leggera
+           perche' sotto ci va scritto, e una mezzaluna piena si mangerebbe
+           meta' della parola. -->
+      <circle class="morso" cx="243" cy="163" r="66" mask="url(#dentroIlDisco)"/>
+      <text class="dTitolo" id="dScelta" x="200" y="194">OGGI</text>
+      <text class="dSotto" x="200" y="222">PIANO</text>
+    </svg>
+    <p class="lunaAiuto" id="lunaAiuto">Gira intorno · premi al centro</p>
+  </div>
+</div>
 
 <p class="solo-lettore" role="status" id="annuncio"></p>
 

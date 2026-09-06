@@ -1,7 +1,8 @@
-// PIANO, l'app della giornata che sta sotto /vita/. Le domande sono tre:
+// PIANO, l'app della giornata che sta sotto /vita/. Le domande sono quattro:
 // quello che scrivi resta, le regole "chill" sono davvero quelle scritte nel
-// codice (tre cose e non di piu', un giorno saltato non rompe la fila), e le
-// due app sullo stesso dominio non si pestano i piedi.
+// codice (tre cose e non di piu', un giorno saltato non rompe la fila), la
+// ghiera si gira come quella di ALBA, e le due app sullo stesso dominio non si
+// pestano i piedi.
 //
 // L'ultima non e' teoria: ALBA e PIANO hanno due service worker sulla stessa
 // origine, e il primo modo di rompere tutto e' che uno cancelli la cache
@@ -67,8 +68,23 @@ const leggi = f => fs.readFileSync(path.join(VITA, f), 'utf8');
   // dentro del codice, o un onclick, qui non partirebbe mai.
   check('nessuno script inline nel markup', !/<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?\S[\s\S]*?<\/script>/.test(html));
   check('nessun onclick nel markup', !/\son[a-z]+\s*=/.test(html));
-  check('la barra in basso e\' navigazione vera (tab e pannelli)',
-    /role="tablist"/.test(html) && (html.match(/role="tabpanel"/g) || []).length === 4);
+
+  console.log('\n-- la luna: navigazione, non illustrazione --');
+  // Come il sole di ALBA: i raggi sono bottoni veri, con la presa tonda
+  // intorno all'icona, perche' un triangolo sottile col pollice non si prende.
+  const raggi = html.match(/<g class="raggio" data-sezione="([a-z]+)"/g) || [];
+  check('ci sono quattro raggi, uno per sezione', raggi.length === 4, raggi);
+  check('e sono bottoni veri, raggiungibili con Tab',
+    (html.match(/class="raggio"[^>]*tabindex="0"[^>]*role="button"/g) || []).length === 4);
+  check('ognuno ha la presa tonda intorno all\'icona',
+    (html.match(/class="presa"/g) || []).length === 4);
+  check('il disco fa da schermo: dice dove stai per andare', /id="dScelta"/.test(html));
+  check('e sotto c\'e\' il nome, che quindi non serve in cima',
+    /class="dSotto"[^>]*>PIANO</.test(html) && !/class="marchio"/.test(html));
+  check('niente barra in basso: la navigazione e\' la ghiera',
+    !/class="barra"/.test(html) && !/id="nav-oggi"/.test(html));
+  check('la ghiera vive anche parcheggiata',
+    /#lunaApp\.parcheggiata/.test(html) && /touch-action:none/.test(html));
 
   console.log('\n-- gli header, sui due host --');
   const headers = fs.readFileSync(path.join(L.SITO, '_headers'), 'utf8');
@@ -87,13 +103,7 @@ const leggi = f => fs.readFileSync(path.join(VITA, f), 'utf8');
   console.log('\n-- i due worker non si pestano i piedi --');
   const swAlba = fs.readFileSync(path.join(L.SITO, 'sw.js'), 'utf8');
   const swPiano = leggi('sw.js');
-  // Senza questa riga la pagina di PIANO passerebbe dal ramo "navigate" di
-  // ALBA e finirebbe salvata come suo index.html: offline, al posto del sole,
-  // si aprirebbe l'altra app.
   check('ALBA lascia stare /vita', /url\.pathname\.startsWith\('\/vita'\)/.test(swAlba));
-  // E la pulizia delle cache vecchie deve guardare solo le proprie: ALBA
-  // cancellava tutto quello che non si chiamava come lei, cache di PIANO
-  // compresa, a ogni attivazione.
   check('ALBA cancella solo le cache di ALBA', /startsWith\('alba-'\)/.test(swAlba));
   check('PIANO cancella solo le cache di PIANO', /startsWith\('piano-'\)/.test(swPiano));
   check('PIANO non esce da /vita/', /!url\.pathname\.startsWith\('\/vita\/'\)/.test(swPiano));
@@ -115,17 +125,147 @@ const leggi = f => fs.readFileSync(path.join(VITA, f), 'utf8');
   const BASE = 'http://127.0.0.1:8912';
   await page.goto(BASE + '/vita/', { waitUntil: 'load' });
 
-  console.log('\n-- si apre --');
-  check('la pagina si apre sull\'oggi', await page.locator('#sez-oggi').evaluate(el => el.classList.contains('on')));
-  check('e il saluto non e\' vuoto', (await page.locator('#saluto').textContent()).trim().length > 2);
+  const sezioneAperta = () => page.evaluate(() => (document.querySelector('.sez.on') || {}).id);
+  const parcheggiata = () => page.evaluate(() => document.getElementById('lunaApp').classList.contains('parcheggiata'));
+  const disco = () => page.textContent('#dScelta');
+  const ETICHETTA = { casa: '', oggi: 'OGGI', ritmo: 'RITMO', settimana: 'SETTIMANA', calma: 'CALMA' };
+
+  // Come ci si arriva davvero: si gira la ghiera fino al nome giusto, e da
+  // casa si preme al centro per entrare. Da parcheggiata lo scatto e' gia' il
+  // cambio di sezione, quindi non c'e' niente da premere.
+  const vaiA = async (nome) => {
+    await page.locator('.lunaNav').focus();
+    for (let i = 0; i < 4 && (await disco()) !== ETICHETTA[nome]; i++) {
+      await page.keyboard.press('ArrowRight');
+    }
+    if (!(await parcheggiata())) await page.keyboard.press('Enter');
+    await page.waitForTimeout(80);
+  };
+
+  console.log('\n-- si apre sulla luna --');
+  check('la pagina si apre sulla casa', (await sezioneAperta()) === 'sez-casa');
+  check('la luna e\' al centro, non parcheggiata', (await parcheggiata()) === false);
+  check('il disco dice cosa stai per aprire', (await disco()) === 'OGGI');
+  check('e sotto c\'e\' una riga su come sta andando la giornata',
+    /tre cose/i.test(await page.textContent('#casaRiga')));
+  check('il saluto non e\' vuoto', (await page.locator('#saluto').textContent()).trim().length > 2);
+
+  console.log('\n-- la ghiera --');
+  // Un raggio si tocca e si apre: e' la strada corta, quella di sempre.
+  await page.click('.raggio[data-sezione="ritmo"] .lama');
+  await page.waitForTimeout(120);
+  check('toccando un raggio si apre la sua sezione', (await sezioneAperta()) === 'sez-ritmo');
+  check('e la luna va a posarsi sotto al contenuto', (await parcheggiata()) === true);
+  check('il disco adesso dice dove sei', (await disco()) === 'RITMO');
+  // Il contenuto le lascia il posto: senza, l'ultima riga finirebbe sotto la
+  // luna e non si potrebbe piu' toccare.
+  check('il contenuto le lascia lo spazio sotto',
+    await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.shell')).paddingBottom) > 150));
+
+  // Da parcheggiata il giro CAMBIA sezione mentre lo fai: e' la differenza fra
+  // un menu da confermare e una manopola.
+  await page.locator('.lunaNav').focus();
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(80);
+  check('uno scatto da parcheggiata cambia sezione', (await sezioneAperta()) === 'sez-settimana');
+  check('e il disco lo segue', (await disco()) === 'SETTIMANA');
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForTimeout(80);
+  check('e si torna indietro girando dall\'altra parte', (await sezioneAperta()) === 'sez-ritmo');
+
+  // Premere al centro da parcheggiata riporta alla luna intera.
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(120);
+  check('premendo al centro si torna a scegliere', (await sezioneAperta()) === 'sez-casa');
+  check('e la luna risale', (await parcheggiata()) === false);
+  // Da casa il giro sceglie e basta: non apre niente finche' non premi. La
+  // ghiera riparte da dov'era - eravamo sul ritmo, uno scatto porta alla
+  // settimana - perche' tornare a scegliere non vuol dire ricominciare.
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(60);
+  check('da casa il giro sceglie e non apre', (await sezioneAperta()) === 'sez-casa',
+    await sezioneAperta());
+  check('e riparte da dov\'eri rimasto', (await disco()) === 'SETTIMANA', await disco());
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(120);
+  check('Invio apre quello che il disco mostra', (await sezioneAperta()) === 'sez-settimana');
+
+  // L'ombra del morso e i decori sono disegnati sopra i raggi: se prendessero
+  // i tocchi, il dito che tocca OGGI aprirebbe quello che il disco mostra.
+  // (Il fuoco torna sulla ghiera: toccando un raggio se l'era preso lui, e
+  // Invio li' dentro vuol dire "apri", non "torna".)
+  await page.locator('.lunaNav').focus();
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(120);
+  await page.click('.raggio[data-sezione="oggi"] .lama');
+  await page.waitForTimeout(120);
+  check('l\'ombra sul disco non ruba il tocco al raggio sotto',
+    (await sezioneAperta()) === 'sez-oggi', await sezioneAperta());
+
+  // La rotella del mouse fa lo stesso lavoro del dito: da oggi, uno scatto in
+  // avanti porta al ritmo.
+  const centroLuna = await page.evaluate(() => {
+    const r = document.getElementById('lunaApp').getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  });
+  await page.mouse.move(centroLuna.x, centroLuna.y);
+  await page.mouse.wheel(0, 120);
+  await page.waitForTimeout(80);
+  check('anche la rotella gira la ghiera', (await sezioneAperta()) === 'sez-ritmo',
+    await sezioneAperta());
+
+  console.log('\n-- il dito vero --');
+  // Il telefono non e' un mouse piccolo: il click che il browser sintetizza
+  // dopo un tocco a volte non arriva, e col solo mouse quel buco non si vede.
+  const cdp = await context.newCDPSession(page);
+  const dito = async (punti) => {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: punti[0][0], y: punti[0][1] }] });
+    for (const p of punti.slice(1)) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: p[0], y: p[1] }] });
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  };
+  const giroDelDito = async (daGradi, aGradi, passo) => {
+    const c = await page.evaluate(() => {
+      const r = document.getElementById('lunaApp').getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2, raggio: r.width * 0.36 };
+    });
+    const punti = [];
+    for (let g = daGradi; passo > 0 ? g <= aGradi : g >= aGradi; g += passo) {
+      const a = g * Math.PI / 180;
+      punti.push([c.x + c.raggio * Math.cos(a), c.y + c.raggio * Math.sin(a)]);
+    }
+    await dito(punti);
+    await page.waitForTimeout(120);
+  };
+
+  const primaDelGiro = await sezioneAperta();
+  await giroDelDito(-90, 0, 9);   // un quarto di giro in senso orario
+  check('il dito che gira fa scattare la ghiera', (await sezioneAperta()) !== primaDelGiro,
+    [primaDelGiro, await sezioneAperta()]);
+  // Il rilascio del dito genera comunque un click: se contasse come tocco, la
+  // fine di ogni giro riporterebbe alla casa.
+  check('e il rilascio a fine giro non e\' un tocco', (await parcheggiata()) === true);
+
+  // Un tocco secco al centro invece si': ed e' quello che riporta a scegliere.
+  const centro = await page.evaluate(() => {
+    const r = document.getElementById('lunaApp').getBoundingClientRect();
+    return [r.x + r.width / 2, r.y + r.height / 2];
+  });
+  await dito([centro]);
+  await page.waitForTimeout(150);
+  check('il tocco secco al centro riporta alla luna intera', (await sezioneAperta()) === 'sez-casa');
+
+  console.log('\n-- le tre cose --');
+  await vaiA('oggi');
+  check('siamo su oggi', (await sezioneAperta()) === 'sez-oggi');
   check('parte senza niente scritto', (await page.locator('#listaTre .cosa').count()) === 0);
   check('e lo dice con parole, non con uno zero',
-    /tre cose/i.test(await page.locator('#statoTre').textContent()));
+    /tre cose/i.test(await page.textContent('#statoTre')));
   // Tre caselle vuote disegnate: e' il limite reso visibile prima ancora di
   // scrivere qualcosa.
   check('le tre caselle si vedono da subito', (await page.locator('#slotLiberi .slot').count()) === 3);
 
-  console.log('\n-- le tre cose --');
   const aggiungi = async (testo) => {
     await page.fill('#nuovaCosa', testo);
     await page.click('#btnAggiungi');
@@ -158,18 +298,19 @@ const leggi = f => fs.readFileSync(path.join(VITA, f), 'utf8');
   check('e lo dice anche a chi non vede lo schermo',
     (await page.locator('#listaTre .cosa').nth(0).locator('.segno').getAttribute('aria-checked')) === 'true');
   check('il testo di stato cambia tono',
-    /fatta/i.test(await page.locator('#statoTre').textContent()));
+    /fatta/i.test(await page.textContent('#statoTre')));
 
   console.log('\n-- quello che scrivi resta --');
   await page.reload({ waitUntil: 'load' });
-  check('dopo il ricaricamento le cose ci sono ancora',
-    (await page.locator('#listaTre .cosa').count()) === 3);
+  check('dopo il ricaricamento si riparte dalla luna', (await sezioneAperta()) === 'sez-casa');
+  check('e la casa lo sa gia\' com\'e\' andata',
+    /1 su 3|una fatta/i.test(await page.textContent('#casaRiga')), await page.textContent('#casaRiga'));
+  await vaiA('oggi');
+  check('le cose ci sono ancora', (await page.locator('#listaTre .cosa').count()) === 3);
   check('e quella spuntata e\' ancora spuntata',
     await page.locator('#listaTre .cosa').nth(0).evaluate(el => el.classList.contains('fatta')));
 
   console.log('\n-- portare su, rimandare --');
-  // Tolta una delle tre, la cosa in "se avanza" puo' salire: il bottone
-  // compare solo quando c'e' posto.
   check('senza posto non si puo\' portare su',
     (await page.locator('#listaExtra [data-az="portaSu"]').count()) === 0);
   await page.click('#listaTre .cosa >> nth=2 >> [data-az="togli"]');
@@ -186,7 +327,7 @@ const leggi = f => fs.readFileSync(path.join(VITA, f), 'utf8');
     await page.evaluate(g => S.cose.some(c => c.giorno === g && c.testo === 'chiamare mamma'), domani));
 
   console.log('\n-- la settimana --');
-  await page.click('#nav-settimana');
+  await vaiA('settimana');
   check('la settimana ha sette giorni', (await page.locator('#grigliaSettimana .gio').count()) === 7);
   check('oggi e\' segnato', (await page.locator('#grigliaSettimana .gio.oggi').count()) === 1);
   check('i pallini raccontano le cose del giorno',
@@ -200,10 +341,14 @@ const leggi = f => fs.readFileSync(path.join(VITA, f), 'utf8');
       (await page.locator(`#grigliaSettimana .gio[data-arg="${domani}"]`).count()) === 1);
   }
   await page.click(`#grigliaSettimana .gio[data-arg="${domani}"]`);
+  await page.waitForTimeout(120);
   check('toccando un giorno si torna alla lista di quel giorno',
-    await page.locator('#sez-oggi').evaluate(el => el.classList.contains('on')));
-  check('e si vede che non e\' oggi',
-    /domani/.test(await page.locator('#bannerGiorno').textContent()));
+    (await sezioneAperta()) === 'sez-oggi');
+  // Ci si e' arrivati da un bottone, non dalla ghiera: il disco deve seguire,
+  // o annuncerebbe una sezione che non e' quella aperta.
+  check('e la ghiera segue chi la scavalca', (await disco()) === 'OGGI');
+  check('si vede che non e\' oggi',
+    /domani/.test(await page.textContent('#bannerGiorno')));
   check('c\'e\' la cosa rimandata', (await page.locator('#listaTre .cosa').count()) === 1);
   // Guardando un altro giorno, "domani" non ha senso: sposterebbe le cose
   // sempre piu' avanti senza che si capisca dove.
@@ -212,20 +357,20 @@ const leggi = f => fs.readFileSync(path.join(VITA, f), 'utf8');
   check('e si torna a oggi', await page.locator('#bannerGiorno').isHidden());
 
   console.log('\n-- il ritmo --');
-  await page.click('#nav-ritmo');
+  await vaiA('ritmo');
   check('senza abitudini non e\' una lista vuota, e\' un invito',
-    /una sola/i.test(await page.locator('#listaAbitudini').textContent()));
+    /una sola/i.test(await page.textContent('#listaAbitudini')));
   await page.fill('#nuovaAbitudine', 'camminare');
   await page.click('#emoji .chip[data-arg="🚶"]');
   await page.click('#btnAbitudine');
   check('l\'abitudine compare', (await page.locator('#listaAbitudini .ab').count()) === 1);
   check('col suo simbolo', (await page.locator('#listaAbitudini .tondo').textContent()) === '🚶');
   check('e non e\' un rimprovero: "quando vuoi"',
-    /quando vuoi/.test(await page.locator('#listaAbitudini .abFila').textContent()));
+    /quando vuoi/.test(await page.textContent('#listaAbitudini')));
 
   await page.click('#listaAbitudini .tondo');
   check('segnata oggi, si vede', await page.locator('#listaAbitudini .ab').evaluate(el => el.classList.contains('oggi')));
-  check('e la fila comincia', /primo giorno/.test(await page.locator('#listaAbitudini .abFila').textContent()));
+  check('e la fila comincia', /primo giorno/.test(await page.textContent('#listaAbitudini')));
   check('sette pallini, una settimana', (await page.locator('#listaAbitudini .punti .p').count()) === 7);
   await page.click('#listaAbitudini .tondo');
   check('e si puo\' togliere il segno', (await page.locator('#listaAbitudini .ab.oggi').count()) === 0);
@@ -244,7 +389,7 @@ const leggi = f => fs.readFileSync(path.join(VITA, f), 'utf8');
   check('e senza niente la fila e\' zero', (await filaCon([])) === 0);
 
   console.log('\n-- la calma --');
-  await page.click('#nav-calma');
+  await vaiA('calma');
   await page.click('#scalaEnergia .liv[data-arg="4"]');
   check('l\'energia scelta resta premuta',
     (await page.locator('#scalaEnergia .liv[data-arg="4"]').getAttribute('aria-pressed')) === 'true');
@@ -273,11 +418,11 @@ const leggi = f => fs.readFileSync(path.join(VITA, f), 'utf8');
   await page.fill('#copiaDati', '{non sono json}');
   await page.click('[data-az="ripristina"]');
   check('una copia rotta non cancella niente',
-    /non si legge/.test(await page.locator('#esitoDati').textContent())
+    /non si legge/.test(await page.textContent('#esitoDati'))
     && (await page.evaluate(() => S.cose.length)) > 0);
-  await page.fill('#copiaDati', JSON.stringify({ v: 1, cose: [{ id: 'x', testo: 'ripreso da una copia', giorno: new Date().toISOString().slice(0, 10), fatta: false }], abitudini: [], giornate: {} }));
+  await page.fill('#copiaDati', JSON.stringify({ v: 1, cose: [{ id: 'x', testo: 'ripreso da una copia', giorno: o, fatta: false }], abitudini: [], giornate: {} }));
   await page.click('[data-az="ripristina"]');
-  await page.click('#nav-oggi');
+  await vaiA('oggi');
   check('una copia buona rientra',
     (await page.locator('#listaTre .cosa .testo').first().textContent()) === 'ripreso da una copia');
 
@@ -294,8 +439,9 @@ const leggi = f => fs.readFileSync(path.join(VITA, f), 'utf8');
   await context.setOffline(true);
   let offlineOk = true;
   try { await page.goto(BASE + '/vita/', { waitUntil: 'load' }); } catch (e) { offlineOk = false; }
-  check('senza rete l\'app si apre lo stesso', offlineOk && (await page.locator('#sez-oggi').count()) > 0);
+  check('senza rete l\'app si apre lo stesso', offlineOk && (await page.locator('#lunaApp').count()) > 0);
   check('e anche lo script c\'e\'', offlineOk && await page.evaluate(() => typeof fila === 'function'));
+  if (offlineOk) await vaiA('oggi');
   check('con dentro quello che avevi scritto',
     offlineOk && (await page.locator('#listaTre .cosa').count()) === 1);
   await context.setOffline(false);

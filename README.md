@@ -48,7 +48,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-958 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+988 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -658,18 +658,42 @@ public/vita/manifest.webmanifest nome, icone, scope /vita/
 public/vita/sw.js                il suo service worker
 public/vita/img/                 le icone dell'app, e la luna da cui nascono
 scripts/icone-piano.js           le ridisegna quando cambia il glifo
-tests/vita.js                    la suite: 94 controlli
+tests/vita.js                    la suite: 124 controlli
 ```
 
-**Cosa fa.** Quattro schede, tutte raggiungibili col pollice dalla barra in
-basso. *Oggi* tiene **le tre cose** della giornata, con un momento appiccicato
-(mattina, pomeriggio, sera) e le caselle libere disegnate, perche' il limite si
-veda prima di riempirlo; la quarta cosa non viene rifiutata, scivola in "se
-avanza". *Ritmo* sono le abitudini, con la fila dei giorni e gli ultimi sette
-pallini. *Settimana* e' il calendario di sette giorni: toccandone uno si
-apre - o si prepara - la sua lista. *Calma* e' il come stai di oggi, la forma
-delle ultime due settimane, un 4-7-8 da respirare e la copia dei dati da
-portarsi via.
+**Cosa fa.** Quattro sezioni. *Oggi* tiene **le tre cose** della giornata, con
+un momento appiccicato (mattina, pomeriggio, sera) e le caselle libere
+disegnate, perche' il limite si veda prima di riempirlo; la quarta cosa non
+viene rifiutata, scivola in "se avanza". *Ritmo* sono le abitudini, con la fila
+dei giorni e gli ultimi sette pallini. *Settimana* e' il calendario di sette
+giorni: toccandone uno si apre - o si prepara - la sua lista. *Calma* e' il
+come stai di oggi, la forma delle ultime due settimane, un 4-7-8 da respirare e
+la copia dei dati da portarsi via.
+
+**Come ci si muove: la luna.** La navigazione e' quella di ALBA, con la luna al
+posto del sole. La pagina si apre su un disco e i suoi quattro raggi sono le
+sezioni: un tocco su un raggio la apre. I raggi non sono un'illustrazione con
+sopra dei bottoni - sono bottoni veri, con la forma del raggio come area
+sensibile piu' una presa tonda intorno all'icona, e funzionano con Tab e Invio
+come col dito.
+
+E si girano come la ghiera dell'iPod classic: il dito ruota intorno al disco e
+la selezione salta di raggio in raggio, uno scatto ogni 45 gradi, con la
+vibrazione corta a fare da "click". Il disco al centro fa da schermo - dice
+dove stai per andare - e da tasto: si preme li' per entrare. Anche la rotella
+del mouse e le frecce della tastiera fanno scattare la ghiera.
+
+Scelta una sezione la luna non sparisce: **si rimpicciolisce e va a posarsi
+sotto al contenuto**, e li' resta. Ci sta tutta, non mezza fuori dal bordo, e
+non e' un vezzo: li' sotto **resta una ghiera viva**. Girandola la sezione
+cambia mentre giri - il contenuto sopra si sostituisce a ogni scatto, il raggio
+pieno si sposta, e il disco scrive dove sei: `RITMO` sopra, `PIANO` sotto.
+Toccarla al centro la fa risalire a schermo intero. Non c'e' nessuna barra in
+basso e in cima non c'e' il nome, che sta gia' nel disco: restano il saluto e
+la data, che in un'app della giornata sono contenuto.
+
+Sotto la luna parcheggiata il contenuto continua a scorrere, e una velatura lo
+fa sparire nel nero prima di arrivarci: passa sotto, non ci sbatte.
 
 **Le regole che la rendono chill** sono nel codice, non nella pubblicita':
 
