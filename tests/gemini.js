@@ -129,6 +129,42 @@ const FOTO = { type: 'image', prompt: 'analizza', images: [{ base64: 'AAA', mime
   await post('1.1.2.0', FOTO);
   check('secondo giro: una sola chiamata, modello preso dalla cache', geminiChiamate.length === 1 && geminiChiamate[0].modello === scelto, { scelto, ora: geminiChiamate.map(c => c.modello) });
 
+  console.log('\n-- chi era pieno, si salta --');
+  // Il 503 di Gemini e' la capacita' del piano gratuito, non un guasto: dura
+  // qualche minuto. Ripartire ogni volta dal modello piu' nuovo costava un
+  // tentativo lungo per niente - con le foto da ricaricare, il grosso del
+  // budget - e sul sito vero era la differenza fra una risposta e un timeout.
+  reset();
+  const PIENO = { status: 503, body: JSON.stringify({ error: { code: 503, status: 'UNAVAILABLE', message: 'high demand' } }) };
+  geminiRisposte = [PIENO, OK_GEMINI];
+  r = await post('1.1.1.20', FOTO);
+  const primoGiro = geminiChiamate.map(c => c.modello);
+  check('il primo che risponde "sono pieno" viene scavalcato',
+    JSON.parse(r.body).provider === 'gemini' && primoGiro.length === 2, primoGiro);
+
+  reset();
+  r = await post('1.1.1.21', FOTO);
+  check('e alla foto dopo non lo si prova nemmeno',
+    !geminiChiamate.some(c => c.modello === primoGiro[0]), geminiChiamate.map(c => c.modello));
+  check('si parte da quello che aveva risposto',
+    geminiChiamate[0] && geminiChiamate[0].modello === primoGiro[1], geminiChiamate.map(c => c.modello));
+  check('e la risposta arriva sempre da Gemini', JSON.parse(r.body).provider === 'gemini', r.body);
+
+  // Il ricordo non deve chiudere la porta: se sono pieni tutti quelli che
+  // conosciamo, si prova lo stesso - la capacita' del piano gratuito torna
+  // quando torna, e l'unico modo di saperlo e' chiedere.
+  reset();
+  for (const m of CATALOGO_GEMINI.models.map(x => x.name.replace('models/', ''))) {
+    geminiRisposte.push(PIENO);
+  }
+  await post('1.1.1.22', FOTO);
+  reset();
+  r = await post('1.1.1.23', FOTO);
+  check('ma se sono pieni tutti, al giro dopo si riprova comunque',
+    geminiChiamate.length >= 1 && JSON.parse(r.body).provider === 'gemini',
+    [geminiChiamate.map(c => c.modello), JSON.parse(r.body).provider]);
+
+
   console.log(`\n${pass} passati, ${fail} falliti`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

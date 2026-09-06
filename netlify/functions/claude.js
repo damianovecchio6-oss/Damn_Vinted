@@ -42,6 +42,14 @@ const MODEL_PREFERENCES = {
   text: [/^openai\/gpt-oss/i, /llama-3\.3-70b/i, /llama-3/i]
 };
 
+// Quanto ci si ricorda che un modello era pieno. Il 503 di Gemini e' quasi
+// sempre passeggero - e' la capacita' del piano gratuito, non un guasto - ma
+// finche' dura ripartire ogni volta dal modello piu' nuovo costa un tentativo
+// lungo per niente: con le foto da ricaricare, quel tentativo e' il grosso del
+// budget. Quattro minuti sono abbastanza da non ripetere l'errore a ogni foto
+// e abbastanza pochi da non restare indietro di una generazione per un blip.
+const PIENO_TTL_MS = 4 * 60 * 1000;
+
 const POSITIVE_TTL_MS = 30 * 60 * 1000;  // "questo modello funziona"
 const NEGATIVE_TTL_MS = 5 * 60 * 1000;   // "nessun modello funziona"
 const CATALOG_TTL_MS = 10 * 60 * 1000;   // elenco modelli dell'account
@@ -339,6 +347,13 @@ async function unTentativoGemini(richiesta, modello, kind, deadline) {
   return { ok: true, text, model: modello, provider: 'gemini' };
 }
 
+function segnaPieno(modello) {
+  S.cacheSet(`gemini:pieno:${modello}`, true);
+}
+function ancoraPieno(modello) {
+  return S.cacheGet(`gemini:pieno:${modello}`, PIENO_TTL_MS) === true;
+}
+
 async function tentaGemini(richiesta, kind, deadline) {
   const cacheKey = `gemini:model:${kind}`;
   const noto = resolvedModel(cacheKey);
@@ -353,16 +368,20 @@ async function tentaGemini(richiesta, kind, deadline) {
   // nome, non di come e' andata la chiamata: il tentativo non ha modo di
   // saperlo, e passarglielo lo obbligava a portarsi dietro un flag e la chiave
   // di cache che non usava per altro.
-  const prova = async (lista, memorizza = true) => {
+  const prova = async (lista, memorizza = true, ignoraPieni = false) => {
     for (const modello of lista) {
       if (!modello || provati.includes(modello)) continue;
       if (provati.length >= MAX_MODEL_ATTEMPTS) break;
       if (deadline - Date.now() < MIN_ATTEMPT_MS) break;
+      // Era pieno pochi minuti fa: si salta senza chiedere. Conta come "pieno"
+      // anche adesso, perche' e' esattamente quello che diremmo dopo averlo
+      // chiesto - solo senza spenderci un tentativo.
+      if (!ignoraPieni && ancoraPieno(modello)) { pieni = true; continue; }
       provati.push(modello);
       const esito = await unTentativoGemini(richiesta, modello, kind, deadline);
       // Pieno: non e' un esito, e' un "prova il prossimo" che pero' va
       // ricordato, perche' cambia cosa diremo se finiscono tutti.
-      if (esito && esito.pieno) { pieni = true; continue; }
+      if (esito && esito.pieno) { segnaPieno(modello); pieni = true; continue; }
       if (esito) {
         if (esito.ok && memorizza) S.cacheSet(cacheKey, modello);
         return esito;
@@ -382,6 +401,15 @@ async function tentaGemini(richiesta, kind, deadline) {
   // memorizza, o resteremmo su un nome cablato per mezz'ora anche quando il
   // catalogo, un secondo dopo, risponderebbe subito.
   if (!esito) esito = await prova([MODEL_GEMINI], false);
+
+  // Se il ricordo li ha saltati TUTTI - cioe' non abbiamo nemmeno provato - si
+  // prova lo stesso, ignorandolo. Quel ricordo serve a non sprecare un
+  // tentativo quando c'e' un'alternativa, non a tenere Gemini chiuso fuori per
+  // quattro minuti: la capacita' del piano gratuito torna quando torna, e
+  // l'unico modo di saperlo e' chiedere.
+  if (!esito && !provati.length && pieni) {
+    esito = await prova([GEMINI_MODEL, noto, ...(await listaGemini(deadline)), MODEL_GEMINI], true, true);
+  }
   if (esito) return esito;
 
   // Se erano pieni, non si scrive in cache che non esiste nessun modello: fra

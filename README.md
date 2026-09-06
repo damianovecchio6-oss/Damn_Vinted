@@ -47,7 +47,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-846 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+851 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -696,6 +696,20 @@ l'errore di Gemini invece della risposta di Groq che era li' pronta: il
 ripiego esisteva ma restava una promessa mantenuta solo quando avanzava tempo.
 `tests/gemini-riserva.js` fa proprio quella scena - Gemini lento e pieno - e
 pretende che risponda Groq.
+
+E chi era pieno se lo ricorda. Il `503` di Gemini e' la capacita' del piano
+gratuito, non un guasto: dura qualche minuto, e colpisce di piu' i modelli
+appena usciti - sul sito vero il `3.8-flash` diceva "sono pieno" mentre il
+`3.7-flash` rispondeva benissimo. Ripartire ogni volta dal piu' nuovo costava
+un tentativo lungo per niente, e con le foto da ricaricare quel tentativo e' il
+grosso del budget. Ora un modello che risponde `503` resta fuori per quattro
+minuti: abbastanza da non ripetere l'errore a ogni foto, abbastanza pochi da
+non restare indietro di una generazione per un blip.
+
+Con un'eccezione che conta: se il ricordo li ha saltati **tutti**, si prova lo
+stesso. Serve a non sprecare un tentativo quando c'e' un'alternativa, non a
+tenere Gemini chiuso fuori per quattro minuti - la capacita' del piano
+gratuito torna quando torna, e l'unico modo di saperlo e' chiedere.
 
 ### Importare il progetto su Vercel
 
