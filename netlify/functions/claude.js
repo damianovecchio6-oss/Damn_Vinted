@@ -147,9 +147,17 @@ exports.handler = async (event) => {
     // aspettare che la quota si ricarichi - e nessun modo di sapere quale.
     // Il motivo lo scriviamo, e sono parole nostre: i motivi che tentaGemini
     // restituisce non contengono niente del provider.
+    // Una fetta del budget resta a Groq, e Gemini non la puo' toccare. Senza
+    // questa riserva il ripiego era una promessa che si mantiene solo quando
+    // avanza tempo: sul sito vero un Gemini sovraccarico si mangiava tutti i
+    // secondi provando modelli, e chi analizzava un capo si prendeva l'errore
+    // di Gemini invece della risposta di Groq che era li' a portata. Con piu'
+    // budget il guasto sarebbe solo arrivato piu' tardi.
+    const riserva = (usaGemini && GROQ_KEY) ? Math.min(8000, Math.round(TIMEOUT_MS * 0.35)) : 0;
+
     let esito, notaGemini = '';
     if (usaGemini) {
-      esito = await tentaGemini(richiesta, kind, deadline);
+      esito = await tentaGemini(richiesta, kind, deadline - riserva);
       // Quota giornaliera finita o modello sparito: se abbiamo anche Groq e
       // resta tempo, meglio una risposta di Groq che un errore.
       if (!esito.ok) {

@@ -11,6 +11,7 @@ const SUITE = [
   ['modelli Gemini', 'gemini.js', 'scelta provider, formato richiesta, ripieghi'],
   ['Gemini assente', 'gemini-assente.js', 'senza chiave: si ripiega, e si dice perche'],
   ['Gemini a freddo', 'gemini-freddo.js', 'il catalogo non si mangia il budget delle foto'],
+  ['riserva per il ripiego', 'gemini-riserva.js', 'Gemini pieno non si mangia il tempo di Groq'],
   ['ricerca immagine', 'lens.js', 'multipart SerpApi, prezzi, errori'],
   ['ricerca online', 'ricerca.js', 'query, prezzi negli snippet, cache, errori'],
   ['interfaccia', 'ui.js', 'accessibilita, doppio invio, storico'],

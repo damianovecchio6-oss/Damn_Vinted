@@ -47,7 +47,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-840 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+846 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -687,6 +687,15 @@ si vedeva "L'AI ci ha messo troppo" su una richiesta che sarebbe arrivata. I
 22s stanno sotto il `maxDuration` e sotto i 25s che la pagina aspetta prima di
 mollare: a decidere resta il nostro budget, non un taglio di qualcun altro.
 `tests/vercel.js` verifica che i tre numeri restino in quest'ordine.
+
+Piu' tempo pero' non basta da solo: sposterebbe solo il momento del guasto.
+Una fetta del budget - il 35%, al massimo 8s - e' **riservata a Groq**, e
+Gemini non la puo' toccare. Senza, un Gemini sovraccarico si mangiava tutti i
+secondi provando un modello dopo l'altro, e chi analizzava un capo si prendeva
+l'errore di Gemini invece della risposta di Groq che era li' pronta: il
+ripiego esisteva ma restava una promessa mantenuta solo quando avanzava tempo.
+`tests/gemini-riserva.js` fa proprio quella scena - Gemini lento e pieno - e
+pretende che risponda Groq.
 
 ### Importare il progetto su Vercel
 
