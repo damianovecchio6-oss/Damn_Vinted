@@ -62,7 +62,7 @@ function sw(n, opzioni){
   // all'altra. Aspetta che il giro si fermi, o sfarfallerebbe a ogni scatto.
   entrataQuandoTiFermi();
 
-  if(n==='storico'){ renderHistory(); sincronizzaImpostazioni(); }
+  if(n==='storico'){ renderHistory(); sincronizzaImpostazioni(); renderAccountUI(); }
   if(n==='ricerca') prefillRicerca();
   if(n==='scanner') syncUploadUI();
 
@@ -3226,25 +3226,37 @@ function upsertHistoryItem(id, patch){
   const arr = loadHistory();
   const dati = soloNoti(patch);
   const idx = arr.findIndex(x=>x.id===id);
+  let voce;
   if(idx>=0){
-    arr[idx] = Object.assign({}, arr[idx], dati, {id, updatedAt: Date.now()});
+    voce = arr[idx] = Object.assign({}, arr[idx], dati, {id, updatedAt: Date.now()});
   }else{
-    arr.unshift(Object.assign({id, createdAt: Date.now(), updatedAt: Date.now()}, dati));
+    voce = Object.assign({id, createdAt: Date.now(), updatedAt: Date.now()}, dati);
+    arr.unshift(voce);
   }
   saveHistoryArr(arr);
+  // La voce intera, non solo il patch appena arrivato: il server non deve
+  // ricostruirsi lo stato precedente per sapere cosa mettere nelle colonne
+  // che questo giro non tocca.
+  sincronizzaVoce(voce);
   return arr;
 }
 
 function deleteHistoryItem(id){
   const arr = loadHistory().filter(x=>x.id!==id);
   saveHistoryArr(arr);
+  cancellaVoceAccount(id);
   renderHistory();
   toast('🗑️ Eliminato');
 }
 
 function clearHistoryConfirm(){
-  if(!loadHistory().length){ toast('Storico già vuoto'); return; }
+  const voci=loadHistory();
+  if(!voci.length){ toast('Storico già vuoto'); return; }
   if(confirm('Cancellare tutto lo storico salvato su questo dispositivo? L\'azione non è reversibile.')){
+    // Anche dall'account, se c'e': "cancella tutto" che lascia le voci sul
+    // server significherebbe ritrovarsele tutte al prossimo login. Una
+    // richiesta sola, non una per voce.
+    cancellaTuttoAccount();
     saveHistoryArr([]);
     renderHistory();
     toast('🗑️ Storico cancellato');
@@ -3292,6 +3304,214 @@ function esportaStorico(){
   toast('⬇ Storico esportato: ' + voci.length + (voci.length===1 ? ' voce' : ' voci'));
 }
 
+/* ===== ACCOUNT PERSONALE =====
+   Email e password, per chi vuole che lo storico sopravviva a un dispositivo
+   che si svuota - su iOS soprattutto, dove un'app aggiunta alla Home ha uno
+   storage separato da Safari e gestito in modo aggressivo dal sistema: non e'
+   un guasto di ALBA, e' cosi' che funziona l'iPhone.
+
+   Volutamente indipendente dal token di sessione del PIN (getSessionToken):
+   sono due sistemi di accesso diversi, e chi non ha mai analizzato una foto
+   deve potersi registrare lo stesso. Per questo le chiamate qui sotto non
+   passano da chiamaEndpoint. */
+const ACCOUNT_URL='/api/account';
+const ACCOUNT_TOKEN_KEY='albaAccountToken', ACCOUNT_EMAIL_KEY='albaAccountEmail';
+let recuperoAccountToken='';
+
+function accountToken(){ try{ return localStorage.getItem(ACCOUNT_TOKEN_KEY)||''; }catch(e){ return ''; } }
+function accountEmail(){ try{ return localStorage.getItem(ACCOUNT_EMAIL_KEY)||''; }catch(e){ return ''; } }
+function salvaAccount(token, email){
+  try{ localStorage.setItem(ACCOUNT_TOKEN_KEY, token); localStorage.setItem(ACCOUNT_EMAIL_KEY, email); }catch(e){}
+}
+function dimenticaAccount(){
+  try{ localStorage.removeItem(ACCOUNT_TOKEN_KEY); localStorage.removeItem(ACCOUNT_EMAIL_KEY); }catch(e){}
+}
+
+async function chiamaAccount(payload, extra){
+  let r;
+  try{
+    r=await fetch(ACCOUNT_URL,{
+      method:'POST',
+      headers:Object.assign({'Content-Type':'application/json'}, extra||{}),
+      body:JSON.stringify(payload),
+      signal:timeoutSignal(AI_TIMEOUT_MS)
+    });
+  }catch(netErr){
+    throw new Error('Connessione fallita. Controlla la rete e riprova.');
+  }
+  const raw=await r.text();
+  let d=null;
+  try{ d=raw?JSON.parse(raw):null; }catch(e){ d=null; }
+  if(!r.ok){
+    const err=new Error((d&&d.error)||'Richiesta non riuscita.');
+    err.codice=d&&d.codice;
+    throw err;
+  }
+  return d||{};
+}
+
+function mostraFormAccount(quale){
+  const el=document.getElementById('accErr'); if(el) el.textContent='';
+  const completa=document.getElementById('accFormResetCompleta');
+  // Il modulo della nuova password prende tutto il riquadro, a prescindere
+  // da chi e' dentro o fuori: e' cosi' che si apre anche per chi su questo
+  // browser ha gia' una sessione attiva.
+  if(quale==='resetCompleta'){
+    const li=document.getElementById('accLoggedIn'), lo=document.getElementById('accLoggedOut');
+    if(li) li.hidden=true;
+    if(lo) lo.hidden=true;
+    if(completa) completa.hidden=false;
+    return;
+  }
+  if(completa) completa.hidden=true;
+  renderAccountUI();
+  ['accFormLogin','accFormReset'].forEach(id=>{
+    const box=document.getElementById(id);
+    if(box) box.hidden = (id !== 'accForm'+quale[0].toUpperCase()+quale.slice(1));
+  });
+}
+
+// Quale meta' del riquadro Account si vede: il login/registrazione o "sei
+// dentro come...". Chiamata a ogni apertura dello Storico, e' locale e non
+// costa niente - la lettura vera dal server la fa caricaStoricoAccount, una
+// volta sola per sessione di pagina.
+function renderAccountUI(){
+  const dentro=!!accountToken();
+  const li=document.getElementById('accLoggedIn'), lo=document.getElementById('accLoggedOut');
+  if(li) li.hidden=!dentro;
+  if(lo) lo.hidden=dentro;
+  const email=document.getElementById('accEmailMostrata');
+  if(email) email.textContent=accountEmail();
+  const nota=document.getElementById('accStoricoNota');
+  if(nota) nota.textContent = dentro
+    ? 'Sincronizzato sul tuo account — si ritrova anche su un altro dispositivo.'
+    : 'Salvato solo su questo dispositivo — non è sincronizzato altrove.';
+}
+
+async function registratiAccount(){
+  const email=v('accEmail'), password=v('accPassword');
+  const err=document.getElementById('accErr');
+  try{
+    const d=await chiamaAccount({azione:'registrati', email, password});
+    if(err) err.textContent='';
+    toast(d.serveConferma ? '📧 Controlla la tua email per confermare l\'account, poi accedi' : '✅ Account creato, ora accedi');
+  }catch(e){ if(err) err.textContent=e.message; }
+}
+
+async function accediAccount(){
+  const email=v('accEmail'), password=v('accPassword');
+  const err=document.getElementById('accErr');
+  try{
+    const d=await chiamaAccount({azione:'accedi', email, password});
+    if(err) err.textContent='';
+    salvaAccount(d.token, email);
+    // Un dispositivo che arriva al login con uno storico gia' scritto non lo
+    // deve perdere in silenzio: si chiede prima di caricarlo sull'account.
+    const locali=loadHistory();
+    if(locali.length && confirm(`Hai ${locali.length} ${locali.length===1?'voce':'voci'} di storico su questo dispositivo. Caricarle sull'account?`)){
+      locali.forEach(sincronizzaVoce);
+    }
+    await caricaStoricoAccount();
+    renderAccountUI();
+    toast('👋 Bentornato');
+  }catch(e){ if(err) err.textContent=e.message; }
+}
+
+function esciAccount(){
+  dimenticaAccount();
+  renderAccountUI();
+  toast('Sei uscito dall\'account. Lo storico resta su questo dispositivo.');
+}
+
+async function richiediResetAccount(){
+  const email=v('accEmailReset');
+  try{
+    await chiamaAccount({azione:'richiedi-reset', email});
+    toast('📧 Se quell\'email ha un account, il link per reimpostare la password è in arrivo');
+    mostraFormAccount('login');
+  }catch(e){ toast('⚠️ '+e.message); }
+}
+
+async function reimpostaPasswordAccount(){
+  const password=v('accPasswordNuova');
+  try{
+    await chiamaAccount({azione:'reimposta-password', tokenRecupero:recuperoAccountToken, password});
+    toast('🔑 Password aggiornata, ora accedi');
+    mostraFormAccount('login');
+  }catch(e){ toast('⚠️ '+e.message); }
+}
+
+// Manda una voce all'account, se c'e' una sessione attiva - come contribuisci()
+// col mercato condiviso: non aspetta e non alza mai la voce, chi sta
+// lavorando ha gia' la sua copia locale, ed e' quella che conta subito.
+// Un token scaduto (trenta giorni) o invalidato non deve restare invisibile:
+// senza questo, la pagina continuerebbe a dire "sincronizzato" mentre ogni
+// scrittura fallisce in silenzio per sempre. Stessa idea del codice==='pin'
+// gia' gestito per l'altro token di sessione (fetchSessionToken).
+function gestisciErroreAccount(e){
+  if(e && e.codice==='account' && accountToken()){
+    dimenticaAccount();
+    renderAccountUI();
+    toast('🔒 La sessione dell\'account è scaduta. Accedi di nuovo per continuare a sincronizzare.');
+  }
+}
+
+function sincronizzaVoce(voce){
+  const token=accountToken();
+  if(!token || !voce || !voce.id) return;
+  const corpo={ azione:'storico-scrivi', voce: Object.assign({}, voce, {foto:undefined}) };
+  if(voce.foto) corpo.foto=voce.foto;
+  chiamaAccount(corpo, {'X-Account-Token':token}).catch(gestisciErroreAccount);
+}
+
+function cancellaVoceAccount(id){
+  const token=accountToken();
+  if(!token || !id) return;
+  chiamaAccount({azione:'storico-cancella', id}, {'X-Account-Token':token}).catch(gestisciErroreAccount);
+}
+
+// Una richiesta sola invece di una per voce: "cancella tutto" su qualche
+// decina di elementi mandato come N cancellazioni in parallelo sbatteva
+// contro il limite di richieste al minuto, e le voci oltre la ventesima
+// tornavano al login successivo - cancellate solo in apparenza.
+function cancellaTuttoAccount(){
+  const token=accountToken();
+  if(!token) return;
+  chiamaAccount({azione:'storico-cancella-tutto'}, {'X-Account-Token':token}).catch(gestisciErroreAccount);
+}
+
+// Lo storico dell'account, unito a quello locale: per ogni id tiene la voce
+// aggiornata piu' di recente. E' cosi' che un dispositivo appena svuotato si
+// ritrova tutto dopo il login - il locale (vuoto) perde contro il remoto.
+async function caricaStoricoAccount(){
+  const token=accountToken();
+  if(!token) return;
+  try{
+    const d=await chiamaAccount({azione:'storico-leggi'}, {'X-Account-Token':token});
+    const remoti=Array.isArray(d.voci)?d.voci:[];
+    const locali=loadHistory();
+    const perId=new Map(locali.map(x=>[x.id,x]));
+    for(const r of remoti){
+      const loc=perId.get(r.id);
+      if(!loc || (r.updatedAt||0) > (loc.updatedAt||0)){
+        // La foto remota e' un URL firmato che scade in un'ora: bene per un
+        // dispositivo che non ha di meglio, ma non deve sostituire una
+        // base64 locale che funziona sempre, offline compresa, con un link
+        // che fra un'ora smette di caricare.
+        const foto = (loc && safePhoto(loc.foto)) ? loc.foto : r.foto;
+        perId.set(r.id, Object.assign({}, r, { foto }));
+      }
+    }
+    saveHistoryArr(Array.from(perId.values()));
+    renderHistory();
+  }catch(e){
+    // Un account che non riesce a leggersi lo storico non deve rompere la
+    // pagina: quello locale resta, e si riprova al prossimo giro - a meno
+    // che il motivo sia proprio che la sessione non e' piu' valida.
+    gestisciErroreAccount(e);
+  }
+}
+
 function fmtDate(ts){
   const d = new Date(ts);
   return d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'}) + ' ' +
@@ -3307,8 +3527,16 @@ function esc(s){
 // La miniatura la produciamo noi, ma passa dal localStorage: se qualcosa la
 // altera deve restare un'immagine, e non poter uscire dall'attributo src.
 // E' l'unico campo di una voce che non passa da esc().
+// Due forme valide: una base64 nata su questo dispositivo, o un URL firmato
+// di Supabase Storage per una voce sincronizzata sull'account - mai altro,
+// e mai un dominio a scelta di chi scrive foto: e' per questo che il
+// controllo resta un regex stretto e non "e' un https qualunque", e perche'
+// va comunque dentro esc() quando finisce in un attributo src=.
 function safePhoto(src){
-  return typeof src==='string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(src) ? src : '';
+  if(typeof src!=='string') return '';
+  if(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(src)) return src;
+  if(/^https:\/\/[a-z0-9-]+\.supabase\.co\/storage\/v1\/object\/sign\/storico-foto\//.test(src)) return src;
+  return '';
 }
 
 // ===== L'ESITO: com'e' andata davvero =====
@@ -3673,7 +3901,7 @@ function renderHistory(voci){
     return `
     <div class="hItem">
       <div class="hTop">
-        ${foto ? `<img src="${foto}" alt="" style="width:56px;height:56px;border-radius:14px;object-fit:cover;border:1px solid var(--bd);flex-shrink:0"/>` : ''}
+        ${foto ? `<img src="${esc(foto)}" alt="" style="width:56px;height:56px;border-radius:14px;object-fit:cover;border:1px solid var(--bd);flex-shrink:0"/>` : ''}
         <div style="flex:1">
           <div class="hName">${esc(item.nome)||'Capo senza nome'}${item.marca?' · '+esc(item.marca):''}</div>
           <div class="hSub">${esc(item.condizione)||''}${item.taglia?' · Taglia '+esc(item.taglia):''}</div>
@@ -3920,6 +4148,33 @@ async function installaApp(){
   try{ invito.prompt(); await invito.userChoice; }catch(e){}
 }
 
+// Il link di reset password: Supabase manda #access_token=...&type=recovery
+// nel frammento dell'URL, che il browser non spedisce mai al server da solo.
+// Apre lo Storico (una scheda che esiste gia', niente di nuovo da costruire)
+// e mostra il modulo della nuova password invece del login.
+//
+// Sta qui in fondo e non subito dopo caricaStoricoAccount() perche' chiama
+// sw(), che a sua volta tocca variabili dichiarate piu' sotto nel file
+// (ultimoCambio e le altre della ghiera): chiamarlo da piu' in alto le
+// troverebbe non ancora inizializzate.
+(function apriDaRecupero(){
+  let frammento;
+  try{ frammento=new URLSearchParams((window.location.hash||'').replace(/^#/,'')); }
+  catch(e){ return; }
+  if(frammento.get('type')!=='recovery') return;
+  const token=frammento.get('access_token');
+  if(!token) return;
+  recuperoAccountToken=token;
+  sw('storico', {senzaScorrimento:true});
+  mostraFormAccount('resetCompleta');
+  try{ history.replaceState(null,'',location.pathname+location.search); }catch(e){}
+})();
+
+// Se il dispositivo aveva gia' una sessione account, lo storico si sincronizza
+// una volta all'avvio - non a ogni apertura della scheda Storico, che sarebbe
+// una richiesta di rete in piu' senza un motivo nuovo per farla.
+if(accountToken()) caricaStoricoAccount();
+
 // Le scorciatoie del manifest (tieni premuta l'icona: "Scanner", "Foto") e
 // qualunque link condiviso aprono la pagina con ?vai=. Il nome va controllato
 // contro le schede vere, o un indirizzo scritto a mano potrebbe far cercare a
@@ -3978,6 +4233,13 @@ const AZIONI = {
   pinConferma:         () => pinConferma(),
   cambiaContributo:    (el) => cambiaContributo(el),
   cambiaPin:           (el) => cambiaPin(el),
+  accediAccount:       () => accediAccount(),
+  registratiAccount:   () => registratiAccount(),
+  esciAccount:         () => esciAccount(),
+  richiediResetAccount:   () => richiediResetAccount(),
+  reimpostaPasswordAccount: () => reimpostaPasswordAccount(),
+  mostraResetAccount:  () => mostraFormAccount('reset'),
+  mostraLoginAccount:  () => mostraFormAccount('login'),
   chiudiGuida:         () => chiudiGuida(),
   guidaAvanti:         () => guidaAvanti(),
   guidaIndietro:       () => guidaIndietro(),

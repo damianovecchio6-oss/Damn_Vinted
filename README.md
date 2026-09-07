@@ -103,8 +103,9 @@ senza di loro il sito continua a funzionare come prima.
 | `GEMINI_API_KEY` | Analisi foto: legge il testo delle etichette molto meglio | No |
 | `SERPAPI_KEY` | Bottone "Identifica prodotto", agente di ricerca e scanner | No |
 | `ALBA_PIN` | Chiude il sito dietro un codice: senza, chi ha l'indirizzo entra | No |
-| `SUPABASE_URL` | Il deposito: prezzi condivisi e tasto del codice | No |
+| `SUPABASE_URL` | Il deposito: prezzi condivisi, tasto del codice, account personale | No |
 | `SUPABASE_SERVICE_KEY` | La chiave di servizio dello stesso progetto Supabase | No |
+| `SUPABASE_ANON_KEY` | La chiave anon dello stesso progetto: solo per il login dell'account | No |
 
 Su Vercel stanno in **Settings > Environment Variables**, e vale la stessa
 regola del riquadro: contano dal deploy dopo.
@@ -593,12 +594,80 @@ il tasto premuto e il codice che entra in vigore. Se il deposito non risponde
 si tiene l'ultimo valore conosciuto, e se non se ne conosce nessuno la
 serratura resta chiusa: in dubbio, non si apre.
 
+## L'account personale
+
+Lo storico locale ha un limite che nessuna riscrittura del codice puo'
+togliere: vive nel browser, e un browser puo' svuotarsi. Su iOS succede piu'
+spesso di quanto sembri - un'app aggiunta alla schermata Home ha uno storage
+**separato** da Safari, e il sistema lo gestisce in modo piu' aggressivo di
+una scheda normale. Non e' un guasto di ALBA: e' cosi' che funziona l'iPhone,
+e l'unico modo per uscirne davvero e' un salvataggio fuori dal telefono.
+
+Da qui l'account: email e password, in **Storico > Account**. Con un account
+attivo, ogni voce di storico - foto comprese - si sincronizza da sola col
+server appena viene scritta, e allo stesso modo torna indietro al login su
+qualunque dispositivo.
+
+### Cosa non cambia
+
+Il mercato condiviso resta esattamente com'era: **anonimo**, per
+`dispositivo`, senza account. L'account personale e' un sistema separato, che
+in piu' rende piu' facile che chi vende arrivi fino a segnare l'esito -
+perche' lo storico non e' sparito prima - ma non cambia cosa arriva al
+deposito comune ne' come.
+
+### Come funziona
+
+- **Login**: email e password, verificate da Supabase Auth via REST
+  (`netlify/functions/lib/account.js`, nessun SDK - stesso stile di
+  `deposito.js`). La function rilascia poi **un suo token**, firmato come
+  quello del PIN (`shared.js`) ma con parametri suoi: non legato all'IP - un
+  account si usa da reti diverse - e valido trenta giorni, non quindici
+  minuti. Il client non parla mai direttamente con Supabase.
+- **Sincronizzazione**: ogni scrittura locale (`upsertHistoryItem`) manda la
+  voce intera alla function, in modo "manda e non aspettare" - lo stesso
+  spirito di `contribuisci()` col mercato condiviso: chi sta lavorando ha
+  gia' la sua copia locale, un sync fallito non deve interrompere niente. Al
+  login lo storico del server si unisce a quello locale per `id`, tenendo la
+  voce con l'`updatedAt` piu' recente fra i due: e' cosi' che un dispositivo
+  appena svuotato si ritrova tutto.
+- **Foto**: caricate su Supabase Storage in un bucket **privato**
+  (`storico-foto`), non pubblico come le icone dell'app. Si leggono solo con
+  URL firmati, validi un'ora, generati dalla function quando serve mostrare
+  lo Storico - non restano raggiungibili per sempre col link.
+- **Password dimenticata**: Supabase manda l'email di reset da sola, nessun
+  servizio email in piu' da configurare. Il link riporta sul sito con
+  `#access_token=...&type=recovery` nel frammento dell'URL - che il browser
+  non manda mai al server da solo - e la pagina lo intercetta per aprire il
+  modulo della nuova password dentro la scheda Storico che gia' esiste,
+  invece di costruirne una apposta.
+
+### Il deposito
+
+Una tabella in piu' rispetto a `001_mercato.sql`: `storico_utenti`, con
+`user_id` che punta a `auth.users` (gestita da Supabase) e RLS accesa senza
+policy, come le tabelle di oggi - ci arriva solo la function, con la service
+key, che controlla lei che ogni riga letta o scritta sia di chi ha firmato il
+token.
+
+Da fare una volta sola, dopo `001_mercato.sql`: incolla
+`supabase/002_account.sql` nel SQL Editor, poi crea a mano dal pannello
+Supabase (Storage > New bucket) il bucket **`storico-foto`**, **non
+pubblico**. Serve anche una terza variabile, `SUPABASE_ANON_KEY` (da *Project
+Settings > API*, la chiave `anon`, non quella `service_role`): e' quella
+pensata per le rotte di autenticazione, diversa da `SUPABASE_SERVICE_KEY` che
+resta riservata alle scritture dirette sul database. Senza le tre variabili
+l'account non esiste e il sito funziona come prima: storico solo locale,
+nessun tasto Account, nessuna rottura.
+
 ## Lo storico, e come portarselo via
 
 Annunci scritti, prezzi stimati e rapporti dell'agente finiscono tutti nella
 scheda **Storico**, che vive nel `localStorage` di questo browser sotto
 `vintedAiHistory`. Non e' un archivio: basta un "cancella dati del sito" o un
-telefono cambiato e non ne resta niente da nessuna parte.
+telefono cambiato e non ne resta niente da nessuna parte - a meno di aver
+fatto l'accesso con un account (sopra), o di aver esportato lo storico a
+mano.
 
 ### Com'e' andata davvero
 

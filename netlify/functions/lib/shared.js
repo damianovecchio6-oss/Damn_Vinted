@@ -114,7 +114,7 @@ function isAllowed(origin, headers) {
 function corsFor(origin, headers) {
   const out = {
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Session-Token, X-Alba-Pin',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Session-Token, X-Alba-Pin, X-Account-Token',
     'Vary': 'Origin'
   };
   if (isAllowed(origin, headers)) out['Access-Control-Allow-Origin'] = origin;
@@ -211,6 +211,61 @@ function sign(payload) {
 function issueToken(ip) {
   const payload = b64url(JSON.stringify({ exp: Date.now() + SESSION_TTL_MS, iph: ipTag(ip) }));
   return `${payload}.${sign(payload)}`;
+}
+
+// Il token dell'account e' un altro animale: non e' legato all'IP - un
+// account si usa da reti diverse, mentre il token del PIN vive solo il tempo
+// di aprire le chiavi AI da qui - e dura settimane, non minuti. Stessa firma
+// HMAC del token di sessione (sign/b64url), stesso file, ma un segreto suo:
+// se lo si legasse a sessionSecret(), cambiare l'ALBA_PIN sloggerebbe tutti
+// gli account, e sono due cose che non hanno niente a che fare l'una con
+// l'altra.
+const ACCOUNT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+function accountSecret() {
+  if (process.env.ACCOUNT_SESSION_SECRET) return process.env.ACCOUNT_SESSION_SECRET;
+  // Derivato dalla chiave di servizio di Supabase, non da GROQ_API_KEY: quella
+  // e' la chiave AI, ruotarla non ha niente a che fare con gli account, e
+  // legarcisi sloggerebbe tutti al primo cambio di una chiave che non
+  // c'entra. La service key invece account.js non parte nemmeno senza
+  // (A.configurato()), quindi e' sempre li' quando questa funzione serve
+  // davvero, ed e' del dominio giusto: se cambia, e' perche' e' cambiato
+  // qualcosa dell'account su Supabase.
+  return crypto.createHash('sha256').update(`${process.env.SUPABASE_SERVICE_KEY || GROQ_KEY || ''}|vinted-account-v1`).digest('hex');
+}
+
+function signAccount(payload) {
+  return crypto.createHmac('sha256', accountSecret()).update(payload).digest('hex');
+}
+
+function issueAccountToken(userId) {
+  const payload = b64url(JSON.stringify({ exp: Date.now() + ACCOUNT_TTL_MS, uid: userId }));
+  return `${payload}.${signAccount(payload)}`;
+}
+
+// Torna l'id utente se il token e' valido, altrimenti null - mai un booleano,
+// perche' chi chiama ha sempre bisogno di sapere DI CHI e' la richiesta, non
+// solo se e' ammessa.
+function verifyAccountToken(token) {
+  if (typeof token !== 'string' || !token) return null;
+  const dot = token.lastIndexOf('.');
+  if (dot < 1) return null;
+
+  const payload = token.slice(0, dot);
+  const sig = token.slice(dot + 1);
+  const expected = signAccount(payload);
+  if (sig.length !== expected.length) return null;
+  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+
+  let data;
+  try {
+    const raw = Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+    data = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!data || typeof data.exp !== 'number' || Date.now() > data.exp) return null;
+  return typeof data.uid === 'string' && data.uid ? data.uid : null;
 }
 
 function verifyToken(token, ip) {
@@ -380,5 +435,6 @@ module.exports = {
   pinRichiesto, pinGiusto, controllaPin,
   SU_VERCEL, TEMPO_MASSIMO,
   issueToken, verifyToken, lowerKeys, json, inviaHttp, statistichePrezzi,
-  cacheGet, cacheSet, cachePeek, checkRequest
+  cacheGet, cacheSet, cachePeek, checkRequest,
+  issueAccountToken, verifyAccountToken, ACCOUNT_TTL_MS
 };

@@ -1063,12 +1063,51 @@ body:not(.home) .mPasseggio{animation:none;transform:translateX(16px);pointer-ev
   <div id="tab-storico" class="tp">
     <div class="card">
       <div class="ct">🗂️ Storico Annunci</div>
-      <div style="font-size:14px;color:var(--mu);margin-bottom:16px;letter-spacing:-.01em">Salvato solo su questo dispositivo — non è sincronizzato altrove.</div>
+      <div id="accStoricoNota" style="font-size:14px;color:var(--mu);margin-bottom:16px;letter-spacing:-.01em">Salvato solo su questo dispositivo — non è sincronizzato altrove.</div>
       <button class="btn" id="btnExportStorico" style="margin-bottom:8px" data-az="esportaStorico">⬇ Esporta lo storico</button>
       <button class="btn" style="background:rgba(255,69,58,.1);border:1px solid rgba(255,69,58,.34);color:#ff9a92;box-shadow:none" data-az="clearHistoryConfirm">🗑️ Cancella tutto lo storico</button>
       <!-- Come sono andati davvero i capi gia' venduti: si riempie da solo
            quando ci sono abbastanza esiti segnati, e resta via finche' no. -->
       <div id="calibra" class="calib" style="display:none"></div>
+    </div>
+
+    <!-- ACCOUNT: lo storico sopravvive a un dispositivo che si svuota (iOS,
+         soprattutto) solo se puo' tornare da qualche parte fuori dal telefono. -->
+    <div class="card" id="accCard">
+      <div class="ct">👤 Account</div>
+
+      <div id="accLoggedIn" hidden>
+        <div style="font-size:14px;color:var(--mu);margin-bottom:14px;letter-spacing:-.01em">Sei dentro come <b id="accEmailMostrata" style="color:var(--t)"></b>. Lo storico si sincronizza da solo.</div>
+        <button class="btn" style="background:rgba(255,69,58,.1);border:1px solid rgba(255,69,58,.34);color:#ff9a92;box-shadow:none" data-az="esciAccount">Esci dall'account</button>
+      </div>
+
+      <div id="accLoggedOut">
+        <div id="accFormLogin">
+          <div style="font-size:14px;color:var(--mu);margin-bottom:14px;letter-spacing:-.01em">Con un account lo storico non resta solo su questo dispositivo: si ritrova anche se lo svuoti o cambi telefono.</div>
+          <div class="fg"><label class="fl" for="accEmail">Email</label><input class="fc" id="accEmail" type="email" autocomplete="email" placeholder="tu@esempio.it"/></div>
+          <div class="fg"><label class="fl" for="accPassword">Password</label><input class="fc" id="accPassword" type="password" autocomplete="current-password" placeholder="almeno 6 caratteri"/></div>
+          <div id="accErr" class="pinE" style="min-height:0;margin-bottom:8px" role="alert"></div>
+          <button class="btn" style="margin-bottom:8px" data-az="accediAccount">Accedi</button>
+          <button class="btn" style="background:transparent;border:1px solid var(--bd);box-shadow:none;margin-bottom:8px" data-az="registratiAccount">Crea account</button>
+          <button style="display:block;margin:0 auto;background:none;border:none;color:var(--mu);font-size:13px;text-decoration:underline;letter-spacing:-.01em" data-az="mostraResetAccount">Password dimenticata?</button>
+        </div>
+
+        <div id="accFormReset" hidden>
+          <div style="font-size:14px;color:var(--mu);margin-bottom:14px;letter-spacing:-.01em">Ti mandiamo un link per reimpostarla.</div>
+          <div class="fg"><label class="fl" for="accEmailReset">Email</label><input class="fc" id="accEmailReset" type="email" autocomplete="email" placeholder="tu@esempio.it"/></div>
+          <button class="btn" style="margin-bottom:8px" data-az="richiediResetAccount">Manda il link</button>
+          <button style="display:block;margin:0 auto;background:none;border:none;color:var(--mu);font-size:13px;text-decoration:underline;letter-spacing:-.01em" data-az="mostraLoginAccount">Torna al login</button>
+        </div>
+      </div>
+
+      <!-- Fuori da accLoggedOut apposta: si apre dal link della mail anche per
+           chi su questo browser ha gia' una sessione attiva, e deve restare
+           visibile a prescindere da come renderAccountUI() imposta il resto. -->
+      <div id="accFormResetCompleta" hidden>
+        <div style="font-size:14px;color:var(--mu);margin-bottom:14px;letter-spacing:-.01em">Scegli la nuova password.</div>
+        <div class="fg"><label class="fl" for="accPasswordNuova">Nuova password</label><input class="fc" id="accPasswordNuova" type="password" autocomplete="new-password" placeholder="almeno 6 caratteri"/></div>
+        <button class="btn" data-az="reimpostaPasswordAccount">Salva la nuova password</button>
+      </div>
     </div>
 
     <div class="card">

@@ -28,7 +28,8 @@ const SUITE = [
   ['app installabile', 'app.js', 'manifest, icone, service worker, offline'],
   ['porta su Vercel', 'vercel.js', 'adattatore, header uguali sui due host, origini'],
   ['codice di accesso', 'pin.js', 'la function lo pretende, la pagina lo chiede una volta'],
-  ['mercato condiviso', 'mercato.js', 'cosa esce dal telefono, la banda, il tasto del codice']
+  ['mercato condiviso', 'mercato.js', 'cosa esce dal telefono, la banda, il tasto del codice'],
+  ['account personale', 'account.js', 'login, reset password, storico sincronizzato, foto private']
 ];
 
 let totale = 0, falliti = 0, suiteKo = [];
