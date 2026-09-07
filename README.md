@@ -397,9 +397,11 @@ campione e mai i prezzi:
 - **quantita'** (peso 0.30): quanti comparabili, su venti. Oltre non si
   guadagna: il ventunesimo annuncio non aggiunge niente al ventesimo.
 - **somiglianza** (peso 0.45, la fetta piu' grossa): quanto ogni annuncio parla
-  *di questo capo* - marca, modello e tipo pesano 0.40, 0.35 e 0.25, e i campi
-  che non conosciamo non contano contro nessuno - e quanto e' vicina la sua
-  condizione alla tua.
+  *di questo capo* - marca, modello e tipo pesano 0.25, 0.30 e 0.15 (gli stessi
+  numeri di `config.js` nel riferimento, per i tre campi che un titolo libero
+  puo' davvero dire; taglia, colore e materiale li' esistono, qui no - un
+  titolo Google non li dichiara in un campo suo), e i campi che non conosciamo
+  non contano contro nessuno - e quanto e' vicina la sua condizione alla tua.
 - **freschezza** (peso 0.25): quanto sono recenti, con la stessa scala dell'eta'
   che pesa le prove. Una data che manca vale 0.6: nel peso di un annuncio vale
   1 apposta, per non spostare la mediana per un dato che manca a Google, ma

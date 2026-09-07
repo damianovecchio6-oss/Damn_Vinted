@@ -2371,14 +2371,18 @@ function sxParole(testo){
   return String(testo||'').toLowerCase().replace(/[^a-zà-ù0-9]+/g,' ').split(' ').filter(w=>w.length>2);
 }
 
-// Quanto un risultato parla davvero di questo capo, da 0 a 1. La marca pesa
-// piu' del tipo perche' "felpa" ce l'hanno in centomila, e il modello pesa
-// quanto la marca perche' e' quello che separa una Air Max 90 da una Air Max
-// qualunque. I campi che non conosciamo non contano contro nessuno: i pesi si
-// ridistribuiscono su quelli che ci sono, altrimenti un capo senza modello
-// riconosciuto avrebbe tutti i comparabili a meta' punteggio per un dato che
-// manca a noi, non a loro.
-const SX_PESO_MATCH={ marca:0.40, modello:0.35, tipo:0.25 };
+// Quanto un risultato parla davvero di questo capo, da 0 a 1. I pesi sono
+// quelli di config.js del riferimento (brand 0.25, model 0.30, category
+// 0.15) presi cosi' come sono: la' il modello pesa piu' della marca, perche'
+// e' il modello a separare una Air Max 90 da una Air Max qualunque, mentre la
+// marca da sola la trovano tutti. Non li ho rinormalizzati - dividere per
+// "totale" qui sotto fa gia' lo stesso conto quando manca un campo (size,
+// color, material, condition non li abbiamo su un titolo libero, quindi non
+// entrano mai in questa somma). I campi che non conosciamo non contano contro
+// nessuno: i pesi si ridistribuiscono su quelli che ci sono, altrimenti un
+// capo senza modello riconosciuto avrebbe tutti i comparabili a meta'
+// punteggio per un dato che manca a noi, non a loro.
+const SX_PESO_MATCH={ marca:0.25, modello:0.30, tipo:0.15 };
 
 function sxGradoPertinenza(prova, identita){
   const testo=`${prova.titolo||''} ${prova.snippet||''}`.toLowerCase();

@@ -150,16 +150,17 @@ const NEGOZIO = (titolo, prezzo) => ({
   // La mediana non e' piu' 42.5€ netti: da quando il peso include anche
   // quanto un titolo somiglia al capo (non tutti nominano "felpa" o "WIP"
   // insieme a "Carhartt"), sei titoli via l'altro pesano un po' diverso e la
-  // mediana pesata si sposta di poco - 42.34€, non piu' il centro esatto fra
-  // il terzo e il quarto prezzo.
-  check('la mediana e\' quella dei soli annunci usati', corpo.includes('42.34€') || corpo.includes('42,34€'), (corpo.match(/Mediana[^€]*€/) || [])[0]);
+  // mediana pesata si sposta di poco. Il numero esatto dipende anche dai pesi
+  // marca/modello/tipo di SX_PESO_MATCH (0.25/0.30/0.15, da config.js del
+  // riferimento): con altri pesi si sposterebbe ancora, di poco.
+  check('la mediana e\' quella dei soli annunci usati', corpo.includes('42.2€') || corpo.includes('42,2€'), (corpo.match(/Mediana[^€]*€/) || [])[0]);
   check('il prezzo dei negozi c\'e\', ma per conto suo', /Nuovo in negozio/.test(corpo), corpo.slice(0, 600));
   check('dice quanto vale l\'usato rispetto al nuovo', /l'usato ne vale il \d+%/.test(corpo), (corpo.match(/l'usato ne vale il \d+%/) || [])[0]);
   const tag = await page.evaluate(() => Array.from(document.querySelectorAll('#rSxBody .sxT')).map(t => t.textContent.trim()));
   check('ogni prova dice da che mercato viene', tag.filter(t => /annuncio usato/.test(t)).length >= 5 && tag.filter(t => /negozio/.test(t)).length >= 2, tag);
 
   const promptVerdetto = primo('verdetto');
-  check('il verdetto riceve i quartili, non una mediana sola', /meta' degli annunci sta fra 36.19€ e 48.73€/.test(promptVerdetto.prompt), (promptVerdetto.prompt.match(/meta' degli annunci.*/) || [])[0]);
+  check('il verdetto riceve i quartili, non una mediana sola', /meta' degli annunci sta fra 36.22€ e 48.61€/.test(promptVerdetto.prompt), (promptVerdetto.prompt.match(/meta' degli annunci.*/) || [])[0]);
   check('il verdetto riceve il prezzo del nuovo come tetto', /PREZZI DEI NEGOZI/.test(promptVerdetto.prompt));
   check('il verdetto vede il mercato di ogni risultato', /\[usato\]/.test(promptVerdetto.prompt) && /\[nuovo\]/.test(promptVerdetto.prompt));
   check('il verdetto riceve l\'identita\' scansionata', /Marca: Carhartt/.test(promptVerdetto.prompt) && /Taglia: L/.test(promptVerdetto.prompt));
