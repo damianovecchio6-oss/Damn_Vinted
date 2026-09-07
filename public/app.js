@@ -2073,9 +2073,17 @@ async function sxScansione(){
     throw new Error('Analisi delle foto non interpretabile, riprova.');
   }
   const analisi=letto.risposta.data;
+  // sxIdentita deve vedere quello che la foto ha letto DAVVERO, prima che
+  // applicaEtichetta la corregga: altrimenti la marca "vista in foto" e'
+  // una copia della marca "letta sull'etichetta", le due fonti concordano
+  // sempre per forza, e sxUnisci alza la fiducia al tetto per un accordo
+  // finto invece che per una vera seconda conferma.
+  const analisiGrezza=Object.assign({}, analisi);
   if(letto.etichetta) applicaEtichetta(analisi, letto.etichetta);
   // La scheda Analizza e' la stessa cosa vista da un'altra parte: quello che
-  // lo scanner ha letto vale anche di la', senza rifare la richiesta.
+  // lo scanner ha letto vale anche di la', senza rifare la richiesta. Li' la
+  // correzione resta: chi guarda il modulo precompilato vuole il valore
+  // migliore, non le due fonti separate.
   lastAnalysis=analisi; lastEtichetta=letto.etichetta;
   sxChiudi(iFoto,'fatto', [analisi.tipo, analisi.brand].filter(campoLetto).join(' · ')
     + (letto.etichetta && etichettaUtile(letto.etichetta) ? ' · etichetta letta' : '')
@@ -2101,7 +2109,7 @@ async function sxScansione(){
   }
 
   const iId=sxPasso('Metto insieme l\'identita\' del capo');
-  const identita=sxIdentita(analisi, letto.etichetta, lens, v('sxNote'));
+  const identita=sxIdentita(analisiGrezza, letto.etichetta, lens, v('sxNote'));
   sxChiudi(iId,'fatto', sxDescrizioneBreve(identita));
   return identita;
 }
