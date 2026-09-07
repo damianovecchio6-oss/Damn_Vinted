@@ -138,6 +138,13 @@ const NEGOZIO = (titolo, prezzo) => ({
   check('e dice che l\'ha letta li\'', corpo.includes('letto sull\'etichetta'), corpo.slice(0, 400));
   check('il modello riconosciuto arriva da Lens', corpo.includes('Chase Sweat') && corpo.includes('riconosciuto da Lens'));
   check('quello che ha solo visto lo dichiara come visto', corpo.includes('visto in foto'));
+  // La fonte da sola diceva meta' della cosa: "letto sull'etichetta" e "visto
+  // in foto" non si fidano uguale, e il numero a fianco e' la meta' che
+  // mancava. La marca la confermano etichetta e foto insieme, quindi sale piu'
+  // in alto della sola etichetta.
+  check('e ogni campo dice anche quanto ci si fida',
+    /letto sull'etichetta · 0\.9\d/.test(corpo) && /visto in foto · 0\.62/.test(corpo),
+    (corpo.match(/(letto sull'etichetta|visto in foto) · [\d.]+/g) || []).join(' | '));
 
   console.log('\n-- usato e nuovo restano due cose diverse --');
   check('la mediana e\' quella dei soli annunci usati', corpo.includes('42.5€') || corpo.includes('42,5€'), (corpo.match(/Mediana[^€]*€/) || [])[0]);
@@ -288,6 +295,14 @@ const NEGOZIO = (titolo, prezzo) => ({
   await page.click('#btnSx');
   await attendiRapporto();
   check('molti annunci vicini fra loro = fiducia alta', /Fiducia alta/.test(await page.textContent('#rSxBody')), (await page.textContent('#rSxBody')).match(/Fiducia \w+[^.]*/)[0]);
+  // Il livello dice se un numero solo si puo' dire; la confidenza dice di che
+  // pasta e' fatto il campione. Sono due numeri diversi e vanno letti tutti e
+  // due, altrimenti "fiducia alta" su annunci di un altro capo passa liscio.
+  const conConfidenza = await page.textContent('#rSxBody');
+  check('e accanto al livello c\'e\' la confidenza del campione, con i suoi pezzi',
+    /Confidenza del campione 0\.\d+ su 1: /.test(conConfidenza)
+    && /somiglianza 0\.\d+/.test(conConfidenza) && /\d+ annunci su 20/.test(conConfidenza),
+    (conConfidenza.match(/Confidenza del campione[^.]*\.[^:]*: [^.]+/) || [])[0]);
 
   console.log('\n-- sotto la soglia non esce un numero solo, esce la banda --');
   reset();

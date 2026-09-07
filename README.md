@@ -47,7 +47,7 @@ npm install     # solo playwright-core, i browser non vengono scaricati
 npm test
 ```
 
-859 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
+896 controlli, nessun framework: ogni file in `tests/` e' uno script che stampa
 quanti controlli sono passati ed esce con codice diverso da zero se qualcosa non
 torna. Le suite delle function girano offline, con `https` sostituito da uno
 stub, quindi non serve nessuna chiave per eseguirli. Quelle dell'interfaccia
@@ -349,6 +349,66 @@ vecchi e di un'altra condizione non sono dieci prove, e la fiducia lo sa.
 E se il numero che il modello propone cade fuori dai prezzi davvero trovati,
 viene riportato dentro la banda **e la pagina lo scrive**: un numero corretto
 di nascosto e' peggio di uno sbagliato in chiaro.
+
+### Il profilo del capo: ogni campo con la sua fiducia
+
+L'identita' che esce dalla scansione non e' una lista di stringhe: e' un
+**profilo**, e ogni campo si porta dietro da dove arriva *e quanto vale*.
+Leggere "Carhartt" sul cartellino e dedurlo dalla forma sono due cose diverse,
+e finora il sito diceva la prima meta' (la fonte) e non la seconda (quanto
+fidarsi). Ora le dice tutte e due, con un numero da 0 a 1:
+
+| fonte | quanto vale |
+|---|---|
+| letto sull'etichetta | 0.97 |
+| detto da te | 0.90 |
+| riconosciuto da Lens | 0.85 |
+| visto in foto | 0.62 |
+
+La foto sta in fondo perche' e' la fonte che sbaglia di piu': un colore lo
+prende quasi sempre, un modello quasi mai.
+
+Quando due fonti parlano dello stesso campo non si sceglie e basta. Se sono
+**d'accordo** la fiducia sale - il dubbio che resta e' il prodotto dei due
+dubbi, con un tetto a 0.99: nessun campo diventa mai una certezza - e se si
+**contraddicono** vince comunque quella piu' affidabile, ma la fiducia scende e
+il disaccordo resta scritto sotto il campo. "L'etichetta dice Nike, la foto
+diceva Adidas" e' esattamente il caso in cui il prezzo va guardato due volte, e
+nasconderlo per far vedere una scheda pulita sarebbe il tipo di bugia che poi
+costa una vendita.
+
+Il profilo esce dallo scanner (`sxProfilo`) nella forma piatta - i valori, poi
+`fiducia` e `fonti` a fianco, campo per campo - ed e' anche come l'identita'
+arriva al modello nel prompt: ogni riga con la sua fonte e il suo numero, cosi'
+il verdetto non costruisce un ragionamento sopra un campo che potrebbe non
+esserci.
+
+### La confidenza del campione: quanti, quanto simili, quanto freschi
+
+Il **livello** di fiducia dice se un numero singolo si puo' dire, e lo decide su
+quante prove contano e su quanto sono sparse. Non dice pero' *di che pasta e'
+fatto il campione*, ed e' una domanda diversa: dieci annunci con prezzi
+vicinissimi ma di un altro modello danno un livello alto e un prezzo che
+sembra solido. E' il modo piu' comodo di sbagliarsi.
+
+Quindi accanto al livello c'e' un secondo numero, da 0 a 1, che guarda solo il
+campione e mai i prezzi:
+
+- **quantita'** (peso 0.30): quanti comparabili, su venti. Oltre non si
+  guadagna: il ventunesimo annuncio non aggiunge niente al ventesimo.
+- **somiglianza** (peso 0.45, la fetta piu' grossa): quanto ogni annuncio parla
+  *di questo capo* - marca, modello e tipo pesano 0.40, 0.35 e 0.25, e i campi
+  che non conosciamo non contano contro nessuno - e quanto e' vicina la sua
+  condizione alla tua.
+- **freschezza** (peso 0.25): quanto sono recenti, con la stessa scala dell'eta'
+  che pesa le prove. Una data che manca vale 0.6: nel peso di un annuncio vale
+  1 apposta, per non spostare la mediana per un dato che manca a Google, ma
+  qui non sapere e' proprio un motivo per fidarsi di meno.
+
+Sotto il prezzo la pagina scrive il numero **e da quale lato e' basso** -
+"quantita' 0.3 (6 annunci su 20), freschezza 0.3, somiglianza 0.56" - partendo
+dal lato piu' debole, che e' anche la risposta alla domanda "cosa cerco
+ancora?".
 
 ### Un modello di prezzo solo, due schede
 

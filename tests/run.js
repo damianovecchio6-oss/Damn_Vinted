@@ -22,6 +22,7 @@ const SUITE = [
   ['agente di ricerca', 'agente.js', 'piano, ricerche, raffinamento, rapporto'],
   ['scanner', 'scanner.js', 'identita e fonti, usato vs nuovo, giri, banda dei prezzi'],
   ['i conti sui prezzi', 'prezzi.js', 'quantile pesato, peso delle prove, casi limite, calibrazione'],
+  ['profilo e confidenza', 'profilo.js', 'fiducia per campo, fonti, comparabili, punteggio del campione'],
   ['micro-interazioni', 'interazioni.js', 'ghiera, attesa, focus, vibrazione, motion'],
   ['dito sul telefono', 'tocco.js', 'tocchi veri: ghiera, tasto centrale, parcheggio'],
   ['app installabile', 'app.js', 'manifest, icone, service worker, offline'],

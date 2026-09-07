@@ -1813,7 +1813,8 @@ function renderRicerca(senzaRapporto){
     (prezzo===null&&u)?{ n:`${u.q1}–${u.q3}€`, l:'Dove sta metà del mercato' }:null,
     (prezzo!==null&&rMin!==null&&rMax!==null)?{ n:`${rMin}–${rMax}€`, l:'Range' }:null,
     p?{ n:p.mediana+'€', l:u?`Mediana su ${p.n} annunci usati`:`Mediana su ${p.n} listini` }:null,
-    { n:fiducia.livello, l:'Fiducia' }
+    { n:fiducia.livello, l:'Fiducia' },
+    u?{ n:String(fiducia.punteggio), l:'Confidenza del campione' }:null
   ].filter(Boolean);
 
   // Tutto quello che segue arriva dal modello o da SerpApi: testo non fidato,
@@ -2013,7 +2014,11 @@ async function avviaScanner(){
     const { prove, motivoStop, erroreRicerca }=await sxIndagine(identita);
     const mercato=sxMercato(prove);
 
-    lastScan={ identita, prove:sxOrdina(prove), mercato, motivoStop, erroreRicerca, verdetto:null };
+    // Il profilo e' l'identita' vista da fuori: campi piatti, fiducia e fonte
+    // a fianco. Chi legge lo scanner - il rapporto, il testo da copiare, un
+    // domani l'esportazione - lo prende da qui invece di rifare il conto.
+    lastScan={ identita, profilo:sxProfilo(identita), prove:sxOrdina(prove), mercato,
+      motivoStop, erroreRicerca, verdetto:null };
     // Senza un solo prezzo dell'usato non c'e' niente da concludere: il
     // modello inventerebbe un numero, ed e' esattamente quello che questo
     // agente esiste per non fare. L'identita' pero' vale gia' da sola.
@@ -2092,13 +2097,84 @@ async function identificaConLens(){
   return chiamaEndpoint(LENS_URL,{ image: base64 });
 }
 
-// Ogni campo tiene la sua provenienza. L'ordine e' sempre lo stesso: quello
-// che c'e' scritto batte quello che si e' dedotto guardando.
+// Quanto vale una fonte, da sola. Non e' un'opinione sul modello: e' la
+// differenza fra leggere una scritta e dedurla dalla forma. "Carhartt letto
+// sul cartellino" e "Carhartt visto in foto" portano allo stesso prezzo con
+// due affidabilita' diverse, e chi vende deve poterle distinguere prima di
+// fidarsi del numero.
+//
+// La taglia detta da te vale quasi come l'etichetta - il capo ce l'hai in
+// mano - mentre la foto resta la fonte che sbaglia di piu': un colore lo
+// prende quasi sempre, un modello quasi mai.
+const SX_FIDUCIA_FONTE={ etichetta:0.97, tu:0.90, lente:0.85, foto:0.62 };
+// Due fonti che dicono la stessa cosa non fanno una prova sola: il dubbio che
+// resta e' il prodotto dei due dubbi. Due che si contraddicono invece non si
+// annullano - una delle due ha ragione - ma quella che vince smette di essere
+// una certezza.
+const SX_FIDUCIA_TETTO=0.99, SX_FIDUCIA_DISCORDE=0.7;
+// Come si chiama una fonte quando la legge una persona.
+const SX_FONTI={ etichetta:'letto sull\'etichetta', foto:'visto in foto',
+  lente:'riconosciuto da Lens', tu:'detto da te' };
+
+// Ogni campo tiene la sua provenienza e quanto ci si puo' fidare. L'ordine e'
+// sempre lo stesso: quello che c'e' scritto batte quello che si e' dedotto
+// guardando.
 function sxCampo(valore, fonte){
-  return campoLetto(valore) ? { v:String(valore).trim().slice(0,120), f:fonte } : null;
+  return campoLetto(valore)
+    ? { v:String(valore).trim().slice(0,120), f:fonte, c:SX_FIDUCIA_FONTE[fonte]||0.5 }
+    : null;
 }
 
 function sxVal(campo){ return campo ? campo.v : ''; }
+function sxFid(campo){ return campo ? campo.c : 0; }
+
+const sxNorm=t=>String(t||'').toLowerCase().replace(/[^a-z0-9à-ù]+/g,' ').trim();
+const sxArr2=x=>Math.round(x*100)/100;
+
+// Piu' fonti sullo stesso campo. La prima che ha qualcosa da dire da' il
+// valore - l'ordine di priorita' e' quello con cui la si chiama - ma le altre
+// non si buttano: se confermano, la fiducia sale; se dicono un'altra cosa,
+// scende e il campo se lo ricorda, perche' un disaccordo fra etichetta e foto
+// e' proprio il caso in cui il prezzo va guardato due volte.
+function sxUnisci(...candidati){
+  const campi=candidati.filter(Boolean);
+  if(!campi.length) return null;
+  const vinto=campi[0];
+  let dubbio=1-vinto.c, discorde=null;
+  for(const altro of campi.slice(1)){
+    if(sxNorm(altro.v)===sxNorm(vinto.v)) dubbio*=(1-altro.c);
+    else if(!discorde) discorde=altro;
+  }
+  let c=Math.min(SX_FIDUCIA_TETTO, 1-dubbio);
+  if(discorde) c*=SX_FIDUCIA_DISCORDE;
+  const campo={ v:vinto.v, f:vinto.f, c:sxArr2(c) };
+  if(discorde) campo.contro={ v:discorde.v, f:discorde.f };
+  return campo;
+}
+
+// Il profilo del capo: gli stessi campi dell'identita', ma piatti, con la
+// fiducia e la fonte a fianco invece che dentro. E' la forma in cui il capo
+// esce dallo scanner - il rapporto, il prompt del verdetto, lo storico - e
+// serve perche' un consumatore possa chiedere "quanto sei sicuro della marca?"
+// senza sapere com'e' fatto sxCampo.
+const SX_PROFILO=[
+  ['categoria','tipo'], ['marca','marca'], ['modello','modello'],
+  ['materiale','materiale'], ['taglia','taglia'], ['colore','colore'],
+  ['condizione','condizione'], ['epoca','epoca']
+];
+
+function sxProfilo(identita){
+  const profilo={ fiducia:{}, fonti:{} };
+  for(const [chiave, campo] of SX_PROFILO){
+    const c=identita ? identita[campo] : null;
+    if(!c) continue;
+    profilo[chiave]=c.v;
+    profilo.fiducia[chiave]=c.c;
+    profilo.fonti[chiave]=c.f;
+    if(c.contro) (profilo.discordi||(profilo.discordi={}))[chiave]=c.contro;
+  }
+  return profilo;
+}
 
 function sxIdentita(analisi, etichetta, lens, note){
   const a=analisi||{}, e=etichetta||{};
@@ -2106,10 +2182,10 @@ function sxIdentita(analisi, etichetta, lens, note){
     && /media|alta/i.test(a.vintageConfidenza||'') ? a.vintageStima : '';
   return {
     tipo:       sxCampo(a.tipo, 'foto'),
-    marca:      sxCampo(e.marca, 'etichetta') || sxCampo(a.brand, 'foto'),
+    marca:      sxUnisci(sxCampo(e.marca, 'etichetta'), sxCampo(a.brand, 'foto')),
     modello:    sxCampo(lens && lens.ipotesi, 'lente'),
-    materiale:  sxCampo(e.composizione, 'etichetta') || sxCampo(a.materiale, 'foto'),
-    taglia:     sxCampo(e.taglia, 'etichetta') || sxCampo(a.taglie, 'foto'),
+    materiale:  sxUnisci(sxCampo(e.composizione, 'etichetta'), sxCampo(a.materiale, 'foto')),
+    taglia:     sxUnisci(sxCampo(e.taglia, 'etichetta'), sxCampo(a.taglie, 'foto')),
     colore:     sxCampo(a.colore, 'foto'),
     condizione: sxCampo(a.condizione, 'foto'),
     epoca:      sxCampo(vintage, 'foto'),
@@ -2126,14 +2202,20 @@ function sxDescrizioneBreve(id){
     .filter(Boolean).join(' · ');
 }
 
+// Come si racconta l'identita' a un modello. Ogni riga si porta dietro la
+// fiducia del campo: un modello che sa che la marca vale 0.62 e la taglia 0.97
+// cerca il modello prima di dare per buona la marca, e nel verdetto non
+// costruisce un ragionamento sopra un campo che potrebbe non esserci.
 function sxDescrivi(id){
   const righe=[
-    ['Capo', sxVal(id.tipo)], ['Marca', sxVal(id.marca)], ['Modello riconosciuto', sxVal(id.modello)],
-    ['Materiale', sxVal(id.materiale)], ['Taglia', sxVal(id.taglia)], ['Colore', sxVal(id.colore)],
-    ['Condizione', sxVal(id.condizione)], ['Epoca', sxVal(id.epoca)],
-    ['Difetti visti', sxVal(id.difetti)], ['Detto dal venditore', sxVal(id.tuo)]
+    ['Capo', id.tipo], ['Marca', id.marca], ['Modello riconosciuto', id.modello],
+    ['Materiale', id.materiale], ['Taglia', id.taglia], ['Colore', id.colore],
+    ['Condizione', id.condizione], ['Epoca', id.epoca],
+    ['Difetti visti', id.difetti], ['Detto dal venditore', id.tuo]
   ];
-  return righe.filter(r=>r[1]).map(r=>`- ${r[0]}: ${r[1]}`).join('\n') || '- nessun dato leggibile dalle foto';
+  return righe.filter(r=>sxVal(r[1])).map(r=>`- ${r[0]}: ${sxVal(r[1])} (${SX_FONTI[r[1].f]||r[1].f}, fiducia ${sxFid(r[1])})`
+    + (r[1].contro?` — ma ${SX_FONTI[r[1].contro.f]||r[1].contro.f} dice invece "${r[1].contro.v}"`:'')
+  ).join('\n') || '- nessun dato leggibile dalle foto';
 }
 
 /* ============ 2. L'INDAGINE: cercare finche' i conti tornano ============ */
@@ -2289,15 +2371,39 @@ function sxParole(testo){
   return String(testo||'').toLowerCase().replace(/[^a-zà-ù0-9]+/g,' ').split(' ').filter(w=>w.length>2);
 }
 
-// Un risultato che non nomina ne' la marca ne' il tipo di capo non parla di
-// questo capo. Resta in elenco, marcato, ma fuori dalla mediana: e' proprio
-// il modo in cui una stima "basata su dati veri" diventa sbagliata.
-function sxPertinente(prova, identita){
+// Quanto un risultato parla davvero di questo capo, da 0 a 1. La marca pesa
+// piu' del tipo perche' "felpa" ce l'hanno in centomila, e il modello pesa
+// quanto la marca perche' e' quello che separa una Air Max 90 da una Air Max
+// qualunque. I campi che non conosciamo non contano contro nessuno: i pesi si
+// ridistribuiscono su quelli che ci sono, altrimenti un capo senza modello
+// riconosciuto avrebbe tutti i comparabili a meta' punteggio per un dato che
+// manca a noi, non a loro.
+const SX_PESO_MATCH={ marca:0.40, modello:0.35, tipo:0.25 };
+
+function sxGradoPertinenza(prova, identita){
   const testo=`${prova.titolo||''} ${prova.snippet||''}`.toLowerCase();
   const marca=sxVal(identita.marca).toLowerCase().trim();
-  if(marca && testo.includes(marca)) return true;
-  const parole=sxParole(sxVal(identita.tipo)).concat(sxParole(sxVal(identita.modello)));
-  return parole.some(p=>testo.includes(p));
+  const quota=(campo)=>{
+    const parole=sxParole(sxVal(campo));
+    return parole.length ? parole.filter(w=>testo.includes(w)).length/parole.length : null;
+  };
+  const parti=[
+    [SX_PESO_MATCH.marca, marca ? (testo.includes(marca)?1:0) : null],
+    [SX_PESO_MATCH.modello, quota(identita.modello)],
+    [SX_PESO_MATCH.tipo, quota(identita.tipo)]
+  ].filter(x=>x[1]!==null);
+  const totale=parti.reduce((t,x)=>t+x[0],0);
+  if(!totale) return 0;
+  return sxArr2(parti.reduce((t,x)=>t+x[0]*x[1],0)/totale);
+}
+
+// Un risultato che non nomina ne' la marca ne' il tipo di capo non parla di
+// questo capo. Resta in elenco, marcato, ma fuori dalla mediana: e' proprio
+// il modo in cui una stima "basata su dati veri" diventa sbagliata. La soglia
+// e' "qualcosa ha fatto match", non un numero scelto a mano: sotto c'e' solo
+// lo zero.
+function sxPertinente(prova, identita){
+  return sxGradoPertinenza(prova, identita)>0;
 }
 
 // La scala delle condizioni di Vinted, dal cartellino ancora attaccato al capo
@@ -2350,13 +2456,98 @@ const SX_PESO_VENDUTO=1.6;
 // Piu' vecchio di cosi' e l'annuncio si racconta come "vecchio" a schermo.
 const SX_ETA_VECCHIA=90;
 
+// L'eta' come fattore, in un posto solo: la usano il peso della prova e la
+// freschezza della confidenza, e due scale diverse per la stessa cosa
+// sarebbero due tarature da tenere allineate a mano.
+function sxFattoreEta(giorni){
+  if(giorni===null) return null;
+  const scaglione=SX_PESO_ETA.find(s=>giorni<=s[0]);
+  return scaglione ? scaglione[1] : SX_PESO_ETA_OLTRE;
+}
+
+function sxDistanzaCond(prova, condizioneCapo){
+  return (prova.condScala!==null && prova.condScala!==undefined && condizioneCapo!==null)
+    ? Math.abs(prova.condScala-condizioneCapo) : null;
+}
+
 function sxPesoDi(prova, condizioneCapo){
-  const giorni=sxGiorni(prova);
-  const scaglione=giorni===null ? null : SX_PESO_ETA.find(s=>giorni<=s[0]);
-  const distanza=(prova.condScala!==null && condizioneCapo!==null) ? Math.abs(prova.condScala-condizioneCapo) : null;
-  return (giorni===null ? 1 : (scaglione ? scaglione[1] : SX_PESO_ETA_OLTRE))
+  const eta=sxFattoreEta(sxGiorni(prova));
+  const distanza=sxDistanzaCond(prova, condizioneCapo);
+  return (eta===null ? 1 : eta)
     * (distanza===null ? SX_PESO_COND_IGNOTA : SX_PESO_COND[Math.min(3,distanza)])
     * (prova.venduto ? SX_PESO_VENDUTO : 1);
+}
+
+/* --- La confidenza: quanto vale il campione, non quanto vale un annuncio ---
+   Il peso dice quanto una prova conta *dentro* la mediana. La confidenza dice
+   se il campione nel suo insieme regge il numero che ne esce, e sono tre
+   domande diverse: quanti annunci ho, quanto somigliano al capo, quanto sono
+   recenti. Una sola non basta - venti annunci di un altro capo non valgono
+   niente, tre annunci identici e freschi non fanno un mercato - quindi si
+   pesano: la somiglianza per prima, poi la quantita', poi la freschezza. --- */
+const SX_CONF_PESI={ quantita:0.30, somiglianza:0.45, freschezza:0.25 };
+// Quanti annunci servono perche' la quantita' valga pieno. Oltre non si
+// guadagna: il ventunesimo annuncio non aggiunge niente al ventesimo.
+const SX_CONF_QUANTI=20;
+// Nella somiglianza, quanto conta parlare dello stesso capo e quanto conta
+// essere nella stessa condizione.
+const SX_CONF_SOMIGLIA={ pertinenza:0.6, condizione:0.4 };
+// Una data che manca non e' una data recente. Nel peso vale 1 apposta - un
+// annuncio senza data non deve scendere sotto gli altri e spostare la mediana
+// per un dato che manca a Google - ma qui non sapere e' proprio il motivo per
+// fidarsi di meno.
+const SX_FRESCHEZZA_IGNOTA=0.6;
+
+// Quanto un annuncio somiglia al capo: di che capo parla, e in che condizione
+// e'. L'esito - venduto o no - resta fuori: e' gia' nel peso, e contarlo due
+// volte lo farebbe pesare quanto la marca.
+function sxSomiglianza(prova, condizioneCapo){
+  const distanza=sxDistanzaCond(prova, condizioneCapo);
+  const cond=distanza===null ? SX_PESO_COND_IGNOTA : SX_PESO_COND[Math.min(3,distanza)];
+  const grado=typeof prova.grado==='number' ? prova.grado : 0;
+  return sxArr2(grado*SX_CONF_SOMIGLIA.pertinenza + cond*SX_CONF_SOMIGLIA.condizione);
+}
+
+function sxFreschezza(prova){
+  const eta=sxFattoreEta(sxGiorni(prova));
+  return eta===null ? SX_FRESCHEZZA_IGNOTA : eta;
+}
+
+// I tre pezzi, prima di essere mescolati. Restano visibili apposta: un numero
+// solo dice che la confidenza e' 0.42, questi dicono da quale dei tre lati e'
+// bassa, ed e' l'unica versione su cui si puo' decidere cosa cercare ancora.
+function sxConfidenzaParti(comparabili){
+  const media=(chiave)=>comparabili.reduce(
+    (somma,c)=>somma+(typeof c[chiave]==='number'?c[chiave]:0), 0)/comparabili.length;
+  return {
+    quantita: Math.min(comparabili.length/SX_CONF_QUANTI, 1),
+    somiglianza: media('somiglianza'),
+    freschezza: media('freschezza')
+  };
+}
+
+// La confidenza del campione, da 0 a 1. Prende i comparabili gia' valutati -
+// ognuno con la sua somiglianza e la sua freschezza - e non guarda i prezzi:
+// dice quanto il campione e' fatto della roba giusta, non che numero ne esce.
+function sxConfidenza(comparabili){
+  if(!comparabili || !comparabili.length) return 0;
+  const p=sxConfidenzaParti(comparabili);
+  return sxArr2(p.quantita*SX_CONF_PESI.quantita
+    + p.somiglianza*SX_CONF_PESI.somiglianza
+    + p.freschezza*SX_CONF_PESI.freschezza);
+}
+
+// La confidenza raccontata a parole, dal lato che pesa di meno: e' la stessa
+// frase che serve a chi legge ("perche' cosi' bassa?") e al giro di ricerca
+// dopo ("cosa cerco adesso?").
+function sxPercheConfidenza(u){
+  if(!u || !u.parti) return 'non ho abbastanza annunci per dirlo';
+  const p=u.parti, pezzi=[
+    ['quantità', p.quantita, `${u.n} annunci su ${SX_CONF_QUANTI}`],
+    ['somiglianza', p.somiglianza, 'quanto parlano di questo capo e di questa condizione'],
+    ['freschezza', p.freschezza, 'quanto sono recenti']
+  ].sort((a,b)=>a[1]-b[1]);
+  return pezzi.map(x=>`${x[0]} ${sxArr2(x[1])} (${x[2]})`).join(', ');
 }
 
 // L'eta' sta in un posto solo. Quando la function ha mandato anche la data,
@@ -2377,10 +2568,13 @@ function sxValuta(prove, identita){
   for(const p of prove){
     const testo=`${p.titolo||''} ${p.snippet||''}`;
     p.mercato=sxDoveSta(p);
-    p.pertinente=sxPertinente(p, identita);
+    p.grado=sxGradoPertinenza(p, identita);
+    p.pertinente=p.grado>0;
     p.venduto=p.mercato==='usato' && SX_VENDUTO.test(testo);
     p.condScala=sxScalaCondizione(testo);
     p.stessaCond=p.condScala!==null && p.condScala===condCapo;
+    p.somiglianza=sxSomiglianza(p, condCapo);
+    p.freschezza=sxFreschezza(p);
     // Solo l'usato si pesa: un listino di negozio non ha ne' condizione ne'
     // esito, e pesarlo per poi rimettere il peso a 1 piu' avanti vuol dire
     // che il prossimo fattore che si aggiunge va ricordato in due posti.
@@ -2464,7 +2658,12 @@ function sxStatistiche(campioni){
     scartati,
     venduti: tenuti.filter(c=>c.prova.venduto).length,
     stessaCond: tenuti.filter(c=>c.prova.stessaCond).length,
-    vecchi: tenuti.filter(c=>sxGiorni(c.prova)>SX_ETA_VECCHIA).length
+    vecchi: tenuti.filter(c=>sxGiorni(c.prova)>SX_ETA_VECCHIA).length,
+    // Quanto regge il campione, in un numero: quantita', somiglianza,
+    // freschezza. E' calcolato sugli annunci tenuti, non su quelli trovati -
+    // gli estremi scartati non fanno confidenza.
+    confidenza: sxConfidenza(tenuti.map(c=>c.prova)),
+    parti: sxConfidenzaParti(tenuti.map(c=>c.prova))
   };
 }
 
@@ -2531,7 +2730,19 @@ function sxPesiContano(u){ return !!u && u.nEff < u.n - 0.4; }
 // E non e' un'etichetta accanto a un numero che resta preciso lo stesso: con
 // tre annunci sparsi "27€" sembra una misura e non lo e'. Sotto la soglia il
 // campo "numero" dice di no, e la pagina mostra la banda invece della cifra.
+// Il livello e la confidenza guardano due cose diverse e vanno tutte e due
+// dette. Il livello decide se un numero singolo si puo' dire - e lo decide
+// sulle prove che contano e su quanto sono sparse - mentre la confidenza dice
+// di che pasta e' fatto il campione: dieci annunci vicinissimi ma di un altro
+// modello danno un livello alto e una confidenza bassa, ed e' esattamente il
+// caso in cui il prezzo sembra solido e non lo e'.
 function sxFiducia(mercato){
+  const f=sxLivelloFiducia(mercato);
+  f.punteggio=mercato.usato ? mercato.usato.confidenza : 0;
+  return f;
+}
+
+function sxLivelloFiducia(mercato){
   const u=mercato.usato;
   const pesati=sxPesiContano(u) ? ` (${u.n} trovati, ma vecchi o di un'altra condizione)` : '';
   if(!u || u.nEff<3){
@@ -2701,11 +2912,14 @@ function sxDisegna(){
     ['Condizione', s.identita.condizione], ['Epoca', s.identita.epoca], ['Difetti', s.identita.difetti]
   ].filter(r=>r[1]);
 
-  const fonti={ etichetta:'letto sull\'etichetta', foto:'visto in foto', lente:'riconosciuto da Lens', tu:'detto da te' };
   let html='<div class="rl" style="margin-top:0">🧾 Identità del capo</div>'
     + identita.map(r=>`<div class="sxr"><span class="sxk">${esc(r[0])}</span>`
       + `<span class="sxv">${esc(r[1].v)}</span>`
-      + `<span class="sxf${r[1].f==='etichetta'?' letta':''}">${esc(fonti[r[1].f]||r[1].f)}</span></div>`).join('');
+      + `<span class="sxf${r[1].f==='etichetta'?' letta':''}" title="Quanto mi fido di questo campo: ${esc(String(sxFid(r[1])))} su 1">`
+      + `${esc(SX_FONTI[r[1].f]||r[1].f)} · ${esc(String(sxFid(r[1])))}</span></div>`
+      + (r[1].contro
+        ? `<div class="hSub" style="margin:-2px 0 8px">${esc(SX_FONTI[r[1].contro.f]||r[1].contro.f)} diceva invece “${esc(r[1].contro.v)}”: ho tenuto il primo, ma la fiducia è più bassa.</div>`
+        : '')).join('');
 
   if(u){
     html+=`<div class="rl" style="margin-top:20px">💶 Il prezzo</div>`
@@ -2719,8 +2933,10 @@ function sxDisegna(){
       + sxValore(banda, 'Dove sta metà del mercato')
       + (n?sxValore(n.mediana+'€', `Nuovo in negozio${s.mercato.tenuta?` · l'usato ne vale il ${s.mercato.tenuta}%`:''}`):'')
       + sxValore(fiducia.livello, 'Fiducia')
+      + sxValore(String(fiducia.punteggio), 'Confidenza del campione')
       + `</div>`
       + `<div class="hSub" style="margin-bottom:6px">Fiducia ${esc(fiducia.livello)}: ${esc(fiducia.perche)}.</div>`
+      + `<div class="hSub" style="margin-bottom:6px">Confidenza del campione ${esc(String(fiducia.punteggio))} su 1: ${esc(sxPercheConfidenza(u))}.</div>`
       + `<div class="hSub" style="margin-bottom:12px">${esc(composizione)}${fiducia.numero&&margine>0?` Il range tiene conto dell'incertezza: ±${margine}€.`:''}</div>`;
     if(!fiducia.numero){
       html+=`<div class="tip">⚠️ Non dico un prezzo solo: ${esc(fiducia.perche)}. Una cifra precisa qui sembrerebbe una misura senza esserlo: resta la banda qui sopra.</div>`;
@@ -2805,6 +3021,7 @@ function sxDisegna(){
     composizione,
     n?`Nuovo in negozio: ${n.mediana}€`:'',
     `Fiducia ${fiducia.livello}: ${fiducia.perche}`,
+    u?`Confidenza del campione ${fiducia.punteggio} su 1: ${sxPercheConfidenza(u)}`:'',
     d.lettura||'',
     perche.length?'\n'+perche.map(o=>'- '+o).join('\n'):''
   ].filter(Boolean).join('\n').trim();
