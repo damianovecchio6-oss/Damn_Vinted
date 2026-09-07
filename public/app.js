@@ -2510,10 +2510,17 @@ const SX_FRESCHEZZA_IGNOTA=0.6;
 // Quanto un annuncio somiglia al capo: di che capo parla, e in che condizione
 // e'. L'esito - venduto o no - resta fuori: e' gia' nel peso, e contarlo due
 // volte lo farebbe pesare quanto la marca.
+//
+// Quando la condizione non si legge - ne' la sua ne' quella del capo - non e'
+// una condizione "nella media": e' un dato che manca, e un dato che manca non
+// deve ne' aiutare ne' penalizzare. Il peso che gli spettava torna tutto alla
+// pertinenza, invece di fingere un 0.8 che nessuno ha misurato: e' la stessa
+// regola con cui sxGradoPertinenza ridistribuisce marca, modello e tipo.
 function sxSomiglianza(prova, condizioneCapo){
   const distanza=sxDistanzaCond(prova, condizioneCapo);
-  const cond=distanza===null ? SX_PESO_COND_IGNOTA : SX_PESO_COND[Math.min(3,distanza)];
   const grado=typeof prova.grado==='number' ? prova.grado : 0;
+  if(distanza===null) return sxArr2(grado);
+  const cond=SX_PESO_COND[Math.min(3,distanza)];
   return sxArr2(grado*SX_CONF_SOMIGLIA.pertinenza + cond*SX_CONF_SOMIGLIA.condizione);
 }
 

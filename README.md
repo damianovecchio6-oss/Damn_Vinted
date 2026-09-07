@@ -428,6 +428,13 @@ aggiunta apposta: tagliare del tutto un annuncio sotto un numero scelto a
 tavolino sarebbe un'altra costante senza dati a sostegno, mentre pesarlo di
 meno lo fa gia' contare quanto merita.
 
+Una cosa pero' non deve fingere di sapere quello che non sa. Quando ne' la
+condizione del capo ne' quella dell'annuncio si leggono, la somiglianza usata
+per la confidenza non sostituisce piu' quel pezzo con un 0.8 a caso: il peso
+che gli spettava torna tutto alla pertinenza, come gia' faceva
+`sxGradoPertinenza` quando marca o modello mancano. Un dato che manca non deve
+ne' aiutare ne' penalizzare - deve solo mancare.
+
 ### Quando il modello non da' un veloce o un paziente
 
 Il prezzo "veloce" e il "paziente" li propone il modello, e il codice li
