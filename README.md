@@ -410,6 +410,35 @@ Sotto il prezzo la pagina scrive il numero **e da quale lato e' basso** -
 dal lato piu' debole, che e' anche la risposta alla domanda "cosa cerco
 ancora?".
 
+### Anche il peso conosce la somiglianza
+
+Il peso di una prova (quello che sposta la mediana) e la confidenza del
+campione condividono due fattori - l'eta' e la condizione - ma fino a poco fa
+non condividevano il terzo: un annuncio che nominava appena il tipo di capo,
+senza marca ne' modello, contava nella mediana quanto uno che li nominava
+tutti, perche' "pertinente" era un si/no. Ora il grado di somiglianza (lo
+stesso 0-1 della confidenza) entra anche nel peso: `grado × eta' × condizione ×
+venduto`. Un match debole sposta la mediana poco invece che come uno pieno.
+
+Sotto lo zero non cambia niente - un annuncio che non nomina ne' la marca ne'
+il tipo resta fuori dalla mediana, marcato ma non contato, come prima - ma un
+annuncio debolmente pertinente adesso pesa meno di uno forte anche se sono
+usati, freschi e nella stessa condizione. Nessuna soglia minima e' stata
+aggiunta apposta: tagliare del tutto un annuncio sotto un numero scelto a
+tavolino sarebbe un'altra costante senza dati a sostegno, mentre pesarlo di
+meno lo fa gia' contare quanto merita.
+
+### Quando il modello non da' un veloce o un paziente
+
+Il prezzo "veloce" e il "paziente" li propone il modello, e il codice li
+riporta dentro la banda degli annunci veri prima di mostrarli. Se pero' il
+modello non risponde con un numero leggibile per uno dei due, la scheda non
+deve restare con un buco: il ripiego e' il quartile che il prompt stesso
+propone come default - `q1` per il veloce, `q3` per il paziente, cioe' "dove
+sta meta' del mercato" - non un moltiplicatore della mediana inventato senza
+prove. Succede solo quando la fiducia permette gia' di mostrare un numero
+singolo: sotto la soglia resta la banda, come sempre.
+
 ### Un modello di prezzo solo, due schede
 
 Questi conti non sono dello scanner: sono del prodotto. La scheda **Ricerca**

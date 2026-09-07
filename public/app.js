@@ -2437,6 +2437,12 @@ const SX_VENDUTO=/\bvendut[oai]\b(?!\s+(da|e spedit))|\bsold\b|aggiudicat|prezzo
 
 // Quanto conta una prova, oltre al suo prezzo. Tre cose la spostano.
 //
+// La somiglianza: un annuncio che nomina appena il tipo di capo, senza marca
+// ne' modello, parla del tuo capo meno di uno che li nomina tutti - e finora
+// contava uguale, perche' "pertinente" era un si/no. Ora il grado stesso
+// (0-1, lo stesso della confidenza) entra nel peso: un match debole conta
+// poco invece di contare come uno pieno.
+//
 // L'eta': gli annunci vivi sono richieste, non vendite, e siccome gli invenduti
 // restano online mentre i venduti spariscono, una banda fatta di soli annunci
 // vivi pende verso l'alto. Un annuncio fermo da mesi e' proprio la prova che a
@@ -2447,9 +2453,10 @@ const SX_VENDUTO=/\bvendut[oai]\b(?!\s+(da|e spedit))|\bsold\b|aggiudicat|prezzo
 //
 // E l'esito: un venduto vale piu' di una richiesta.
 //
-// Quando non si sa niente - niente data, niente condizione - il peso resta
-// uguale per tutti, e i conti vengono identici a una mediana semplice: il peso
-// sposta qualcosa solo quando c'e' davvero qualcosa da sapere.
+// Quando non si sa niente - niente data, niente condizione - quei due fattori
+// restano uguali per tutti, e i conti vengono identici a una mediana semplice
+// pesata solo dalla somiglianza: il peso si sposta solo quando c'e' davvero
+// qualcosa da sapere.
 const SX_PESO_ETA=[[45,1],[90,0.8],[180,0.6],[365,0.45]], SX_PESO_ETA_OLTRE=0.3;
 const SX_PESO_COND=[1,0.7,0.45,0.3], SX_PESO_COND_IGNOTA=0.8;
 const SX_PESO_VENDUTO=1.6;
@@ -2473,7 +2480,9 @@ function sxDistanzaCond(prova, condizioneCapo){
 function sxPesoDi(prova, condizioneCapo){
   const eta=sxFattoreEta(sxGiorni(prova));
   const distanza=sxDistanzaCond(prova, condizioneCapo);
-  return (eta===null ? 1 : eta)
+  const grado=typeof prova.grado==='number' ? prova.grado : 1;
+  return grado
+    * (eta===null ? 1 : eta)
     * (distanza===null ? SX_PESO_COND_IGNOTA : SX_PESO_COND[Math.min(3,distanza)])
     * (prova.venduto ? SX_PESO_VENDUTO : 1);
 }
@@ -2902,8 +2911,12 @@ function sxDisegna(){
     || calibrazioneMercato();
   const tarato=calibra(fiducia.numero?corretto.valore:null, cal, u);
   const prezzo=tarato.valore;
-  const veloce=calibra(estremo(d.prezzoVeloce,-margine), cal, u).valore;
-  const paziente=calibra(estremo(d.prezzoPaziente,margine), cal, u).valore;
+  // Se il modello non ha dato un veloce/paziente leggibile, la banda non deve
+  // restare vuota: q1 e q3 sono gia' "dove sta meta' del mercato" - lo stesso
+  // numero che il prompt propone come default - quindi sono il ripiego piu'
+  // onesto che c'e', non un moltiplicatore inventato senza dati a sostegno.
+  const veloce=calibra(estremo(d.prezzoVeloce,-margine) ?? (fiducia.numero?u.q1:null), cal, u).valore;
+  const paziente=calibra(estremo(d.prezzoPaziente,margine) ?? (fiducia.numero?u.q3:null), cal, u).valore;
   const banda=u?`${u.q1}–${u.q3}€`:'', composizione=sxComposizione(u);
 
   const identita=[
