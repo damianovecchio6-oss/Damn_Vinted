@@ -126,7 +126,11 @@ async function analizza(ip) {
   // E se sono pieni tutti: lo si dice per quello che e', e soprattutto non si
   // scrive in cache "non esiste nessun modello" - fra cinque minuti sarebbe
   // falso, e intanto ogni richiesta si prenderebbe la bugia senza provare.
-  pieni = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-2.5-flash'];
+  // Il catalogo qui ha solo 2.5-flash e 3.7-flash: perche' "tutti pieni"
+  // sia vero per davvero, deve esserlo anche l'ultima spiaggia cablata nel
+  // codice (MODEL_GEMINI) - altrimenti quel nome resta libero nel mock e la
+  // richiesta riesce, quando dovrebbe fallire.
+  pieni = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-2.5-flash', 'gemini-3.5-flash'];
   r = await analizza('7.7.7.6');
   d = JSON.parse(r.body);
   check('tutti pieni: lo dice come sovraccarico, non come "nessun modello"',

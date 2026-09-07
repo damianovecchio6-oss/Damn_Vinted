@@ -231,6 +231,48 @@ const { check, fine } = L.contatore();
   check('la fiducia non scrive mai "NaN" da nessuna parte',
     !/NaN/.test(largo.fiducia.perche) && !/NaN/.test(largo.fiducia.livello), largo.fiducia);
 
+  console.log('\n-- sxLacuna guarda anche il lato debole della confidenza --');
+  // Identita' con un modello lungo (piu' parole), cosi' un titolo che ne
+  // nomina una sola da' un grado piccolo ma non zero - il caso che i soli
+  // nEff/larghezza non vedono: abbastanza annunci, prezzi vicini, ma di
+  // un altro capo.
+  const ID_LACUNA = {
+    marca: { v: 'Carhartt', f: 'foto' }, tipo: { v: 'giacca', f: 'foto' },
+    modello: { v: 'Detroit Chore Jacket Blanket Lined Duck Canvas', f: 'foto' },
+    condizione: { v: 'Buono', f: 'foto' }
+  };
+  const lacuna = (prove, identita) => page.evaluate(([pr, id]) => {
+    const p = pr.map(x => Object.assign({ fonte: 'Vinted', link: 'https://www.vinted.it/items/1', snippet: '' }, x,
+      { prezzo: { valore: x.prezzo, valuta: '€' } }));
+    sxValuta(p, id);
+    const m = sxMercato(p);
+    return { lacuna: sxLacuna(m, p, null), parti: m.usato && m.usato.parti, nEff: m.usato && m.usato.nEff };
+  }, [prove, identita]);
+
+  const parole = ['blanket', 'duck', 'lined', 'chore', 'canvas', 'detroit'];
+  const debole = await lacuna(
+    parole.map((w, i) => ({ titolo: `Capospalla vintage ${w} usato ${i}`, prezzo: 40 + i })), ID_LACUNA);
+  check('nEff e larghezza vanno bene da soli', debole.nEff >= 5, debole.nEff);
+  check('ma la somiglianza e\' troppo bassa, e si cerca ancora',
+    /assomigliano poco/.test(debole.lacuna || ''), debole);
+
+  const vecchi = await lacuna(
+    [0, 1, 2, 3, 4, 5].map(i => ({
+      titolo: `Carhartt giacca Detroit Chore vintage usata ${i}`, prezzo: 40 + i,
+      eta: { testo: '2 anni fa', giorni: 730 }
+    })), ID_LACUNA);
+  check('qui la somiglianza resta buona', vecchi.parti.somiglianza >= 0.4, vecchi.parti);
+  check('ma sono tutti vecchi, e si cerca ancora dicendolo',
+    /sono vecchi/.test(vecchi.lacuna || ''), vecchi);
+
+  const buoni = await lacuna(
+    [0, 1, 2, 3, 4, 5].map(i => ({
+      titolo: `Carhartt giacca Detroit Chore vintage usata ${i}`, prezzo: 40 + i,
+      eta: { testo: '5 giorni fa', giorni: 5 }
+    })), ID_LACUNA);
+  check('e quando non sono ne\' vecchi ne\' poco somiglianti, ci si ferma davvero',
+    buoni.lacuna === null, buoni);
+
   check('nessun errore JS in tutta la sessione', errori.length === 0, errori);
 
   await browser.close();

@@ -283,6 +283,16 @@ cambia strategia invece di ripetere la stessa query con altre parole. Si ferma
 quando il quadro sta in piedi - non dopo un numero fisso di ricerche - ma il
 tetto resta: quattro giri, sei ricerche in tutto, perche' ognuna costa quota.
 
+"Stare in piedi" pero' non guarda solo quanti annunci ci sono e quanto sono
+vicini i prezzi: guarda anche il lato piu' debole della confidenza del
+campione (sopra). Dieci annunci vicinissimi ma di un altro modello passano i
+controlli sui numeri - abbastanza prove, prezzi stretti, mediana ferma - e non
+dicono niente di questo capo lo stesso. Quando la somiglianza media o la
+freschezza media sono troppo basse, il giro continua, e la lacuna lo dice a
+lettere: "gli annunci trovati assomigliano poco a questo capo" fa restringere
+la query successiva (nome del modello, marca esatta), "sono vecchi" fa cercare
+il venduto invece della richiesta (eBay, dove i venduti restano indicizzati).
+
 **3. Capisce i prezzi.** Un annuncio Vinted a 30€ e una scheda Zalando a 89€
 non sono lo stesso numero: il primo dice a quanto **si vende**, il secondo
 quanto **costa nuovo**. Lo scanner:

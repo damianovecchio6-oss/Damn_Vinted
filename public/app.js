@@ -2299,7 +2299,7 @@ async function sxPiano(identita, prove, correlate, lacuna, quante, giro){
 CAPO, come l'ho scansionato dalle foto:
 ${sxDescrivi(identita)}
 
-${lacuna?`COSA NON TORNA ANCORA: ${lacuna}.\nLe ricerche fatte finora hanno dato ${prove.length} risultati, di cui ${sxDiTipo(prove,'usato').length} annunci dell'usato con un prezzo. Titoli visti:\n${prove.slice(0,8).map((p,n)=>`${n+1}. ${String(p.titolo).slice(0,80)}${p.prezzo?` — ${p.prezzo.valore}€`:''}`).join('\n')}\n\nRicerche correlate suggerite da Google: ${correlate.length?correlate.slice(0,4).join(', '):'nessuna'}\n\nCambia strategia: se i risultati parlavano di un altro capo restringi (nome del modello, marca esatta); se erano pochi allarga (categoria e materiale invece del modello); se erano tutti di negozi punta esplicitamente ai siti dell'usato.`:'E\' il primo giro: parti dalle ricerche che hanno piu\' probabilita\' di far uscire annunci veri con un prezzo.'}
+${lacuna?`COSA NON TORNA ANCORA: ${lacuna}.\nLe ricerche fatte finora hanno dato ${prove.length} risultati, di cui ${sxDiTipo(prove,'usato').length} annunci dell'usato con un prezzo. Titoli visti:\n${prove.slice(0,8).map((p,n)=>`${n+1}. ${String(p.titolo).slice(0,80)}${p.prezzo?` — ${p.prezzo.valore}€`:''}`).join('\n')}\n\nRicerche correlate suggerite da Google: ${correlate.length?correlate.slice(0,4).join(', '):'nessuna'}\n\nCambia strategia: se i risultati parlavano di un altro capo restringi (nome del modello, marca esatta); se erano pochi allarga (categoria e materiale invece del modello); se erano tutti di negozi punta esplicitamente ai siti dell'usato; se erano giusti ma vecchi cerca il venduto (aggiungi "venduto" o "sold" alla ricerca, o punta a eBay dove i venduti restano indicizzati).`:'E\' il primo giro: parti dalle ricerche che hanno piu\' probabilita\' di far uscire annunci veri con un prezzo.'}
 
 Scrivi ${quante===1?'UNA sola ricerca':`al massimo ${quante} ricerche`} da dare a Google, in italiano.
 - almeno una deve puntare agli annunci dell'usato (per esempio con "vinted" o "subito" nel testo)
@@ -2532,6 +2532,17 @@ const SX_CONF_PESI={ quantita:0.30, somiglianza:0.45, freschezza:0.25 };
 // Quanti annunci servono perche' la quantita' valga pieno. Oltre non si
 // guadagna: il ventunesimo annuncio non aggiunge niente al ventesimo.
 const SX_CONF_QUANTI=20;
+// Sotto quanto un lato della confidenza conta troppo poco per fermarsi,
+// anche se nEff e larghezza sono gia' a posto: dieci annunci vicinissimi ma
+// di un altro modello passano quei controlli e non dicono niente di questo
+// capo.
+//
+// Non puo' essere la stessa soglia di SX_USATI_OK/SX_CONF_QUANTI (0.25): la
+// freschezza non scende mai sotto SX_PESO_ETA_OLTRE (0.3, oltre un anno), e
+// una soglia piu' bassa di quel pavimento non l'avrebbe mai intercettata. Sta
+// sopra 0.3 (il caso peggiore vero, oltre un anno, deve contare) e sotto 0.45
+// (lo scaglione 91-365 giorni non e' di per se' un allarme).
+const SX_CONF_SOGLIA_LACUNA=0.4;
 // Nella somiglianza, quanto conta parlare dello stesso capo e quanto conta
 // essere nella stessa condizione.
 const SX_CONF_SOMIGLIA={ pertinenza:0.6, condizione:0.4 };
@@ -2765,6 +2776,22 @@ function sxLacuna(mercato, prove, medianaPrima){
   if(larghezza>SX_SPARSI) return 'i prezzi dell\'usato sono troppo sparsi per dire un numero';
   if(medianaPrima && Math.abs(u.mediana-medianaPrima)/medianaPrima > SX_STABILE){
     return 'la mediana si sta ancora muovendo';
+  }
+  // Il quadro sta in piedi sui numeri - abbastanza prove, prezzi vicini,
+  // mediana ferma - ma "in piedi" non e' "giusto": dieci annunci vicinissimi
+  // di un altro modello passano tutti i controlli qui sopra, e la confidenza
+  // lo sa anche quando nEff e larghezza dicono che va tutto bene. Si guarda
+  // il lato piu' debole fra somiglianza e freschezza - non la quantita', gia'
+  // coperta dal controllo su nEff qui sopra - e se conta troppo poco si cerca
+  // ancora, dicendo a lettere quale dei due manca.
+  if(u.parti){
+    const debole=[['somiglianza',u.parti.somiglianza],['freschezza',u.parti.freschezza]]
+      .filter(x=>x[1]<SX_CONF_SOGLIA_LACUNA).sort((a,b)=>a[1]-b[1])[0];
+    if(debole){
+      return debole[0]==='somiglianza'
+        ? 'i prezzi tornano fra loro, ma gli annunci trovati assomigliano poco a questo capo'
+        : 'i prezzi tornano fra loro, ma gli annunci trovati sono vecchi';
+    }
   }
   return null;
 }
