@@ -84,7 +84,7 @@ async function analizza(ip) {
   // Il numero che conta: prima erano fino a 4000ms buttati qui.
   check('e partono entro il tetto, non entro il budget', foto && foto.quando < 2000, foto);
   check('col nome noto, visto che il catalogo ha taciuto',
-    JSON.parse(r.body).model === 'gemini-2.5-flash', JSON.parse(r.body).model);
+    JSON.parse(r.body).model === 'gemini-3.5-flash', JSON.parse(r.body).model);
 
   // E la ragione per cui il catalogo non e' stato tolto di mezzo: quando fa in
   // tempo, e' lui a scegliere - e sceglie meglio di un nome cablato.

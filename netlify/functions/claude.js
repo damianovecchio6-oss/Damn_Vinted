@@ -28,7 +28,14 @@ const MODEL_TEXT = process.env.GROQ_MODEL_TEXT || 'openai/gpt-oss-120b';
 // caricare due volte, dentro i 9s di budget, quel giro puo' essere la
 // differenza fra una risposta e un timeout. Il default va tenuto vivo anche
 // se il ripiego esiste.
-const MODEL_VISION = process.env.GROQ_MODEL_VISION || 'qwen/qwen3.6-27b';
+//
+// qwen3.8-27b (14 agosto 2026) ha preso il posto di qwen3.6-27b: stessa
+// famiglia densa 27B con visione nativa, ma batte la 3.6 su ogni riga
+// multimodale pubblicata - Vision2Web +17.9, OSWorld +20.4, WebArena +16.0 -
+// quindi legge un'etichetta almeno quanto la 3.6, non di meno. Il pool di
+// ripiego lo trova comunque da solo (newestFirst ordina per versione dentro
+// la stessa famiglia), ma partire gia' dal migliore risparmia il giro.
+const MODEL_VISION = process.env.GROQ_MODEL_VISION || 'qwen/qwen3.8-27b';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || '';
 
 // Ordine di gradimento, applicato a quello che il provider dichiara
@@ -242,7 +249,14 @@ const GEMINI_HOST = 'generativelanguage.googleapis.com';
 // riparte da un nome noto invece di rispondere "nessun modello", che e' un
 // errore dove bastava un tentativo.
 const CATALOG_WAIT_MS = 1200;
-const MODEL_GEMINI = 'gemini-2.5-flash';
+// Il ripiego quando il catalogo stesso non risponde in tempo. Doveva restare
+// un nome quasi certamente vivo, e gemini-2.5-flash non lo e' piu': Google lo
+// ritira il 16 ottobre 2026, e c'e' chi lo vede sparire anche prima di quella
+// data. gemini-3.5-flash e' il ricambio che Google stessa indica, gia' in
+// disponibilita' generale - non il piu' nuovo possibile (rincorrerlo qui
+// vorrebbe dire aggiornare questa riga ogni poche settimane), ma uno che
+// dura.
+const MODEL_GEMINI = 'gemini-3.5-flash';
 
 const NON_TESTUALI = /embedding|aqa|imagen|veo|tts|native-audio|live-|image-generation/i;
 

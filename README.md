@@ -153,7 +153,7 @@ chiave non puo' controllare i prezzi.
 | Variabile | Default | A cosa serve |
 |---|---|---|
 | `GROQ_MODEL_TEXT` | `openai/gpt-oss-120b` | Fissa il modello di testo |
-| `GROQ_MODEL_VISION` | `qwen/qwen3.6-27b` | Fissa il modello con visione di Groq |
+| `GROQ_MODEL_VISION` | `qwen/qwen3.8-27b` | Fissa il modello con visione di Groq |
 | `GEMINI_MODEL` | scelto dal catalogo | Fissa il modello Gemini |
 | `RATE_LIMIT_PER_MIN` | `20` | Richieste al minuto per IP (`0` disattiva) |
 | `AI_TIMEOUT_MS` | `9000` | Budget di una richiesta AI |
