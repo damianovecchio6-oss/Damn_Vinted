@@ -542,6 +542,18 @@ const NEGOZIO = (titolo, prezzo) => ({
   const storico = await page.textContent('#historyList');
   check('la voce c\'e\', col capo riconosciuto', /Chase Sweat/.test(storico), storico.slice(0, 300));
   check('e col prezzo concluso', /42€/.test(storico), storico.slice(0, 400));
+  // sxProfilo si calcolava e restava solo su lastScan, senza che nessuno lo
+  // rileggesse mai: lo storico e' l'unico posto dove sopravvive oltre la
+  // sessione, quindi e' li' che deve arrivare davvero. Non index 0: fra la
+  // scansione e questo controllo la scheda Prezzo ha scritto anche lei nello
+  // storico (id diverso), e va per prima nell'elenco.
+  const profiloSalvato = await page.evaluate(() =>
+    (loadHistory().find(x => x.marca === 'Carhartt') || {}).profilo);
+  check('il profilo del capo arriva nello storico, non resta solo su lastScan',
+    !!profiloSalvato && profiloSalvato.marca === 'Carhartt', profiloSalvato);
+  check('con la fiducia e la fonte per campo, non solo il valore',
+    profiloSalvato && typeof profiloSalvato.fiducia.marca === 'number' && profiloSalvato.fonti.marca === 'etichetta',
+    profiloSalvato && { fiducia: profiloSalvato.fiducia, fonti: profiloSalvato.fonti });
 
   console.log('\n-- foto nuove, capo nuovo --');
   await page.evaluate(() => sw('scanner'));

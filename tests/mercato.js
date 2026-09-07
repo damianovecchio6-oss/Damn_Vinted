@@ -258,6 +258,56 @@ const ESITO = { azione: 'segna', marca: 'Carhartt', categoria: 'Felpa', condizio
   check('e sotto quelli di chi sta vendendo qui',
     /Pesano meno degli esiti di chi sta vendendo qui/.test(promptVisto));
 
+  console.log('\n-- il codice corretto a meta\' del tentativo non lascia a meta\' anche il tasto --');
+  // Un pin vecchio salvato sul dispositivo, un token di sessione ancora
+  // valido (quindi nessuna finestra finche' non si preme il tasto), e il
+  // server che sull'azione "cambia" pretende il pin nuovo. Il primo giro va
+  // sotto 401, la finestra chiede il codice, l'utente scrive quello giusto -
+  // e il tentativo che segue deve usarlo, non il valore congelato da prima
+  // della finestra.
+  await page.evaluate(() => { localStorage.setItem('albaPin', 'vecchio'); sessionToken='gia-valido'; sessionTokenExp=Date.now()+900000; });
+  let vistiClaudePin = [], vistiMercatoPin = [];
+  await page.unroute('**/api/claude');
+  await page.route('**/api/claude', route => {
+    const req = route.request();
+    if (req.method() !== 'GET') return route.fulfill({ status: 200, contentType: 'application/json', body: '{"text":"ok"}' });
+    const pin = req.headers()['x-alba-pin'] || '';
+    vistiClaudePin.push(pin);
+    if (pin !== 'nuovo') return route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Serve il codice.', codice: 'pin' }) });
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 'finto.token.2', expiresIn: 900000 }) });
+  });
+  await page.unroute('**/api/mercato');
+  await page.route('**/api/mercato', route => {
+    const b = JSON.parse(route.request().postData() || '{}');
+    if (b.azione === 'impostazioni' && b.cambia) {
+      const pin = route.request().headers()['x-alba-pin'] || '';
+      vistiMercatoPin.push(pin);
+      if (pin !== 'nuovo') return route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Codice sbagliato.', codice: 'pin' }) });
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ pinAttivo: false }) });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ pinDisponibile: true, pinAttivo: true }) });
+  });
+
+  await page.evaluate(() => sw('storico'));
+  await page.waitForSelector('#impPin:not([hidden])', { timeout: 5000 });
+  await page.click('#swPin');
+  await page.waitForSelector('#pin:not([hidden])', { timeout: 5000 });
+  await page.fill('#pinIn', 'nuovo');
+  await page.click('[data-az="pinConferma"]');
+  await page.waitForFunction(() => document.getElementById('swPin').disabled === false, null, { timeout: 5000 });
+  await page.waitForTimeout(200);
+  const toastFinale = await page.textContent('#toast');
+  check('va a buon fine al primo tentativo, senza dover ricliccare',
+    !/Sessione non valida/.test(toastFinale), toastFinale);
+  // Il primo tentativo prova legittimamente il pin che c'era gia' (il token
+  // di sessione era ancora valido, quindi parte prima di sapere che serve
+  // aggiornarlo): quello che conta e' che il secondo - quello dopo la
+  // finestra - usi il pin appena corretto, non lo stesso di prima congelato.
+  check('e il tentativo dopo la finestra usa il pin appena corretto',
+    vistiMercatoPin[vistiMercatoPin.length - 1] === 'nuovo' && vistiMercatoPin.length <= 2, vistiMercatoPin);
+  check('il tasto riflette la risposta del server, non e\' rimasto a meta\'',
+    await page.locator('#swPin').isChecked() === false);
+
   check('nessun errore JS in tutta la sessione', errori.length === 0, errori);
 
   await browser.close();

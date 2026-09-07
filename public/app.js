@@ -556,11 +556,18 @@ function getSessionToken(force){
 const UNAUTHORIZED=Symbol('unauthorized');
 
 // Un solo giro di token per tutti gli endpoint della funzione.
+// "extra" puo' essere un oggetto fisso o una funzione senza argomenti: se e'
+// una funzione la si richiama a ogni tentativo, non solo al primo. Un header
+// come X-Alba-Pin scattato una volta sola resterebbe quello di prima anche
+// quando getSessionToken(true), nel mezzo, ha appena corretto il codice
+// salvato - e il secondo tentativo ripartirebbe con l'header vecchio, 401 di
+// nuovo, per un codice che nel frattempo era gia' giusto.
 async function chiamaEndpoint(url, payload, extra){
-  let d=await inviaA(url, payload, await getSessionToken(false), extra);
+  const intestazioni=()=> typeof extra==='function' ? extra() : extra;
+  let d=await inviaA(url, payload, await getSessionToken(false), intestazioni());
   // 401 = token scaduto, oppure siamo finiti su un'istanza che non lo conosce.
   // Se ne prende uno nuovo e si riprova una volta sola, in silenzio.
-  if(d===UNAUTHORIZED) d=await inviaA(url, payload, await getSessionToken(true), extra);
+  if(d===UNAUTHORIZED) d=await inviaA(url, payload, await getSessionToken(true), intestazioni());
   if(d===UNAUTHORIZED) throw new Error('Sessione non valida. Ricarica la pagina e riprova.');
   return d;
 }
@@ -1781,7 +1788,20 @@ function agMercato(capo, prove){
   sxValuta(prove, identita);
   let mercato=sxMercato(prove);
   if(!mercato.usato && !mercato.nuovo && conPrezzo(prove).length){
-    for(const p of prove) p.pertinente=true;
+    // Nessun risultato nomina la marca o il tipo: si allarga a tutto quello
+    // che ha un prezzo. Ma "pertinente" da solo non basta piu' da quando il
+    // peso dipende dal grado - sxValuta l'aveva calcolato 0 per tutti proprio
+    // perche' non erano pertinenti, e un peso sempre zero manda nEff a NaN
+    // (0*0/0) invece che a un numero piccolo ma vero. Dichiarare pertinente
+    // vuol dire dichiarare anche il grado, non solo il si/no che ci si legge
+    // sopra.
+    const condCapo=sxScalaCondizione(sxVal(identita.condizione));
+    for(const p of prove){
+      p.pertinente=true;
+      p.grado=1;
+      p.somiglianza=sxSomiglianza(p, condCapo);
+      p.peso=p.mercato==='usato' ? sxPesoDi(p, condCapo) : 1;
+    }
     return { mercato: sxMercato(prove), largo: true };
   }
   return { mercato, largo: false };
@@ -2153,10 +2173,12 @@ function sxUnisci(...candidati){
 }
 
 // Il profilo del capo: gli stessi campi dell'identita', ma piatti, con la
-// fiducia e la fonte a fianco invece che dentro. E' la forma in cui il capo
-// esce dallo scanner - il rapporto, il prompt del verdetto, lo storico - e
-// serve perche' un consumatore possa chiedere "quanto sei sicuro della marca?"
-// senza sapere com'e' fatto sxCampo.
+// fiducia e la fonte a fianco invece che dentro. Il rapporto e il prompt del
+// verdetto leggono la fiducia direttamente dall'identita' (sxDescrivi, e il
+// rendering in sxDisegna) - il profilo e' la forma che esce verso lo storico,
+// l'unico posto dove sopravvive oltre la sessione, e serve perche' un
+// consumatore futuro possa chiedere "quanto ero sicuro della marca?" senza
+// sapere com'e' fatto sxCampo.
 const SX_PROFILO=[
   ['categoria','tipo'], ['marca','marca'], ['modello','modello'],
   ['materiale','materiale'], ['taglia','taglia'], ['colore','colore'],
@@ -3034,7 +3056,11 @@ function sxDisegna(){
     rangeMax: paziente !== null ? paziente : (u ? u.q3 : undefined),
     fiducia: fiducia.livello,
     consiglio: (Array.isArray(d.consigli) && d.consigli[0]) || undefined,
-    foto: lastThumbnail || undefined
+    foto: lastThumbnail || undefined,
+    // Resta solo sul telefono - lo storico non va al deposito comune, che
+    // riceve marca/categoria/condizione/esito e nient'altro. E' il posto in
+    // cui "quanto ero sicuro della marca" sopravvive oltre la sessione.
+    profilo: s.profilo
   });
 
   sxTesto=[
@@ -3510,7 +3536,11 @@ async function cambiaPin(el){
     const pin=pinSalvato() || await chiediPin(false);
     if(!pin){ return; }
     salvaPin(pin);
-    const d=await chiamaEndpoint(MERCATO_URL, { azione:'impostazioni', cambia:true, valore:voluto }, { 'X-Alba-Pin': pin });
+    // pinHeader, non { 'X-Alba-Pin': pin }: se il primo tentativo prende un
+    // 401 e il retry dentro chiamaEndpoint corregge il codice salvato,
+    // l'header del secondo tentativo deve leggere quello nuovo, non il
+    // valore congelato di "pin" letto qui sopra.
+    const d=await chiamaEndpoint(MERCATO_URL, { azione:'impostazioni', cambia:true, valore:voluto }, pinHeader);
     el.checked=!!d.pinAttivo;
     toast(d.pinAttivo ? '🔐 Ora ALBA chiede il codice' : '🔓 ALBA e\' aperta a chi ha l\'indirizzo');
   }catch(e){

@@ -209,6 +209,28 @@ const { check, fine } = L.contatore();
   check('un solo esito diventa un esempio, non una regola',
     /pochi esiti per una media/.test(unoSolo) && /venduto 28€/.test(unoSolo), unoSolo);
 
+  console.log('\n-- quando nessun risultato nomina il capo, agMercato allarga la rete --');
+  // Da quando il peso include il grado di somiglianza, dichiarare "pertinente"
+  // senza dichiarare anche il grado lascia il peso a zero per tutti: nEff
+  // diventa 0*0/0, cioe' NaN, e quel NaN finiva scritto a schermo dentro la
+  // spiegazione della fiducia.
+  const largo = await page.evaluate(([pr, capo]) => {
+    const p = pr.map(x => Object.assign({ fonte: 'Vinted', link: 'https://www.vinted.it/items/1', snippet: '' }, x,
+      { prezzo: { valore: x.prezzo, valuta: '€' } }));
+    const { mercato, largo } = agMercato(capo, p);
+    return { largo, usato: mercato.usato, fiducia: mercato.usato ? sxFiducia(mercato) : null };
+  }, [
+    [
+      { titolo: 'Custodia porta chiavi in pelle A', prezzo: 40 }, { titolo: 'Custodia porta chiavi in pelle B', prezzo: 42 },
+      { titolo: 'Custodia porta chiavi in pelle C', prezzo: 41 }, { titolo: 'Custodia porta chiavi in pelle D', prezzo: 43 }
+    ],
+    { marca: 'Fjallraven', nome: 'Zaino Kanken', condizione: 'Buono' }
+  ]);
+  check('la rete si allarga davvero (nessun titolo nomina Fjallraven, Zaino o Kanken)', largo.largo === true, largo);
+  check('e nEff e\' un numero vero, non NaN', Number.isFinite(largo.usato.nEff) && largo.usato.nEff > 0, largo.usato);
+  check('la fiducia non scrive mai "NaN" da nessuna parte',
+    !/NaN/.test(largo.fiducia.perche) && !/NaN/.test(largo.fiducia.livello), largo.fiducia);
+
   check('nessun errore JS in tutta la sessione', errori.length === 0, errori);
 
   await browser.close();
