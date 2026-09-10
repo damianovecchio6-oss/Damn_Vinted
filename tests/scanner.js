@@ -151,27 +151,29 @@ const NEGOZIO = (titolo, prezzo) => ({
   // quanto un titolo somiglia al capo (non tutti nominano "felpa" o "WIP"
   // insieme a "Carhartt"), sei titoli via l'altro pesano un po' diverso e la
   // mediana pesata si sposta di poco. Il numero esatto dipende anche dai pesi
-  // marca/modello/tipo di SX_PESO_MATCH (0.25/0.30/0.15, da config.js del
-  // riferimento): con altri pesi si sposterebbe ancora, di poco.
-  check('la mediana e\' quella dei soli annunci usati', corpo.includes('42.2€') || corpo.includes('42,2€'), (corpo.match(/Mediana[^€]*€/) || [])[0]);
+  // marca/modello/tipo/taglia di SX_PESO_MATCH (0.25/0.30/0.15/0.15): con
+  // altri pesi si sposterebbe ancora, di poco. "Hoodie Carhartt taglia L"
+  // dichiara la taglia giusta (l'etichetta dice L) e pesa un po' di piu'; gli
+  // altri titoli non nominano nessuna taglia e restano come prima.
+  check('la mediana e\' quella dei soli annunci usati', corpo.includes('41.88€') || corpo.includes('41,88€'), (corpo.match(/Mediana[^€]*€/) || [])[0]);
   check('il prezzo dei negozi c\'e\', ma per conto suo', /Nuovo in negozio/.test(corpo), corpo.slice(0, 600));
   check('dice quanto vale l\'usato rispetto al nuovo', /l'usato ne vale il \d+%/.test(corpo), (corpo.match(/l'usato ne vale il \d+%/) || [])[0]);
   const tag = await page.evaluate(() => Array.from(document.querySelectorAll('#rSxBody .sxT')).map(t => t.textContent.trim()));
   check('ogni prova dice da che mercato viene', tag.filter(t => /annuncio usato/.test(t)).length >= 5 && tag.filter(t => /negozio/.test(t)).length >= 2, tag);
 
   const promptVerdetto = primo('verdetto');
-  check('il verdetto riceve i quartili, non una mediana sola', /meta' degli annunci sta fra 36.22€ e 48.61€/.test(promptVerdetto.prompt), (promptVerdetto.prompt.match(/meta' degli annunci.*/) || [])[0]);
+  check('il verdetto riceve i quartili, non una mediana sola', /meta' degli annunci sta fra 36€ e 48.43€/.test(promptVerdetto.prompt), (promptVerdetto.prompt.match(/meta' degli annunci.*/) || [])[0]);
   check('il verdetto riceve il prezzo del nuovo come tetto', /PREZZI DEI NEGOZI/.test(promptVerdetto.prompt));
   check('il verdetto vede il mercato di ogni risultato', /\[usato\]/.test(promptVerdetto.prompt) && /\[nuovo\]/.test(promptVerdetto.prompt));
   check('il verdetto riceve l\'identita\' scansionata', /Marca: Carhartt/.test(promptVerdetto.prompt) && /Taglia: L/.test(promptVerdetto.prompt));
   check('il piano riceve l\'identita\' scansionata', /Carhartt/.test(primo('piano').prompt));
 
   check('il prezzo consigliato finisce a schermo', corpo.includes('42€'), corpo.slice(0, 300));
-  // Il modello dice 34 e 52; la banda di sei annunci fra 36.25 e 48.75 porta
-  // un'incertezza di ~2.6€, e il range che si mostra si apre di quella.
+  // Il modello dice 34 e 52; la banda di sei annunci fra 36€ e 48.43€ porta
+  // un'incertezza di ~2.5€, e il range che si mostra si apre di quella.
   check('il veloce e il paziente si aprono dell\'incertezza della banda',
-    corpo.includes('31€') && corpo.includes('55€'), (corpo.match(/veloce[^·]*·[^\n]*/) || [])[0]);
-  check('e la pagina scrive di quanto', /±2\.6€/.test(corpo), (corpo.match(/±[\d.]+€/) || [])[0]);
+    corpo.includes('32€') && corpo.includes('55€'), (corpo.match(/veloce[^·]*·[^\n]*/) || [])[0]);
+  check('e la pagina scrive di quanto', /±2\.5€/.test(corpo), (corpo.match(/±[\d.]+€/) || [])[0]);
   check('la banda dei prezzi si disegna', await page.evaluate(() => !!document.querySelector('#rSxBody .sxIqr') && !!document.querySelector('#rSxBody .sxMark')));
   check('la banda si legge anche senza vederla', /da 30 a 55 euro/.test(await page.evaluate(() => document.querySelector('#rSxBody .sxBand').getAttribute('aria-label'))));
   check('la lettura del mercato finisce a schermo', corpo.includes('Gli annunci dell\'usato stanno fra 30'));

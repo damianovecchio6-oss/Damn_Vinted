@@ -107,6 +107,27 @@ const { check, fine } = L.contatore();
       sxPertinente({ titolo: 'lampada', snippet: '' }, id)
     ], [IDENTITA]).then(r => r[0] === true && r[1] === true && r[2] === false));
 
+  // La taglia: c'e' gia' (etichetta o foto), ma prima non entrava mai nel
+  // grado. Un titolo dimezzato sul modello ("Air", non "Air Max") lascia
+  // spazio per vedere la taglia spostare il numero, in un senso o nell'altro
+  // - un titolo pieno satura gia' a 1 da solo, e non mostrerebbe niente.
+  const CON_TAGLIA = Object.assign({}, IDENTITA, { taglia: { v: '42', f: 'etichetta', c: 0.9 } });
+  const gradoTg = (titolo, id) => page.evaluate(([t, i]) => sxGradoPertinenza({ titolo: t, snippet: '' }, i), [titolo, id]);
+  const parziale = 'Nike Air sneakers bianche';
+  const baseSenzaCampo = await gradoTg(parziale, IDENTITA);
+  const baseMuto = await gradoTg(parziale, CON_TAGLIA);
+  const tagliaGiusta = await gradoTg(parziale + ' tg 42', CON_TAGLIA);
+  const tagliaSbagliata = await gradoTg(parziale + ' tg 38', CON_TAGLIA);
+  const finta = await gradoTg('Nike Air modello 42 sneakers bianche', CON_TAGLIA);
+  check('un titolo muto sulla taglia conta come se la taglia non ci fosse nell\'identita\'',
+    baseMuto === baseSenzaCampo, { baseMuto, baseSenzaCampo });
+  check('la taglia giusta, dichiarata nel titolo, vale di piu\' del titolo muto',
+    tagliaGiusta > baseMuto, { tagliaGiusta, baseMuto });
+  check('la taglia sbagliata, dichiarata nel titolo, vale meno del titolo muto',
+    tagliaSbagliata < baseMuto, { tagliaSbagliata, baseMuto });
+  check('un "42" senza "tg"/"taglia"/"size" davanti non conta come una taglia dichiarata',
+    finta === baseMuto, { finta, baseMuto });
+
   console.log('\n-- la confidenza del campione --');
   const conf = (comparabili) => page.evaluate(c => sxConfidenza(c), comparabili);
   const uguali = (n, somiglianza, freschezza) =>

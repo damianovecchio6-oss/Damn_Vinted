@@ -2412,7 +2412,27 @@ function sxParole(testo){
 // nessuno: i pesi si ridistribuiscono su quelli che ci sono, altrimenti un
 // capo senza modello riconosciuto avrebbe tutti i comparabili a meta'
 // punteggio per un dato che manca a noi, non a loro.
-const SX_PESO_MATCH={ marca:0.25, modello:0.30, tipo:0.15 };
+// taglia non viene dal riferimento (che si fermava a brand/model/category):
+// non c'e' un numero "giusto" da copiare, solo una scelta. Sta con tipo
+// perche' e' lo stesso genere di segnale - discreto, o combacia o no - e non
+// deve pesare quanto marca o modello: un titolo che tace sulla taglia non
+// deve costare quanto uno che ne dichiara una sbagliata.
+const SX_PESO_MATCH={ marca:0.25, modello:0.30, tipo:0.15, taglia:0.15 };
+
+// Una taglia scritta da sola in un titolo e' troppo facile da confondere con
+// altro - "M" e' anche un'iniziale, "42" anche un numero di modello o un
+// pezzo di prezzo. Conta solo vicino a un segnale che dice che e' proprio
+// quello: "tg", "taglia", "size", "sz".
+const SX_TAGLIA_MARCATORE=/\b(?:tg|taglia|size|sz)\.?\s*/i;
+function sxTagliaInTesto(taglia, testo){
+  const t=sxVal(taglia).trim();
+  // Un titolo che non nomina nessuna taglia non dice ne' si ne' no: resta
+  // fuori, come un campo che manca. E' diverso da un titolo che una taglia la
+  // dice, e non e' la nostra.
+  if(!t || !SX_TAGLIA_MARCATORE.test(testo)) return null;
+  const escaped=t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return new RegExp(SX_TAGLIA_MARCATORE.source+escaped+'\\b','i').test(testo);
+}
 
 function sxGradoPertinenza(prova, identita){
   const testo=`${prova.titolo||''} ${prova.snippet||''}`.toLowerCase();
@@ -2424,7 +2444,8 @@ function sxGradoPertinenza(prova, identita){
   const parti=[
     [SX_PESO_MATCH.marca, marca ? (testo.includes(marca)?1:0) : null],
     [SX_PESO_MATCH.modello, quota(identita.modello)],
-    [SX_PESO_MATCH.tipo, quota(identita.tipo)]
+    [SX_PESO_MATCH.tipo, quota(identita.tipo)],
+    [SX_PESO_MATCH.taglia, sxTagliaInTesto(identita.taglia, testo)]
   ].filter(x=>x[1]!==null);
   const totale=parti.reduce((t,x)=>t+x[0],0);
   if(!totale) return 0;
