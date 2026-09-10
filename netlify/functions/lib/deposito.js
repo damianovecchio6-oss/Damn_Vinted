@@ -34,24 +34,17 @@ async function chiama(metodo, percorso, corpo, opzioni) {
   const o = opzioni || {};
   if (!configurato()) return { status: 0, dati: null, assente: true };
   const payload = corpo ? JSON.stringify(corpo) : null;
-  try {
-    const r = await S.inviaHttp({
-      hostname: hostname(),
-      path: '/rest/v1' + percorso,
-      method: metodo,
-      headers: Object.assign({
-        'apikey': CHIAVE,
-        'Authorization': 'Bearer ' + CHIAVE,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      }, o.headers || {})
-    }, payload, Date.now() + (o.timeoutMs || 4000));
-    let dati = null;
-    try { dati = r.body ? JSON.parse(r.body) : null; } catch (e) { dati = null; }
-    return { status: r.status, dati };
-  } catch (e) {
-    return { status: 0, dati: null, errore: e.message };
-  }
+  return S.chiamaJson({
+    hostname: hostname(),
+    path: '/rest/v1' + percorso,
+    method: metodo,
+    headers: Object.assign({
+      'apikey': CHIAVE,
+      'Authorization': 'Bearer ' + CHIAVE,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    }, o.headers || {})
+  }, payload, o.timeoutMs || 4000);
 }
 
 /* ===== GLI ESITI CONDIVISI ===== */

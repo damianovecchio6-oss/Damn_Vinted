@@ -81,6 +81,15 @@ const leggi = f => fs.readFileSync(path.join(L.SITO, f), 'utf8');
   check('solo le GET passano dal worker', /req\.method !== 'GET'/.test(sw));
   check('il guscio contiene la pagina e lo script',
     /'\.\/index\.html'/.test(sw) && /'\.\/app\.js'/.test(sw));
+  // Un 500, o la pagina di un captive portal servita con 200: senza guardare
+  // risposta.ok diventerebbero loro il guscio offline.
+  check('la pagina va in cache solo se la risposta e\' buona',
+    /await fetch\(req\);[\s\S]{0,400}if \(risposta && risposta\.ok\)/.test(sw));
+  // L'aggiornamento in background di un asset gia' in cache resta appeso a
+  // dallaRete anche dopo che respondWith ha gia' risposto: senza waitUntil il
+  // browser puo' chiudere il worker prima che cache.put finisca.
+  check('l\'aggiornamento in background estende la vita dell\'evento',
+    /e\.waitUntil\(dallaRete\)/.test(sw));
 
   /* ===== IL WORKER, IN FUNZIONE ===== */
   const server = await L.serviSito(8907);
@@ -128,6 +137,13 @@ const leggi = f => fs.readFileSync(path.join(L.SITO, f), 'utf8');
   check('le function non vengono servite dalla cache', funzioneOffline === 'errore', funzioneOffline);
 
   await context.setOffline(false);
+
+  // Un 500 (o la pagina di un captive portal, servita con 200 ma non nostra)
+  // non deve diventare la copia offline: page.route non intercetta pero' il
+  // fetch() rifatto dal service worker (0 richieste viste, verificato a
+  // mano), quindi qui non si puo' fingere dal vivo - resta il controllo
+  // statico sopra, sullo stesso pattern che il file usa gia' per le altre
+  // garanzie del worker che un browser di prova non puo' mettere in crisi.
 
   /* ===== LE SCORCIATOIE DELL'ICONA ===== */
   await page.goto('http://127.0.0.1:8907/?vai=scanner', { waitUntil: 'load' });

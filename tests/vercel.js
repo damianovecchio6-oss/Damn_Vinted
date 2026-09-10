@@ -91,6 +91,23 @@ const esegui = (handler, opzioni) => {
   await esegui(spia, { method: 'GET', body: undefined, corpoStream: '' });
   check('una GET porta un corpo vuoto, non mancante', visto.body === '', visto.body);
 
+  // Nessuna function legge un corpo su una GET: se Vercel avesse gia' drenato
+  // lo stream per conto suo (senza valorizzare req.body), mettersi in ascolto
+  // ora - dopo che 'end' e' gia' passato - non lo farebbe arrivare mai piu'.
+  // Una GET non deve proprio toccare lo stream: qui non emette ne' 'data' ne'
+  // 'end', e se l'adattatore ci si mettesse in ascolto la richiesta resterebbe
+  // appesa per sempre.
+  const streamCheMaiFinisce = new Readable({ read() {} });
+  streamCheMaiFinisce.method = 'GET';
+  streamCheMaiFinisce.url = '/api/claude';
+  streamCheMaiFinisce.headers = {};
+  const persa = await Promise.race([
+    adatta(spia)(streamCheMaiFinisce, risposta()).then(() => 'risposta'),
+    new Promise(r => setTimeout(() => r('appesa'), 500))
+  ]);
+  check('una GET non si mette mai in ascolto dello stream (niente rischio di restare appesa)',
+    persa === 'risposta', persa);
+
   // Se la function lancia, la richiesta non deve restare appesa fino al
   // timeout della piattaforma: un 500 detto subito e' piu' onesto.
   const rotta = await esegui(async () => { throw new Error('crash'); }, {});

@@ -14,6 +14,13 @@
 // darebbe vuoto, quindi si ricompone da req.body. Quando invece il corpo non
 // e' stato toccato, si legge dallo stream come si e' sempre fatto.
 function corpoDi(req) {
+  // Una GET non ha mai un corpo qui dentro (nessuna function ne legge uno per
+  // quel metodo), quindi non serve ne' fidarsi di req.body ne' toccare lo
+  // stream. Se la piattaforma avesse gia' consumato lo stream per decidere
+  // che non c'era niente da parsare, mettersi in ascolto ora - dopo che 'end'
+  // e' gia' passato - non lo farebbe mai piu' arrivare, e la richiesta
+  // resterebbe appesa per sempre invece che tornare vuota subito.
+  if (req.method === 'GET' || req.method === 'HEAD') return Promise.resolve('');
   if (req.body !== undefined && req.body !== null) {
     if (typeof req.body === 'string') return Promise.resolve(req.body);
     if (Buffer.isBuffer(req.body)) return Promise.resolve(req.body.toString('utf8'));

@@ -76,8 +76,13 @@ self.addEventListener('fetch', e => {
     e.respondWith((async () => {
       try {
         const risposta = await fetch(req);
-        const cache = await caches.open(VERSIONE);
-        cache.put('./index.html', risposta.clone());
+        // Un 500 del host, o la pagina di un captive portal servita con 200:
+        // senza questo controllo diventava lei la copia offline, e ci restava
+        // finche' qualcuno non svuotava i dati del sito a mano.
+        if (risposta && risposta.ok) {
+          const cache = await caches.open(VERSIONE);
+          cache.put('./index.html', risposta.clone());
+        }
         return risposta;
       } catch (err) {
         const cache = await caches.open(VERSIONE);
@@ -97,6 +102,12 @@ self.addEventListener('fetch', e => {
       if (risposta && risposta.ok) cache.put(req, risposta.clone());
       return risposta;
     }).catch(() => null);
+    // Quando c'e' gia' una copia in cache, dallaRete resta in volo dopo che
+    // respondWith ha gia' risposto: senza extendere l'evento il browser puo'
+    // chiudere il worker prima che il cache.put finisca, e l'aggiornamento
+    // si perde in silenzio - il sito resta sulla versione vecchia finche' non
+    // arriva un ricaricamento forzato.
+    e.waitUntil(dallaRete);
     return salvata || (await dallaRete) || Response.error();
   })());
 });

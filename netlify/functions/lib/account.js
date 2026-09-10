@@ -28,23 +28,16 @@ function hostname() {
 async function chiama(metodo, percorso, corpo, opzioni) {
   const o = opzioni || {};
   const payload = corpo !== undefined ? JSON.stringify(corpo) : null;
-  try {
-    const r = await S.inviaHttp({
-      hostname: hostname(),
-      path: percorso,
-      method: metodo,
-      headers: Object.assign({
-        'apikey': o.chiave || ANON_KEY,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      }, o.headers || {})
-    }, payload, Date.now() + (o.timeoutMs || 5000));
-    let dati = null;
-    try { dati = r.body ? JSON.parse(r.body) : null; } catch (e) { dati = null; }
-    return { status: r.status, dati };
-  } catch (e) {
-    return { status: 0, dati: null, errore: e.message };
-  }
+  return S.chiamaJson({
+    hostname: hostname(),
+    path: percorso,
+    method: metodo,
+    headers: Object.assign({
+      'apikey': o.chiave || ANON_KEY,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    }, o.headers || {})
+  }, payload, o.timeoutMs || 5000);
 }
 
 /* ===== AUTENTICAZIONE ===== */

@@ -53,10 +53,16 @@ const hits = new Map();
 const SESSION_TTL_MS = 15 * 60 * 1000;
 
 function buildAllowlist() {
+  // Il README la chiama "domini", non "origini": chi la compila scrive
+  // "miosito.esempio.com" senza schema, come sotto per le variabili di
+  // Vercel. normalizeOrigin da sola non lo somma da se' - new URL() su un
+  // valore senza schema lancia, e il catch lo lascerebbe passare cosi' com'e',
+  // per non combaciare mai con un vero header Origin (che ce l'ha sempre).
   const list = (process.env.ALLOWED_ORIGINS || '')
     .split(',')
-    .map(s => normalizeOrigin(s))
-    .filter(Boolean);
+    .map(s => s.trim())
+    .filter(Boolean)
+    .map(s => normalizeOrigin(/^https?:\/\//.test(s) ? s : 'https://' + s));
 
   // Netlify popola queste da sola: URL = sito di produzione,
   // DEPLOY_PRIME_URL / DEPLOY_URL = deploy preview e branch deploy.
@@ -413,6 +419,25 @@ function inviaHttp(opzioni, payload, deadline) {
   });
 }
 
+// Una POST/GET verso un REST che risponde JSON, con la stessa forma di
+// ritorno ovunque: status, dati (null se il corpo non c'era o non era JSON
+// valido - un errore di parsing non deve mai far esplodere chi chiama, solo
+// tornare senza dati), errore se la rete stessa ha fallito. payload e' gia'
+// una stringa (o null per "nessun corpo"): la differenza fra "niente" e
+// "null esplicito" cambia da un chiamante all'altro (deposito.js e
+// account.js non la trattano allo stesso modo), quindi resta a chi chiama
+// deciderla prima di arrivare qui.
+async function chiamaJson(opzioni, payload, scadenzaMs) {
+  try {
+    const r = await inviaHttp(opzioni, payload, Date.now() + (scadenzaMs || 5000));
+    let dati = null;
+    try { dati = r.body ? JSON.parse(r.body) : null; } catch (e) { dati = null; }
+    return { status: r.status, dati };
+  } catch (e) {
+    return { status: 0, dati: null, errore: e.message };
+  }
+}
+
 // Il prezzo di riferimento e' la mediana, non la media: un solo venditore fuori
 // mercato non deve spostarla. Serve alla ricerca per immagine e all'agente, che
 // partono da liste diverse ma con lo stesso problema.
@@ -434,7 +459,7 @@ module.exports = {
   normalizeOrigin, isSameSite, isAllowed, corsFor, clientIp, rateLimited,
   pinRichiesto, pinGiusto, controllaPin,
   SU_VERCEL, TEMPO_MASSIMO,
-  issueToken, verifyToken, lowerKeys, json, inviaHttp, statistichePrezzi,
+  issueToken, verifyToken, lowerKeys, json, inviaHttp, chiamaJson, statistichePrezzi,
   cacheGet, cacheSet, cachePeek, checkRequest,
   issueAccountToken, verifyAccountToken, ACCOUNT_TTL_MS
 };

@@ -31,6 +31,21 @@ const hdr = (ip, extra) => Object.assign({ origin: SITE, host: HOST, 'x-nf-clien
   r = await fn.handler(ev({ headers: { host: HOST, 'x-nf-client-connection-ip': '1.1.1.4' } }));
   check('senza Origin -> 403', r.statusCode === 403, r.statusCode);
 
+  // L'allowlist si legge una volta sola all'avvio: serve un processo pulito
+  // per provare un ALLOWED_ORIGINS con un dominio senza schema, come lo
+  // scrive il README ("domini", non "origini").
+  {
+    const { spawnSync } = require('child_process');
+    const script = `
+      process.env.ALLOWED_ORIGINS = 'miosito.esempio.com';
+      const S = require(${JSON.stringify(L.funzione('lib/shared.js'))});
+      console.log(S.isAllowed('https://miosito.esempio.com', { host: 'altro-host.tld' }));
+    `;
+    const rr = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8' });
+    check('un dominio senza schema in ALLOWED_ORIGINS combacia con l\'Origin vero',
+      (rr.stdout || '').trim() === 'true', (rr.stdout || '') + (rr.stderr || ''));
+  }
+
   console.log('\n-- token --');
   r = await fn.handler(ev({ httpMethod: 'GET', headers: hdr('2.0.0.1') }));
   const tok = JSON.parse(r.body).token;
